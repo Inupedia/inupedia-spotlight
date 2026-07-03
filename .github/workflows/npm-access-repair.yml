@@ -1,0 +1,28 @@
+name: NPM access repair
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  npm-access:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Inspect and repair Spotlight Vue access
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm access get status @inupedia/spotlight-protocol --registry=https://registry.npmjs.org/ || true
+          npm access get status @inupedia/spotlight-client --registry=https://registry.npmjs.org/ || true
+          npm access get status @inupedia/spotlight-vue --registry=https://registry.npmjs.org/ || true
+          npm access set status=public @inupedia/spotlight-vue --registry=https://registry.npmjs.org/
+          npm access get status @inupedia/spotlight-vue --registry=https://registry.npmjs.org/
+          npm view @inupedia/spotlight-vue version --registry=https://registry.npmjs.org/
