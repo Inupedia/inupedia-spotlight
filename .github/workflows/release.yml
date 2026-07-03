@@ -1,0 +1,78 @@
+name: Release to npm
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NPM_PUBLISH_ACCESS: ${{ vars.NPM_PUBLISH_ACCESS || 'restricted' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version from tag
+        id: meta
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Invalid tag: $TAG (expected vX.Y.Z)"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing version: $VERSION"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Align package versions
+        run: node scripts/set-release-version.mjs "${{ steps.meta.outputs.version }}"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Release test pipeline
+        run: pnpm test:ci
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish spotlight-protocol
+        working-directory: packages/spotlight-protocol
+        run: pnpm publish --access "$NPM_PUBLISH_ACCESS" --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish spotlight-client
+        working-directory: packages/spotlight-client
+        run: pnpm publish --access "$NPM_PUBLISH_ACCESS" --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish spotlight-vue
+        working-directory: packages/spotlight-vue
+        run: pnpm publish --access "$NPM_PUBLISH_ACCESS" --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "Published @inupedia/spotlight-protocol@${{ steps.meta.outputs.version }}"
+          echo "Published @inupedia/spotlight-client@${{ steps.meta.outputs.version }}"
+          echo "Published @inupedia/spotlight-vue@${{ steps.meta.outputs.version }}"

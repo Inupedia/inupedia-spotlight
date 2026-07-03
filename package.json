@@ -1,0 +1,27 @@
+{
+  "name": "inupedia-spotlight",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "author": "inupedia",
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "build": "pnpm -r --filter '@inupedia/*' run build",
+    "typecheck": "pnpm -r --filter '@inupedia/*' run typecheck",
+    "test": "vitest run",
+    "test:run": "vitest run",
+    "test:ci": "node scripts/test-pipeline.mjs",
+    "release:version": "node scripts/set-release-version.mjs"
+  },
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=9"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18",
+    "vue-tsc": "^3.2.2"
+  }
+}

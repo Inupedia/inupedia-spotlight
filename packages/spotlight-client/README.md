@@ -1,0 +1,77 @@
+# @inupedia/spotlight-client
+
+Spotlight **宿主侧执行层** + **Inupedia skills/service 标准**。
+
+## Service 注入（单一 `@agent`）
+
+在函数上方加一行 `@agent`；**scene / tab / host 由文件路径 + name 自动推断**。
+
+```ts
+// capabilities/panels/construction.ts
+@agent({
+  name: "panel.openCadViewer",
+  description: "打开 CAD 图纸",
+  rollback: () => store.setCadViewerVisible(false),
+})
+export async function openCadViewer() {
+  store.setCadViewerVisible(true);
+}
+```
+
+编译后等价于：
+
+```ts
+registerAgentCapability(
+  resolveAgentMeta({ name: "panel.openCadViewer", ... }, "/…/construction.ts"),
+  openCadViewer,
+);
+```
+
+宿主 `vite.config.ts`：
+
+```ts
+import spotlightAgentIoc from "@inupedia/spotlight-client/vite";
+
+export default defineConfig({
+  plugins: [
+    spotlightAgentIoc({
+      agentPreset: "@/service/agent/presets/resolveAgentMeta",
+    }),
+  ],
+});
+```
+
+TypeScript shim：`/// <reference types="@inupedia/spotlight-client/agent-decorator" />`
+
+路径约定与 name 推断规则见 `src/service/agent/README.md`。
+
+> 暂不支持运行时装饰器（esbuild 限制）；HOF 写法 `agent(meta)(fn)` 仍可用。
+
+## 分工（Inupedia 标准）
+
+| 注入 | 目录 | 作用 |
+|------|------|------|
+| **Skills** | `.inupedia/skills/<id>/` | 知识、流程、`allowed-tools` |
+| **Service** | `src/service/agent/capabilities/` | 可执行 host tools（`@agent` IoC） |
+
+Skills 布局与 [Agent Skills 开放标准](https://agentskills.io) 一致。
+
+## Service 目录
+
+```text
+src/service/agent/
+├── host.ts
+├── capabilities/        # @agent + 函数体
+├── actions/             # Vue / Cesium 复用
+└── presets/
+    └── resolveAgentMeta.ts
+```
+
+## API
+
+```ts
+registerAgentCapability / buildAgentServiceHost / loadAgentCapabilities
+validateSkillFrontmatter / substituteSkillPlaceholders
+```
+
+校验：`pnpm validate:skills`

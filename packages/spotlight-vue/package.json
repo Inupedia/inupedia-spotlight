@@ -1,0 +1,79 @@
+{
+  "name": "@inupedia/spotlight-vue",
+  "version": "0.1.0",
+  "description": "Vue plugin and config entry for Inupedia Spotlight (monorepo workspace package)",
+  "type": "module",
+  "license": "MIT",
+  "author": "inupedia",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.js"
+    },
+    "./remote": {
+      "types": "./dist/remote/index.d.ts",
+      "import": "./dist/remote/index.js"
+    },
+    "./components/*": {
+      "types": "./dist/components/*.vue.d.ts",
+      "import": "./dist/components/*.js"
+    },
+    "./styles/*": "./dist/assets/*"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "build:js": "vite build",
+    "build:types": "vue-tsc -p tsconfig.build.json",
+    "build": "pnpm run clean && pnpm run build:js && pnpm run build:types",
+    "prepack": "pnpm run build"
+  },
+  "dependencies": {
+    "@inupedia/spotlight-client": "workspace:*",
+    "@inupedia/spotlight-protocol": "workspace:*",
+    "prettier": "^3.8.1",
+    "yaml": "^2.8.4"
+  },
+  "peerDependencies": {
+    "@inspira-ui/plugins": "^0.0.2",
+    "md-editor-v3": "^5.0.0 || ^6.0.0",
+    "pinia": "^3.0.0",
+    "vue": "^3.5.0"
+  },
+  "peerDependenciesMeta": {
+    "@inspira-ui/plugins": {
+      "optional": true
+    },
+    "@pixi-spine/all-3.8": {
+      "optional": true
+    },
+    "pixi.js": {
+      "optional": true
+    }
+  },
+  "optionalDependencies": {
+    "@pixi-spine/all-3.8": "^4.0.6",
+    "pixi.js": "^8.9.2"
+  },
+  "devDependencies": {
+    "@inspira-ui/plugins": "^0.0.2",
+    "@vitejs/plugin-vue": "^6.0.3",
+    "md-editor-v3": "^6.4.1",
+    "pinia": "^3.0.4",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vue": "^3.5.26",
+    "vue-tsc": "^3.2.2",
+    "yaml": "^2.8.4"
+  }
+}
