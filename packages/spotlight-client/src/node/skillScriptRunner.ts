@@ -1,40 +1,18 @@
-// @ts-nocheck — Node-only script runner; not typechecked in browser vue-tsc graph.
+import type { SkillScriptRunResult } from "../skillScriptPath.js";
 
-export type SkillScriptRunResult = {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-};
-
-/** Resolve scripts/foo.sh under skill root; rejects path traversal. */
-export function joinSkillScriptPath(
-  skillRoot: string,
-  scriptRelative: string,
-): string {
-  const root = skillRoot.replace(/\\/g, "/").replace(/\/$/, "");
-  const rel = scriptRelative
-    .replace(/\\/g, "/")
-    .replace(/^\.\/+/, "")
-    .replace(/^scripts\//, "");
-  if (!rel || rel.includes("..")) {
-    throw new Error(`非法脚本路径：${scriptRelative}`);
-  }
-  return `${root}/scripts/${rel}`;
-}
+export type NodeSkillScriptRunner = (params: {
+  skillRoot: string;
+  scriptPath: string;
+  args?: string;
+  cwd: string;
+}) => Promise<SkillScriptRunResult>;
 
 /**
  * Node 宿主默认脚本执行器（浏览器宿主请自定义 runScript）。
  */
 export async function createNodeSkillScriptRunner(options: {
   defaultCwd: string;
-}): Promise<
-  (params: {
-    skillRoot: string;
-    scriptPath: string;
-    args?: string;
-    cwd: string;
-  }) => Promise<SkillScriptRunResult>
-> {
+}): Promise<NodeSkillScriptRunner> {
   const { spawn } = await import("node:child_process");
 
   return async ({ scriptPath, args, cwd }) => {

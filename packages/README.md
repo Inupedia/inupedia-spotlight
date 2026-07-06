@@ -15,6 +15,37 @@ pnpm install
 pnpm build:spotlight-packages
 ```
 
+## Maintenance Rules
+
+`inupedia-spotlight` is the release source of truth. During the ydjm transition
+window, edit `ydjm-construction-map/packages/`, then run:
+
+```bash
+pnpm update:spotlight
+```
+
+Commit, tag, and publish only from `inupedia-spotlight`.
+
+Public API is split by runtime:
+
+| Entry | Runtime | Purpose |
+|-------|---------|---------|
+| `@inupedia/spotlight-vue` | browser | Vue plugin, config, stable host APIs |
+| `@inupedia/spotlight-vue/remote` | browser | server pipeline HTTP helpers |
+| `@inupedia/spotlight-vue/markdown` | browser | markdown formatting helpers |
+| `@inupedia/spotlight-vue/workflow` | browser | operate/session workflow builders |
+| `@inupedia/spotlight-vue/testing` | test only | reset helpers |
+| `@inupedia/spotlight-client` | browser-safe | host tools, registry, service helpers |
+| `@inupedia/spotlight-client/vite` | build tool | Vite IoC transform |
+| `@inupedia/spotlight-client/node` | Node only | skill script runner |
+
+Do not add Node-only imports to package root entries. If a helper touches
+`node:*`, `process`, filesystem, or shell execution, put it behind a Node-only
+subpath.
+
+Before publishing, run package builds from `inupedia-spotlight`; each build
+verifies export targets after `dist` is generated.
+
 ## Host app integration
 
 Skills + service layout follows Inupedia Agent Skills standard. See `@inupedia/spotlight-client` README.

@@ -14,6 +14,10 @@
       "types": "./dist/vite/spotlightAgentIoc.d.ts",
       "import": "./dist/vite/spotlightAgentIoc.js"
     },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.js"
+    },
     "./agent-decorator": {
       "types": "./src/agentDecorator.d.ts"
     },
@@ -24,14 +28,18 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist",
     "src/agentDecorator.d.ts"
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build": "pnpm run clean && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "build": "pnpm run clean && tsc -p tsconfig.json && tsc -p tsconfig.node.json && pnpm run verify:exports",
+    "verify:exports": "node ../scripts/verify-package-exports.mjs",
     "test": "vitest run",
     "prepack": "pnpm run build"
   },
@@ -52,6 +60,7 @@
   },
   "devDependencies": {
     "@types/babel__traverse": "^7.28.0",
+    "@types/node": "^24.10.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18",
     "vite": "^7.3.1"

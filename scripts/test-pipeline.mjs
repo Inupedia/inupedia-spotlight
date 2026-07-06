@@ -3,17 +3,23 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 
 const stages = [
   { name: "build", cmd: "pnpm", args: ["run", "build"] },
+  { name: "smoke", cmd: "pnpm", args: ["run", "smoke:packages"] },
   { name: "typecheck", cmd: "pnpm", args: ["run", "typecheck"] },
   { name: "unit", cmd: "pnpm", args: ["run", "test:run"] },
 ];
 
 function runStage(stage) {
   return new Promise((resolve, reject) => {
-    console.log(`\n${"=".repeat(60)}\n▶ stage: ${stage.name}\n${"=".repeat(60)}\n`);
+    console.log(
+      `\n${"=".repeat(60)}\n▶ stage: ${stage.name}\n${"=".repeat(60)}\n`,
+    );
     const started = Date.now();
     const child = spawn(stage.cmd, stage.args, {
       cwd: rootDir,

@@ -1,5 +1,8 @@
 import { defineAgentTool } from "./defineAgentTool.js";
-import { joinSkillScriptPath, type SkillScriptRunResult } from "./skillScriptRunner.js";
+import {
+  joinSkillScriptPath,
+  type SkillScriptRunResult,
+} from "./skillScriptPath.js";
 
 export type SkillScriptRunner = (params: {
   skillRoot: string;

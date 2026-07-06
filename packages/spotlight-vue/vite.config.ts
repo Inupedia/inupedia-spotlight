@@ -27,6 +27,11 @@ export default defineConfig({
         index: resolve(rootDir, "src/index.ts"),
         plugin: resolve(rootDir, "src/plugin.ts"),
         "remote/index": resolve(rootDir, "src/remote/index.ts"),
+        "markdown/index": resolve(rootDir, "src/markdown/index.ts"),
+        "store/index": resolve(rootDir, "src/store/index.ts"),
+        "workflow/index": resolve(rootDir, "src/workflow/index.ts"),
+        "testing/index": resolve(rootDir, "src/testing/index.ts"),
+        "components/index": resolve(rootDir, "src/components/index.ts"),
         "components/InspiraCardSpotlight": resolve(
           rootDir,
           "src/components/InspiraCardSpotlight.vue",
@@ -40,7 +45,7 @@ export default defineConfig({
     },
     outDir: "dist",
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: false,
     rollupOptions: {
       external: isExternal,
       output: {

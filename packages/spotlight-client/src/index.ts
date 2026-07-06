@@ -113,7 +113,6 @@ export {
 } from "./skillScriptTool.js";
 export {
   joinSkillScriptPath,
-  createNodeSkillScriptRunner,
   type SkillScriptRunResult,
-} from "./skillScriptRunner.js";
+} from "./skillScriptPath.js";
 export type { AgentDef } from "./agentDecoratorTypes.js";

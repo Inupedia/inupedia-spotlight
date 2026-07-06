@@ -75,3 +75,14 @@ validateSkillFrontmatter / substituteSkillPlaceholders
 ```
 
 校验：`pnpm validate:skills`
+
+## Node-only runner
+
+默认脚本执行器只给 Node 宿主使用：
+
+```ts
+import { createNodeSkillScriptRunner } from "@inupedia/spotlight-client/node";
+```
+
+浏览器宿主不要从主入口引入 Node runner；请通过 `registerSkillScriptTool`
+传入自己的 `runScript` 实现。

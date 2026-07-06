@@ -1,5 +1,17 @@
-import * as prettier from "prettier/standalone";
-import * as prettierPluginMarkdown from "prettier/plugins/markdown";
+type PrettierMarkdownModules = {
+  prettier: typeof import("prettier/standalone");
+  markdownPlugin: typeof import("prettier/plugins/markdown");
+};
+
+let prettierMarkdownModules: Promise<PrettierMarkdownModules> | null = null;
+
+function loadPrettierMarkdown(): Promise<PrettierMarkdownModules> {
+  prettierMarkdownModules ??= Promise.all([
+    import("prettier/standalone"),
+    import("prettier/plugins/markdown"),
+  ]).then(([prettier, markdownPlugin]) => ({ prettier, markdownPlugin }));
+  return prettierMarkdownModules;
+}
 
 /** LLM 常把标题/列表/表格粘在一行；在 prettier 前做轻量拆分。 */
 export function preprocessKnowledgeMarkdown(text: string): string {
@@ -105,10 +117,11 @@ export async function formatSpotlightKnowledgeMarkdown(
   if (!preprocessed) return "";
 
   try {
+    const { prettier, markdownPlugin } = await loadPrettierMarkdown();
     return (
       await prettier.format(preprocessed, {
         parser: "markdown",
-        plugins: [prettierPluginMarkdown],
+        plugins: [markdownPlugin],
         proseWrap: "preserve",
       })
     ).trim();

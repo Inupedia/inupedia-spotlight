@@ -48,6 +48,9 @@ importers:
       '@types/babel__traverse':
         specifier: ^7.28.0
         version: 7.28.0
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.13.2
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

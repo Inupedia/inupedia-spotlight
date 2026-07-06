@@ -13,13 +13,17 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist"
   ],
   "scripts": {
     "clean": "rm -rf dist",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build": "pnpm run clean && tsc -p tsconfig.json",
+    "build": "pnpm run clean && tsc -p tsconfig.json && pnpm run verify:exports",
+    "verify:exports": "node ../scripts/verify-package-exports.mjs",
     "prepack": "pnpm run build"
   },
   "devDependencies": {
