@@ -48,18 +48,25 @@ const backgroundStyle = computed(() => {
   <div
     :class="
       cn(
-        'group relative flex size-full overflow-hidden rounded-xl',
+        'inspira-card-spotlight group relative flex size-full overflow-hidden rounded-xl',
         props.class,
       )
     "
     @mousemove="handleMouseMove"
     @mouseleave="handleMouseLeave"
   >
-    <div :class="cn('relative z-10 size-full', props.slotClass)">
+    <div
+      :class="
+        cn(
+          'inspira-card-spotlight__content relative z-10 size-full',
+          props.slotClass,
+        )
+      "
+    >
       <slot />
     </div>
     <div
-      class="pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+      class="inspira-card-spotlight__gradient pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
       :style="{
         background: backgroundStyle,
         opacity: gradientOpacity,
@@ -67,3 +74,36 @@ const backgroundStyle = computed(() => {
     />
   </div>
 </template>
+
+<style scoped>
+.inspira-card-spotlight {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.inspira-card-spotlight__content {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+}
+
+.inspira-card-spotlight__gradient {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.inspira-card-spotlight:hover .inspira-card-spotlight__gradient {
+  opacity: 1;
+}
+</style>
