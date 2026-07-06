@@ -14,7 +14,7 @@ import {
 import type { HandlerApi } from "../store/pipeline/types.js";
 import type { AgentStep, AgentStepToolCall } from "../store/types.js";
 import type { SpotlightExecutionEvent } from "../store/runtime/types.js";
-import { getSpotlightConfig } from "../plugin.js";
+import { getSpotlightConfig, getSpotlightHostAdapter } from "../plugin.js";
 import {
   ensureHostToolsManifest,
   executeRemoteHostTool,
@@ -418,8 +418,11 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
   const session = useAgentSessionStore();
   const runtime = useSpotlightRuntimeStore();
   const hostManifest = await ensureHostToolsManifest(signal);
+  const localClientTools =
+    getSpotlightHostAdapter().getClientToolDescriptors();
   return {
     hostManifest,
+    localClientTools,
     payload: {
       projectId: getSpotlightProjectId(),
       sessionId: session.sessionId,
@@ -444,7 +447,9 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
         resumableAction: runtime.resumableAction,
         lastResolvedTarget: runtime.lastResolvedTarget,
       },
-      clientToolsManifestVersion: hostManifest.version,
+      // Prefer the host's actually registered tools so server allowlist matches
+      // what executeHostTool can run locally (avoids manifest-version skew).
+      clientTools: localClientTools,
       skills: serializeSkillsForRemote(getSkillsPoolForRun()),
     },
   };
@@ -456,11 +461,11 @@ export async function runRemoteSpotlightPipeline(
 ): Promise<SpotlightPipelineRunOutcome> {
   const base = getSpotlightServerBase();
   const signal = api.getSignal();
-  const { payload, hostManifest } = await buildRemotePayload(
+  const { payload, localClientTools } = await buildRemotePayload(
     userQuestion,
     signal,
   );
-  const allowedHostNames = new Set(hostManifest.tools.map((t) => t.name));
+  const allowedHostNames = new Set(localClientTools.map((t) => t.name));
   const createResponse = await fetch(`${base}/v1/runs`, {
     method: "POST",
     headers: buildSpotlightJsonHeaders(),
