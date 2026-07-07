@@ -8,6 +8,7 @@ import {
 import { classifyMemoryKind, isMemoryKindAllowedForRead } from "../classify.js";
 import { normalizeQuestion } from "../normalize.js";
 import { isMemoryEntryStale } from "../stale.js";
+import { clampMemoryTtlSec } from "../ttl.js";
 import { buildCacheKey, createMemoryEntryId } from "./cacheKey.js";
 
 export interface MemoryStoreReader {
@@ -171,7 +172,9 @@ export function createMemoryGate(
           answer: input.answer,
           plan: input.plan,
           invalidation: input.invalidation,
-          ttlSec: input.ttlSec ?? SPOTLIGHT_MEMORY_DEFAULT_TTL_SEC[kind],
+          ttlSec: clampMemoryTtlSec(
+            input.ttlSec ?? SPOTLIGHT_MEMORY_DEFAULT_TTL_SEC[kind],
+          ),
           createdAt: Date.now(),
           hitCount: 0,
           confidence: input.confidence,

@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   classifyMemoryKind,
+  clampMemoryTtlSec,
   isMemoryEntryStale,
+  MEMORY_TTL_MAX_SEC,
   normalizeQuestion,
 } from "../src/index.js";
 import {
@@ -210,5 +212,12 @@ describe("ExactMemoryStore admin", () => {
 
     expect(exact.deleteEntry(listed[0]!.id)).toBe(true);
     expect(exact.listEntries(10)).toHaveLength(0);
+  });
+});
+
+describe("memory ttl cap", () => {
+  it("clamps ttl to 24 hours max", () => {
+    expect(clampMemoryTtlSec(604_800)).toBe(MEMORY_TTL_MAX_SEC);
+    expect(clampMemoryTtlSec(86_400)).toBe(86_400);
   });
 });

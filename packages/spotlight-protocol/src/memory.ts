@@ -103,7 +103,7 @@ export const SPOTLIGHT_MEMORY_DEFAULT_TTL_SEC: Record<
   number
 > = {
   qa_answer: 86_400,
-  action_plan: 604_800,
-  routing_hint: 604_800,
+  action_plan: 86_400,
+  routing_hint: 86_400,
   data_snapshot: 1_800,
 };
