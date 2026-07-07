@@ -7,8 +7,10 @@ import type { ToolResult } from "../../types/toolResult.js";
 import type {
   AgentStep,
   AgentStepAttachment,
+  AgentStepChatItem,
   AgentStepFile,
   AgentStepToolCall,
+  SpotlightArtifact,
 } from "../types";
 
 export type SpotlightStepContentChannel =
@@ -112,6 +114,11 @@ export type SpotlightExecutionEvent =
         | "tool_calls"
         | "chat_items";
       count: number;
+      attachments?: AgentStepAttachment[];
+      files?: AgentStepFile[];
+      artifacts?: SpotlightArtifact[];
+      toolCalls?: AgentStepToolCall[];
+      chatItems?: AgentStepChatItem[];
     }
   | {
       type: "turn_transition";

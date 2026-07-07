@@ -24,7 +24,11 @@ try {
     "spotlight-client",
     "spotlight-vue",
   ]) {
-    symlinkSync(join(packagesRoot, packageName), join(scopeDir, packageName), "dir");
+    symlinkSync(
+      join(packagesRoot, packageName),
+      join(scopeDir, packageName),
+      "dir",
+    );
   }
 
   const runnerPath = join(tempDir, "smoke.mjs");

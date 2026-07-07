@@ -1,6 +1,6 @@
 {
   "name": "@inupedia/spotlight-vue",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "description": "Vue plugin and config entry for Inupedia Spotlight (monorepo workspace package)",
   "type": "module",
   "license": "MIT",

@@ -7,7 +7,10 @@ export {
   type SpotlightQuickPanelActions,
   type SpotlightVuePluginOptions,
 } from "./config.js";
-export { resolveSpotlightConfig, type SpotlightHostRegistration } from "./resolveConfig.js";
+export {
+  resolveSpotlightConfig,
+  type SpotlightHostRegistration,
+} from "./resolveConfig.js";
 export {
   defineSpotlightApp,
   readSpotlightEnv,

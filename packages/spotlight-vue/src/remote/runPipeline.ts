@@ -1,6 +1,5 @@
 import { serializeSkillsForRemote } from "@inupedia/spotlight-client";
 import type { HostToolEffect } from "@inupedia/spotlight-protocol";
-import { TOOL_NAMES } from "../constants/toolNames.js";
 import { getSkillsPoolForRun } from "../skills/index.js";
 import { useAgentSessionStore } from "../session/agentSession.js";
 import { useSpotlightRuntimeStore } from "../store/runtimeStore.js";
@@ -14,7 +13,7 @@ import {
 import type { HandlerApi } from "../store/pipeline/types.js";
 import type { AgentStep, AgentStepToolCall } from "../store/types.js";
 import type { SpotlightExecutionEvent } from "../store/runtime/types.js";
-import { getSpotlightConfig, getSpotlightHostAdapter } from "../plugin.js";
+import { getSpotlightConfig } from "../plugin.js";
 import {
   ensureHostToolsManifest,
   executeRemoteHostTool,
@@ -227,6 +226,20 @@ function settlePureHostOperationStep(
   );
 }
 
+function ensureToolStepActive(api: HandlerApi, stepId: string) {
+  if (stepId !== SPOTLIGHT_PIPELINE_STEP_IDS.tool) return;
+  const step = api.getSteps().find((item) => item.id === stepId);
+  if (!step || step.status === "active" || step.status === "done") return;
+  api.setStep(stepId, "active", step.content);
+}
+
+function toolStepLabel(stepId: string, label: string | null | undefined): string {
+  if (label) return label;
+  return stepId === SPOTLIGHT_PIPELINE_STEP_IDS.tool
+    ? "执行工具与回答"
+    : stepId;
+}
+
 async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
   if (event.type === "ping") return;
 
@@ -267,14 +280,7 @@ async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
       }
     }
 
-    ensureStep(
-      api,
-      stepId,
-      event.label ??
-        (stepId === SPOTLIGHT_PIPELINE_STEP_IDS.tool
-          ? "执行工具与回答"
-          : stepId),
-    );
+    ensureStep(api, stepId, toolStepLabel(stepId, event.label));
     if (event.mode === "replace") {
       api.setStep(
         stepId,
@@ -282,16 +288,33 @@ async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
         content,
       );
     } else {
+      ensureToolStepActive(api, stepId);
       api.appendChunkToStep(stepId, content);
       await paintYield();
     }
+  } else if (event.type === "step_artifact") {
+    ensureStep(api, event.stepId, toolStepLabel(event.stepId, event.label));
+    ensureToolStepActive(api, event.stepId);
+    if (event.artifact === "tool_calls" && event.toolCalls?.length) {
+      api.appendToolCallsToStep(event.stepId, event.toolCalls);
+    } else if (event.artifact === "attachments" && event.attachments?.length) {
+      api.appendAttachmentsToStep(event.stepId, event.attachments);
+    } else if (event.artifact === "files" && event.files?.length) {
+      api.appendFilesToStep(event.stepId, event.files);
+    } else if (event.artifact === "artifacts" && event.artifacts?.length) {
+      api.appendArtifactsToStep(event.stepId, event.artifacts);
+    } else if (event.artifact === "chat_items" && event.chatItems?.length) {
+      api.appendChatItemsToStep(event.stepId, event.chatItems);
+    }
   } else if (event.type === "tool_start") {
     ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
+    ensureToolStepActive(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool);
     api.appendToolCallsToStep(SPOTLIGHT_PIPELINE_STEP_IDS.tool, [
       toolCallFromRemote(event),
     ]);
   } else if (event.type === "tool_progress") {
     ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
+    ensureToolStepActive(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool);
     api.appendToolCallsToStep(SPOTLIGHT_PIPELINE_STEP_IDS.tool, [
       {
         id: event.call.id,
@@ -304,6 +327,7 @@ async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
     ]);
   } else if (event.type === "tool_result") {
     ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
+    ensureToolStepActive(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool);
     api.appendToolCallsToStep(SPOTLIGHT_PIPELINE_STEP_IDS.tool, [
       buildToolResultCall(event),
     ]);
@@ -319,10 +343,7 @@ async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
         event.result.files,
       );
     }
-    if (
-      event.result.toolCalls?.length &&
-      event.result.call.name !== TOOL_NAMES.knowledge.answer
-    ) {
+    if (event.result.toolCalls?.length) {
       api.appendToolCallsToStep(
         SPOTLIGHT_PIPELINE_STEP_IDS.tool,
         event.result.toolCalls,
@@ -348,12 +369,25 @@ async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
     const step = api
       .getSteps()
       .find((item) => item.id === SPOTLIGHT_PIPELINE_STEP_IDS.tool);
-    const { planning } = splitToolStepContent(step?.content ?? "");
-    api.setStep(
-      SPOTLIGHT_PIPELINE_STEP_IDS.tool,
-      "done",
-      composeToolStepContent(planning, event.content),
-    );
+    const { planning, answer } = splitToolStepContent(step?.content ?? "");
+    const finalAnswer = event.content.trim();
+    const streamedAnswer = answer.trim();
+    if (
+      streamedAnswer &&
+      finalAnswer &&
+      (streamedAnswer === finalAnswer ||
+        finalAnswer.startsWith(
+          streamedAnswer.slice(0, Math.min(streamedAnswer.length, 80)),
+        ))
+    ) {
+      api.setStep(SPOTLIGHT_PIPELINE_STEP_IDS.tool, "done");
+    } else {
+      api.setStep(
+        SPOTLIGHT_PIPELINE_STEP_IDS.tool,
+        "done",
+        composeToolStepContent(planning, finalAnswer),
+      );
+    }
   }
 
   if (isTelemetryEvent(event)) {
@@ -418,11 +452,8 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
   const session = useAgentSessionStore();
   const runtime = useSpotlightRuntimeStore();
   const hostManifest = await ensureHostToolsManifest(signal);
-  const localClientTools =
-    getSpotlightHostAdapter().getClientToolDescriptors();
   return {
     hostManifest,
-    localClientTools,
     payload: {
       projectId: getSpotlightProjectId(),
       sessionId: session.sessionId,
@@ -447,9 +478,7 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
         resumableAction: runtime.resumableAction,
         lastResolvedTarget: runtime.lastResolvedTarget,
       },
-      // Prefer the host's actually registered tools so server allowlist matches
-      // what executeHostTool can run locally (avoids manifest-version skew).
-      clientTools: localClientTools,
+      clientToolsManifestVersion: hostManifest.version,
       skills: serializeSkillsForRemote(getSkillsPoolForRun()),
     },
   };
@@ -461,11 +490,11 @@ export async function runRemoteSpotlightPipeline(
 ): Promise<SpotlightPipelineRunOutcome> {
   const base = getSpotlightServerBase();
   const signal = api.getSignal();
-  const { payload, localClientTools } = await buildRemotePayload(
+  const { payload, hostManifest } = await buildRemotePayload(
     userQuestion,
     signal,
   );
-  const allowedHostNames = new Set(localClientTools.map((t) => t.name));
+  const allowedHostNames = new Set(hostManifest.tools.map((t) => t.name));
   const createResponse = await fetch(`${base}/v1/runs`, {
     method: "POST",
     headers: buildSpotlightJsonHeaders(),
