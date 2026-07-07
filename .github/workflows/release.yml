@@ -57,6 +57,12 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Publish spotlight-memory
+        working-directory: packages/spotlight-memory
+        run: pnpm publish --access "$NPM_PUBLISH_ACCESS" --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish spotlight-client
         working-directory: packages/spotlight-client
         run: pnpm publish --access "$NPM_PUBLISH_ACCESS" --no-git-checks
@@ -72,5 +78,6 @@ jobs:
       - name: Summary
         run: |
           echo "Published @inupedia/spotlight-protocol@${{ steps.meta.outputs.version }}"
+          echo "Published @inupedia/spotlight-memory@${{ steps.meta.outputs.version }}"
           echo "Published @inupedia/spotlight-client@${{ steps.meta.outputs.version }}"
           echo "Published @inupedia/spotlight-vue@${{ steps.meta.outputs.version }}"

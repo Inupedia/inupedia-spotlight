@@ -38,6 +38,12 @@ type PipelinePhase = "idle" | "running" | "cancelled" | "error" | "done";
 const SPOTLIGHT_TELEMETRY_KEY = "spotlight-telemetry-snapshots";
 const MAX_TELEMETRY_SNAPSHOTS = 20;
 
+export type SpotlightMemoryReplayBadge = {
+  source: "exact" | "semantic" | "session";
+  entryId: string;
+  kind: string;
+};
+
 type SpotlightTelemetryFailureCategory =
   | "tool_runtime"
   | "tool_timeout"
@@ -284,6 +290,7 @@ export const useSpotlightStore = defineStore("spotlight", {
     pipelinePhase: "idle" as PipelinePhase,
     pipelineRunId: 0,
     pipelineAbortController: null as AbortController | null,
+    lastMemoryReplay: null as SpotlightMemoryReplayBadge | null,
     telemetrySnapshots:
       loadTelemetrySnapshots() as SpotlightTelemetrySnapshot[],
   }),
@@ -498,6 +505,7 @@ export const useSpotlightStore = defineStore("spotlight", {
       this.pendingSkillPermission = null;
       this.error = "";
       this.result = null;
+      this.lastMemoryReplay = null;
       this.pipelinePhase = "idle";
     },
 
@@ -583,6 +591,7 @@ export const useSpotlightStore = defineStore("spotlight", {
       this.loading = true;
       this.error = "";
       this.result = null;
+      this.lastMemoryReplay = null;
       this.executionEvents = [];
       const userQuestion = this.prompt.trim();
       this.addRecentQuestion(userQuestion);
@@ -592,7 +601,13 @@ export const useSpotlightStore = defineStore("spotlight", {
       try {
         const handlerApi = this.buildHandlerApi(runId, controller.signal);
         try {
-          await runRemoteSpotlightPipeline(userQuestion, handlerApi);
+          const outcome = await runRemoteSpotlightPipeline(
+            userQuestion,
+            handlerApi,
+          );
+          if (outcome.memoryReplay) {
+            this.lastMemoryReplay = outcome.memoryReplay;
+          }
         } catch (remoteError) {
           if (!this.isPipelineRunActive(runId)) return;
           if (isAbortError(remoteError)) {

@@ -244,6 +244,22 @@ export const SPOTLIGHT_CORE_TOOL_NAMES = {
 } as const;
 
 export {
+  SPOTLIGHT_MEMORY_DEFAULT_TTL_SEC,
+  type SpotlightMemoryEntry,
+  type SpotlightMemoryEntryKind,
+  type SpotlightMemoryGateResult,
+  type SpotlightMemoryHit,
+  type SpotlightMemoryHitSource,
+  type SpotlightMemoryInvalidationContext,
+  type SpotlightMemoryLookupInput,
+  type SpotlightMemoryMiss,
+  type SpotlightMemoryPlan,
+  type SpotlightMemoryReplayMeta,
+  type SpotlightMemoryWriteInput,
+  type SpotlightMemoryWriteResult,
+} from "./memory.js";
+
+export {
   SPOTLIGHT_LAYOUT,
   SPOTLIGHT_SKILL_FRONTMATTER_KEYS,
   SPOTLIGHT_SKILL_LOAD_LEVELS,

@@ -37,6 +37,7 @@ export type SpotlightTurnFailureClass =
 
 export type SpotlightTurnPhase =
   | "handle_session_control"
+  | "memory_replay"
   | "analyzing"
   | "routing"
   | "query_planning"

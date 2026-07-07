@@ -7,6 +7,7 @@ Private source repository for the Inupedia Spotlight SDK packages.
 | Package | Role |
 | --- | --- |
 | `@inupedia/spotlight-protocol` | Shared client/server wire types |
+| `@inupedia/spotlight-memory` | Memory Gate, exact/semantic cache stores |
 | `@inupedia/spotlight-client` | HTTP helpers, host tool bridge, agent registry |
 | `@inupedia/spotlight-vue` | Vue plugin, command UI, Spotlight workflow runtime |
 

@@ -5,6 +5,11 @@ export type SpotlightPanelUiState = "idle" | "running" | "done" | "error";
 export type UseSpotlightPanelUiOptions = {
   pipelinePhase: Ref<string>;
   loading: Ref<boolean>;
+  memoryReplay?: Ref<{
+    source: "exact" | "semantic" | "session";
+    entryId: string;
+    kind: string;
+  } | null>;
   voiceHoldActive?: Ref<boolean>;
   speechPending?: Ref<boolean>;
   voiceKeyLabel?: string;
@@ -45,7 +50,14 @@ export function useSpotlightPanelUi(options: UseSpotlightPanelUiOptions) {
     if (options.voiceHoldActive?.value) return "语音录制中";
     if (options.speechPending?.value) return "语音识别中";
     if (uiState.value === "running") return "Agent 执行中";
-    if (uiState.value === "done") return "已完成";
+    if (uiState.value === "done") {
+      if (options.memoryReplay?.value) {
+        return options.memoryReplay.value.source === "semantic"
+          ? "语义缓存命中"
+          : "Memory 缓存命中";
+      }
+      return "已完成";
+    }
     if (uiState.value === "error") return "执行异常";
     return "等待提问";
   });

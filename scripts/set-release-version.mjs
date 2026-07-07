@@ -13,6 +13,7 @@ if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
 
 const packageDirs = [
   "packages/spotlight-protocol",
+  "packages/spotlight-memory",
   "packages/spotlight-client",
   "packages/spotlight-vue",
 ];

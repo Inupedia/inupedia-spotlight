@@ -56,6 +56,12 @@ type RemoteRunEvent =
       stopReason: string;
       failureClass: string | null;
       elapsedMs: number;
+      memoryReplay?: {
+        source: "exact" | "semantic" | "session";
+        entryId: string;
+        replayedAt: number;
+        kind: string;
+      };
       sessionPatch?: {
         invokedSkills?: Array<{
           skillName: string;
@@ -364,6 +370,15 @@ async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
       SPOTLIGHT_PIPELINE_STEP_IDS.tool,
       `\n[fork ${event.agentId}] 第 ${event.iteration} 轮 · ${event.phase}：${event.summary}\n`,
     );
+  } else if (event.type === "turn_transition") {
+    if (event.phase === "memory_replay") {
+      ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.breakdown, "问题拆解");
+      api.setStep(
+        SPOTLIGHT_PIPELINE_STEP_IDS.breakdown,
+        "done",
+        event.summary ?? "Memory 缓存命中，跳过 LLM 规划。",
+      );
+    }
   } else if (event.type === "assistant_response") {
     ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
     const step = api
@@ -569,6 +584,7 @@ export async function runRemoteSpotlightPipeline(
           return {
             command: null,
             usedLegacyFallback: event.usedQueryLoop,
+            memoryReplay: event.memoryReplay ?? null,
           };
         }
       }

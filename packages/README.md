@@ -7,12 +7,19 @@ Monorepo packages extracted from ydjm-construction-map for productization.
 | `spotlight-protocol` | `@inupedia/spotlight-protocol` | Shared wire types (client ↔ server) |
 | `spotlight-client` | `@inupedia/spotlight-client` | HTTP, manifest, host tool bridge |
 | `spotlight-vue` | `@inupedia/spotlight-vue` | Vue plugin, UI shell, `defineSpotlightHost` |
+| `spotlight-memory` | `@inupedia/spotlight-memory` | Memory Gate, exact/semantic cache stores |
 
 ## Build
 
 ```bash
 pnpm install
 pnpm build:spotlight-packages
+```
+
+In `ydjm-construction-map/packages/spotlight-memory` alone (outside inupedia-spotlight workspace):
+
+```bash
+pnpm install --ignore-workspace && pnpm run build && pnpm test
 ```
 
 ## Maintenance Rules
@@ -38,6 +45,8 @@ Public API is split by runtime:
 | `@inupedia/spotlight-client` | browser-safe | host tools, registry, service helpers |
 | `@inupedia/spotlight-client/vite` | build tool | Vite IoC transform |
 | `@inupedia/spotlight-client/node` | Node only | skill script runner |
+| `@inupedia/spotlight-memory` | isomorphic | Memory Gate, normalize, classify |
+| `@inupedia/spotlight-memory/node` | Node only | pack exact store, paths |
 
 Do not add Node-only imports to package root entries. If a helper touches
 `node:*`, `process`, filesystem, or shell execution, put it behind a Node-only

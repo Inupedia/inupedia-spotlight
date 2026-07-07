@@ -21,6 +21,7 @@ try {
 
   for (const packageName of [
     "spotlight-protocol",
+    "spotlight-memory",
     "spotlight-client",
     "spotlight-vue",
   ]) {
@@ -40,6 +41,22 @@ const imports = [
     id: "@inupedia/spotlight-protocol",
     assert(mod) {
       assertExport(mod, "SPOTLIGHT_CORE_TOOL_NAMES", this.id);
+    },
+  },
+  {
+    id: "@inupedia/spotlight-memory",
+    assert(mod) {
+      assertExport(mod, "normalizeQuestion", this.id);
+      if ("ExactMemoryStore" in mod) {
+        throw new Error(\`\${this.id} leaked Node-only ExactMemoryStore\`);
+      }
+    },
+  },
+  {
+    id: "@inupedia/spotlight-memory/node",
+    assert(mod) {
+      assertExport(mod, "ExactMemoryStore", this.id);
+      assertExport(mod, "createPackMemoryStores", this.id);
     },
   },
   {

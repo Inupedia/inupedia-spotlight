@@ -12,6 +12,7 @@
       v-if="showThinking"
       :steps="store.agentSteps"
       :centered="thinkingCentered"
+      :memory-replay="store.lastMemoryReplay"
       @close="store.closeThinking"
     />
   </Teleport>

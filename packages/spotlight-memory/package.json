@@ -1,0 +1,42 @@
+{
+  "name": "@inupedia/spotlight-memory",
+  "version": "0.1.5",
+  "description": "Memory Gate, exact/semantic cache stores for Inupedia Spotlight",
+  "type": "module",
+  "license": "MIT",
+  "author": "inupedia",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "build": "pnpm run clean && tsc -p tsconfig.json && tsc -p tsconfig.node.json && pnpm run verify:exports",
+    "verify:exports": "node ../scripts/verify-package-exports.mjs",
+    "test": "vitest run",
+    "prepack": "pnpm run build"
+  },
+  "dependencies": {
+    "@inupedia/spotlight-protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

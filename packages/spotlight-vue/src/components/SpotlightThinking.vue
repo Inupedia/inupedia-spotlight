@@ -13,6 +13,9 @@
       <div class="thinking-bar-title-stack">
         <span class="thinking-bar-kicker">HYDRO PROCESS</span>
         <span class="thinking-bar-title">{{ titleText }}</span>
+        <span v-if="memoryBadge" class="thinking-bar-memory-badge">{{
+          memoryBadge
+        }}</span>
       </div>
       <div class="thinking-bar-metrics" aria-label="执行状态概览">
         <span class="thinking-bar-metric">
@@ -778,6 +781,11 @@ const props = defineProps<{
   }>;
   embedded?: boolean;
   centered?: boolean;
+  memoryReplay?: {
+    source: "exact" | "semantic" | "session";
+    entryId: string;
+    kind: string;
+  } | null;
 }>();
 
 defineEmits<{
@@ -789,6 +797,13 @@ const titleText = computed(() => {
     props.steps.length > 0 &&
     props.steps.every((s) => s.status === "done" || s.status === "error");
   return allEnded ? "执行完成" : "思考中";
+});
+
+const memoryBadge = computed(() => {
+  if (!props.memoryReplay) return "";
+  if (props.memoryReplay.source === "semantic") return "语义缓存";
+  if (props.memoryReplay.source === "exact") return "Memory 缓存";
+  return "Session 缓存";
 });
 
 const isThinkingActive = computed(() =>
@@ -2329,6 +2344,21 @@ function getFileIcon(path: string): string {
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+
+.thinking-bar-memory-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(112, 172, 150, 0.34);
+  background: rgba(112, 172, 150, 0.12);
+  color: #8fc6b2;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .thinking-bar-kicker {

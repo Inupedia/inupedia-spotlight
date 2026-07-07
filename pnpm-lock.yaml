@@ -61,6 +61,22 @@ importers:
         specifier: ^4.0.18
         version: 4.1.9(@types/node@24.13.2)(vite@7.3.6(@types/node@24.13.2)(yaml@2.9.0))
 
+  packages/spotlight-memory:
+    dependencies:
+      '@inupedia/spotlight-protocol':
+        specifier: workspace:*
+        version: link:../spotlight-protocol
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.1.9(@types/node@22.20.0)(vite@7.3.6(@types/node@22.20.0)(yaml@2.9.0))
+
   packages/spotlight-protocol:
     devDependencies:
       typescript:
@@ -81,6 +97,13 @@ importers:
       yaml:
         specifier: ^2.8.4
         version: 2.9.0
+    optionalDependencies:
+      '@pixi-spine/all-3.8':
+        specifier: ^4.0.6
+        version: 4.0.6(@pixi/assets@7.4.3(@pixi/core@7.0.0))(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))
+      pixi.js:
+        specifier: ^8.9.2
+        version: 8.19.0
     devDependencies:
       '@inspira-ui/plugins':
         specifier: ^0.0.2
@@ -106,13 +129,6 @@ importers:
       vue-tsc:
         specifier: ^3.2.2
         version: 3.3.6(typescript@5.9.3)
-    optionalDependencies:
-      '@pixi-spine/all-3.8':
-        specifier: ^4.0.6
-        version: 4.0.6(@pixi/assets@7.4.3(@pixi/core@7.0.0))(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))
-      pixi.js:
-        specifier: ^8.9.2
-        version: 8.19.0
 
 packages:
 
@@ -759,6 +775,9 @@ packages:
   '@types/mdurl@2.0.0':
     resolution: {integrity: sha512-RGdgjQUZba5p6QEFAVx2OGb8rQDL/cPRG7GiedRzMcJ1tYnUANBncjbSB1NRGwbvjcPeikRABz2nshyPk1bhWg==}
 
+  '@types/node@22.20.0':
+    resolution: {integrity: sha512-QWlFW2wf3nTjC13/DqRnBpR4ZO36VJH/JVBkA/vcnmbTBNQIlnObqyqZE1tUR7+Ni23Lda8R1BxMfbXRpCUx5g==}
+
   '@types/node@24.13.2':
     resolution: {integrity: sha512-fRa09kZTgu8o71KFcDjUFuc7F+dEbZYZmkI0mg5YBTRs0yMKjYHsq/c0urDKeDb+D5qVgXOdFcuu+DZPKOITwA==}
 
@@ -1233,6 +1252,9 @@ packages:
 
   uc.micro@2.1.0:
     resolution: {integrity: sha512-ARDJmphmdvUk6Glw7y9DQ2bFkKBHwQHLi2lsaH6PPmz/Ka9sFOBsBluozhDltWmnv9u/cF6Rt87znRTPV+yp/A==}
+
+  undici-types@6.21.0:
+    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
   undici-types@7.18.2:
     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
@@ -1861,7 +1883,7 @@ snapshots:
   '@pixi-spine/all-3.8@4.0.6(@pixi/assets@7.4.3(@pixi/core@7.0.0))(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))':
     dependencies:
       '@pixi-spine/base': 4.0.6(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))
-      '@pixi-spine/loader-3.8': 4.0.6(86bb3408bf61c73e054ef799754ca317)
+      '@pixi-spine/loader-3.8': 4.0.6(f5qldcu2bdd6dnq3ahgohdfxbu)
       '@pixi-spine/loader-base': 4.0.6(@pixi-spine/base@4.0.6(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/assets@7.4.3(@pixi/core@7.0.0))(@pixi/core@7.0.0)
       '@pixi-spine/runtime-3.8': 4.0.6(@pixi-spine/base@4.0.6(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/core@7.0.0)
       '@pixi/assets': 7.4.3(@pixi/core@7.0.0)
@@ -1883,7 +1905,7 @@ snapshots:
       '@pixi/sprite': 7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))
     optional: true
 
-  '@pixi-spine/loader-3.8@4.0.6(86bb3408bf61c73e054ef799754ca317)':
+  '@pixi-spine/loader-3.8@4.0.6(f5qldcu2bdd6dnq3ahgohdfxbu)':
     dependencies:
       '@pixi-spine/loader-base': 4.0.6(@pixi-spine/base@4.0.6(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/assets@7.4.3(@pixi/core@7.0.0))(@pixi/core@7.0.0)
       '@pixi-spine/runtime-3.8': 4.0.6(@pixi-spine/base@4.0.6(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/core@7.0.0)
@@ -2100,6 +2122,10 @@ snapshots:
 
   '@types/mdurl@2.0.0': {}
 
+  '@types/node@22.20.0':
+    dependencies:
+      undici-types: 6.21.0
+
   '@types/node@24.13.2':
     dependencies:
       undici-types: 7.18.2
@@ -2127,6 +2153,14 @@ snapshots:
       '@vitest/utils': 4.1.9
       chai: 6.2.2
       tinyrainbow: 3.1.0
+
+  '@vitest/mocker@4.1.9(vite@7.3.6(@types/node@22.20.0)(yaml@2.9.0))':
+    dependencies:
+      '@vitest/spy': 4.1.9
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 7.3.6(@types/node@22.20.0)(yaml@2.9.0)
 
   '@vitest/mocker@4.1.9(vite@7.3.6(@types/node@24.13.2)(yaml@2.9.0))':
     dependencies:
@@ -2671,6 +2705,8 @@ snapshots:
 
   uc.micro@2.1.0: {}
 
+  undici-types@6.21.0: {}
+
   undici-types@7.18.2: {}
 
   url@0.11.4:
@@ -2678,6 +2714,19 @@ snapshots:
       punycode: 1.4.1
       qs: 6.15.3
     optional: true
+
+  vite@7.3.6(@types/node@22.20.0)(yaml@2.9.0):
+    dependencies:
+      esbuild: 0.28.1
+      fdir: 6.5.0(picomatch@4.0.4)
+      picomatch: 4.0.4
+      postcss: 8.5.16
+      rollup: 4.62.2
+      tinyglobby: 0.2.17
+    optionalDependencies:
+      '@types/node': 22.20.0
+      fsevents: 2.3.3
+      yaml: 2.9.0
 
   vite@7.3.6(@types/node@24.13.2)(yaml@2.9.0):
     dependencies:
@@ -2691,6 +2740,33 @@ snapshots:
       '@types/node': 24.13.2
       fsevents: 2.3.3
       yaml: 2.9.0
+
+  vitest@4.1.9(@types/node@22.20.0)(vite@7.3.6(@types/node@22.20.0)(yaml@2.9.0)):
+    dependencies:
+      '@vitest/expect': 4.1.9
+      '@vitest/mocker': 4.1.9(vite@7.3.6(@types/node@22.20.0)(yaml@2.9.0))
+      '@vitest/pretty-format': 4.1.9
+      '@vitest/runner': 4.1.9
+      '@vitest/snapshot': 4.1.9
+      '@vitest/spy': 4.1.9
+      '@vitest/utils': 4.1.9
+      es-module-lexer: 2.3.0
+      expect-type: 1.4.0
+      magic-string: 0.30.21
+      obug: 2.1.3
+      pathe: 2.0.3
+      picomatch: 4.0.4
+      std-env: 4.1.0
+      tinybench: 2.9.0
+      tinyexec: 1.2.4
+      tinyglobby: 0.2.17
+      tinyrainbow: 3.1.0
+      vite: 7.3.6(@types/node@22.20.0)(yaml@2.9.0)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 22.20.0
+    transitivePeerDependencies:
+      - msw
 
   vitest@4.1.9(@types/node@24.13.2)(vite@7.3.6(@types/node@24.13.2)(yaml@2.9.0)):
     dependencies:
