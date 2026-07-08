@@ -9,24 +9,12 @@
     >
       <OfficialBorderBeam
         v-if="memoryPreference.enabled"
-        class="spotlight-panel-beam spotlight-panel-beam--primary"
-        intense
-        :size="200"
-        :duration="12"
-        :border-width="2.5"
-        color-from="#2dd4bf"
+        class="spotlight-panel-beam"
+        :size="120"
+        :duration="22"
+        :border-width="1.5"
+        color-from="#5eead4"
         color-to="#38bdf8"
-      />
-      <OfficialBorderBeam
-        v-if="memoryPreference.enabled"
-        class="spotlight-panel-beam spotlight-panel-beam--secondary"
-        intense
-        :size="140"
-        :duration="18"
-        :border-width="2"
-        :delay="6"
-        color-from="#0ea5e9"
-        color-to="#14b8a6"
       />
       <div class="spotlight-command-deck">
         <div class="spotlight-command-deck-meta">
@@ -102,12 +90,11 @@
         >
           <OfficialBorderBeam
             class="spotlight-voice-beam"
-            intense
-            :size="100"
-            :duration="8"
-            :border-width="2"
-            color-from="#14b8a6"
-            color-to="#0ea5e9"
+            :size="86"
+            :duration="6"
+            :border-width="1.5"
+            color-from="#c9a25d"
+            color-to="#5d8f9b"
           />
           <div class="spotlight-voice-mic" aria-hidden="true">
             <span class="spotlight-voice-mic-icon">

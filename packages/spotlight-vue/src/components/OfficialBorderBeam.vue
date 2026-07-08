@@ -9,8 +9,6 @@ interface BorderBeamProps {
   colorFrom?: string;
   colorTo?: string;
   delay?: number;
-  /** Stronger halo for memory / active states */
-  intense?: boolean;
 }
 
 const props = withDefaults(defineProps<BorderBeamProps>(), {
@@ -21,7 +19,6 @@ const props = withDefaults(defineProps<BorderBeamProps>(), {
   colorFrom: "#ffaa40",
   colorTo: "#9c40ff",
   delay: 0,
-  intense: false,
 });
 
 const durationInSeconds = computed(() => `${props.duration}s`);
@@ -29,10 +26,7 @@ const delayInSeconds = computed(() => `${props.delay}s`);
 </script>
 
 <template>
-  <div
-    class="border-beam-official"
-    :class="{ 'border-beam-official--intense': intense }"
-  />
+  <div class="border-beam-official" />
 </template>
 
 <style scoped>
@@ -59,27 +53,6 @@ const delayInSeconds = computed(() => `${props.delay}s`);
   -webkit-mask-composite: source-in;
 }
 
-.border-beam-official::before {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border-radius: inherit;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--color-from) 55%, transparent),
-    color-mix(in srgb, var(--color-to) 55%, transparent)
-  );
-  opacity: 0;
-  filter: blur(10px);
-  transition: opacity 0.28s ease;
-  z-index: -1;
-}
-
-.border-beam-official--intense::before {
-  opacity: 0.75;
-  animation: border-beam-official-glow 4.2s ease-in-out infinite;
-}
-
 .border-beam-official::after {
   content: "";
   position: absolute;
@@ -91,19 +64,12 @@ const delayInSeconds = computed(() => `${props.delay}s`);
     to left,
     var(--color-from),
     var(--color-to),
-    color-mix(in srgb, var(--color-to) 40%, transparent),
     transparent
   );
-  filter: saturate(1.25) brightness(1.05);
   offset-anchor: calc(var(--anchor) * 1%) 50%;
   offset-path: rect(0 auto auto 0 round calc(var(--size) * 1px));
   animation: border-beam-official-anim var(--duration) infinite linear;
   animation-delay: var(--delay);
-}
-
-.border-beam-official--intense::after {
-  width: calc(var(--size) * 1.15px);
-  filter: saturate(1.45) brightness(1.12);
 }
 
 @keyframes border-beam-official-anim {
@@ -112,26 +78,9 @@ const delayInSeconds = computed(() => `${props.delay}s`);
   }
 }
 
-@keyframes border-beam-official-glow {
-  0%,
-  100% {
-    opacity: 0.45;
-    transform: scale(0.98);
-  }
-  50% {
-    opacity: 0.9;
-    transform: scale(1.02);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .border-beam-official::after,
-  .border-beam-official--intense::before {
+  .border-beam-official::after {
     animation: none;
-  }
-
-  .border-beam-official--intense::before {
-    opacity: 0.5;
   }
 }
 </style>

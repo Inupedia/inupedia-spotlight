@@ -108,7 +108,7 @@ onUnmounted(() => {
   width: min(360px, 40vw);
   max-height: 32vh;
   overflow: hidden auto;
-  border-radius: 14px;
+  border-radius: 20px;
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: linear-gradient(
     165deg,
@@ -124,10 +124,10 @@ onUnmounted(() => {
 }
 
 .live2d-speech-bubble.is-speaking {
-  border-color: rgba(20, 184, 166, 0.5);
+  border-color: rgba(20, 184, 166, 0.45);
   box-shadow:
-    0 20px 40px rgba(20, 184, 166, 0.16),
-    0 0 0 1px rgba(14, 165, 233, 0.2),
+    0 20px 40px rgba(20, 184, 166, 0.14),
+    0 0 0 1px rgba(14, 165, 233, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
@@ -145,7 +145,7 @@ onUnmounted(() => {
   height: 8px;
   border-radius: 999px;
   background: currentcolor;
-  box-shadow: 0 0 10px rgba(20, 184, 166, 0.45);
+  box-shadow: 0 0 12px currentcolor;
 }
 
 .live2d-speech-bubble.is-speaking .live2d-speech-dot {
