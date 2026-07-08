@@ -116,7 +116,11 @@ export class ExactMemoryStore {
     entry.lastHitAt = Date.now();
   }
 
-  listEntries(limit = 50): SpotlightMemoryEntry[] {
+  async listEntries(limit = 50): Promise<SpotlightMemoryEntry[]> {
+    return this.listEntriesSync(limit);
+  }
+
+  listEntriesSync(limit = 50): SpotlightMemoryEntry[] {
     const safeLimit =
       Number.isFinite(limit) && limit > 0 ? Math.min(500, Math.floor(limit)) : 50;
     return [...this.entries.values()]
@@ -124,7 +128,11 @@ export class ExactMemoryStore {
       .slice(0, safeLimit);
   }
 
-  deleteEntry(entryId: string): boolean {
+  async deleteEntry(entryId: string): Promise<boolean> {
+    return this.deleteEntrySync(entryId);
+  }
+
+  deleteEntrySync(entryId: string): boolean {
     if (!this.entries.has(entryId)) return false;
     this.entries.delete(entryId);
     for (const [cacheKey, id] of Object.entries(this.index)) {
@@ -136,15 +144,28 @@ export class ExactMemoryStore {
     return true;
   }
 
-  deleteAll(projectId: string): number {
+  async deleteAll(projectId: string): Promise<number> {
+    return this.deleteAllSync(projectId);
+  }
+
+  deleteAllSync(projectId: string): number {
     const ids = [...this.entries.values()]
       .filter((entry) => entry.projectId === projectId)
       .map((entry) => entry.id);
     let removed = 0;
     for (const entryId of ids) {
-      if (this.deleteEntry(entryId)) removed += 1;
+      if (this.deleteEntrySync(entryId)) removed += 1;
     }
     return removed;
+  }
+
+  async count(): Promise<number> {
+    return this.entries.size;
+  }
+
+  /** @deprecated use async count() */
+  countSync(): number {
+    return this.entries.size;
   }
 
   private rewriteEntriesFile(): void {

@@ -91,9 +91,9 @@ export class RedisExactMemoryStore {
       const staleKeys = await redis.zrange(index, 0, evictCount - 1);
       if (staleKeys.length) {
         const pipeline = redis.pipeline();
-        for (const cacheKey of staleKeys) {
-          pipeline.del(exactKey(this.projectId, this.tenantId, cacheKey));
-          pipeline.zrem(index, cacheKey);
+        for (const staleCacheKey of staleKeys) {
+          pipeline.del(exactKey(this.projectId, this.tenantId, staleCacheKey));
+          pipeline.zrem(index, staleCacheKey);
         }
         await pipeline.exec();
       }
@@ -103,8 +103,6 @@ export class RedisExactMemoryStore {
   async touch(entryId: string): Promise<void> {
     const redis = await getSpotlightRedisClient();
     if (!redis) return;
-    const pattern = spotlightRedisKey("gate", "exact", "*");
-    void pattern;
     const index = indexKey(this.projectId, this.tenantId);
     const cacheKeys = await redis.zrange(index, 0, -1);
     for (const cacheKey of cacheKeys) {
@@ -122,6 +120,7 @@ export class RedisExactMemoryStore {
         } else {
           await redis.set(key, JSON.stringify(entry), "EX", this.ttlSec(entry));
         }
+        await redis.zadd(index, Date.now(), cacheKey);
         return;
       } catch {
         continue;
@@ -129,16 +128,70 @@ export class RedisExactMemoryStore {
     }
   }
 
-  listEntries(limit = 50): SpotlightMemoryEntry[] {
-    void limit;
-    return [];
+  async listEntries(limit = 50): Promise<SpotlightMemoryEntry[]> {
+    const redis = await getSpotlightRedisClient();
+    if (!redis) return [];
+    const safeLimit =
+      Number.isFinite(limit) && limit > 0 ? Math.min(500, Math.floor(limit)) : 50;
+    const index = indexKey(this.projectId, this.tenantId);
+    const cacheKeys = await redis.zrevrange(index, 0, safeLimit - 1);
+    const entries: SpotlightMemoryEntry[] = [];
+    for (const cacheKey of cacheKeys) {
+      const raw = await redis.get(exactKey(this.projectId, this.tenantId, cacheKey));
+      if (!raw) continue;
+      try {
+        entries.push(JSON.parse(raw) as SpotlightMemoryEntry);
+      } catch {
+        continue;
+      }
+    }
+    return entries.sort((a, b) => b.createdAt - a.createdAt);
   }
 
-  deleteEntry(_entryId: string): boolean {
+  async deleteEntry(entryId: string): Promise<boolean> {
+    const redis = await getSpotlightRedisClient();
+    if (!redis) return false;
+    const index = indexKey(this.projectId, this.tenantId);
+    const cacheKeys = await redis.zrange(index, 0, -1);
+    for (const cacheKey of cacheKeys) {
+      const key = exactKey(this.projectId, this.tenantId, cacheKey);
+      const raw = await redis.get(key);
+      if (!raw) {
+        await redis.zrem(index, cacheKey);
+        continue;
+      }
+      try {
+        const entry = JSON.parse(raw) as SpotlightMemoryEntry;
+        if (entry.id !== entryId) continue;
+        await redis.del(key);
+        await redis.zrem(index, cacheKey);
+        return true;
+      } catch {
+        continue;
+      }
+    }
     return false;
   }
 
-  deleteAll(_projectId: string): number {
-    return 0;
+  async deleteAll(projectId: string): Promise<number> {
+    if (projectId !== this.projectId) return 0;
+    const redis = await getSpotlightRedisClient();
+    if (!redis) return 0;
+    const index = indexKey(this.projectId, this.tenantId);
+    const cacheKeys = await redis.zrange(index, 0, -1);
+    if (cacheKeys.length === 0) return 0;
+    const pipeline = redis.pipeline();
+    for (const cacheKey of cacheKeys) {
+      pipeline.del(exactKey(this.projectId, this.tenantId, cacheKey));
+      pipeline.zrem(index, cacheKey);
+    }
+    await pipeline.exec();
+    return cacheKeys.length;
+  }
+
+  async count(): Promise<number> {
+    const redis = await getSpotlightRedisClient();
+    if (!redis) return 0;
+    return redis.zcard(indexKey(this.projectId, this.tenantId));
   }
 }

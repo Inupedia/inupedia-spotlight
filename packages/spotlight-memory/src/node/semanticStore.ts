@@ -4,6 +4,11 @@ import type { SpotlightMemoryEntry } from "@inupedia/spotlight-protocol";
 import { scoreQuestionSimilarity } from "../normalize.js";
 import type { PackMemoryPaths } from "./paths.js";
 import {
+  entryMatchesLookupScopes,
+  isMemoryEntryExpired,
+} from "./memoryEntryScope.js";
+import type { SemanticLookupOptions, SemanticWriteResult } from "./memoryStoreTypes.js";
+import {
   type EmbeddingProvider,
   resolveEmbeddingProviderFromEnv,
   scoreEmbeddingPair,
@@ -58,7 +63,9 @@ export class SemanticMemoryStore {
     );
   }
 
-  async putWithOptionalEmbedding(entry: SpotlightMemoryEntry): Promise<void> {
+  async putWithOptionalEmbedding(
+    entry: SpotlightMemoryEntry,
+  ): Promise<SemanticWriteResult> {
     let embedding: number[] | null = null;
     if (this.embeddingProvider) {
       try {
@@ -68,12 +75,14 @@ export class SemanticMemoryStore {
       }
     }
     this.put(entry, embedding);
+    return { written: true };
   }
 
   async findSimilar(
     projectId: string,
     questionNorm: string,
     limit = 5,
+    options?: SemanticLookupOptions,
   ): Promise<Array<{ entry: SpotlightMemoryEntry; score: number }>> {
     const rows = this.db
       .prepare(
@@ -90,12 +99,20 @@ export class SemanticMemoryStore {
       }
     }
 
+    const now = options?.now ?? Date.now();
     const scored: Array<{ entry: SpotlightMemoryEntry; score: number }> = [];
     for (const row of rows) {
       let entry: SpotlightMemoryEntry;
       try {
         entry = JSON.parse(row.entry_json) as SpotlightMemoryEntry;
       } catch {
+        continue;
+      }
+      if (isMemoryEntryExpired(entry, now)) continue;
+      if (
+        options?.scopes?.length &&
+        !entryMatchesLookupScopes(entry, options.scopes)
+      ) {
         continue;
       }
       const lexical = scoreQuestionSimilarity(questionNorm, entry.questionNorm);
@@ -134,7 +151,7 @@ export class SemanticMemoryStore {
     }
   }
 
-  listEntries(limit = 50): SpotlightMemoryEntry[] {
+  async listEntries(limit = 50): Promise<SpotlightMemoryEntry[]> {
     const safeLimit =
       Number.isFinite(limit) && limit > 0 ? Math.min(500, Math.floor(limit)) : 50;
     const rows = this.db
@@ -151,21 +168,21 @@ export class SemanticMemoryStore {
     return entries;
   }
 
-  deleteEntry(entryId: string): boolean {
+  async deleteEntry(entryId: string): Promise<boolean> {
     const result = this.db
       .prepare(`DELETE FROM entries WHERE id = ?`)
       .run(entryId);
     return Number(result.changes) > 0;
   }
 
-  deleteAll(projectId: string): number {
+  async deleteAll(projectId: string): Promise<number> {
     const result = this.db
       .prepare(`DELETE FROM entries WHERE project_id = ?`)
       .run(projectId);
     return Number(result.changes);
   }
 
-  count(projectId?: string): number {
+  async count(projectId?: string): Promise<number> {
     if (projectId) {
       const row = this.db
         .prepare(`SELECT COUNT(*) AS total FROM entries WHERE project_id = ?`)

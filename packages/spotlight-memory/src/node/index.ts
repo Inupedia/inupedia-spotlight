@@ -5,25 +5,35 @@ import type { MemoryStoreReader, MemoryStoreWriter } from "./gate.js";
 import { ExactMemoryStore } from "./exactStore.js";
 import { refreshPackMemoryMeta } from "./meta.js";
 import {
+  isRemoteMemoryBackend,
+  resolveEffectiveSemanticMemoryBackend,
   resolveExactMemoryBackend,
-  resolveSemanticMemoryBackend,
+  type ExactMemoryBackend,
+  type SemanticMemoryBackend,
 } from "./memoryBackends.js";
 import { MilvusSemanticMemoryStore } from "./milvusSemanticStore.js";
 import { resolvePackMemoryDir, type PackMemoryPaths } from "./paths.js";
 import { RedisExactMemoryStore } from "./redisExactStore.js";
 import { SemanticMemoryStore } from "./semanticStore.js";
+import type { MemoryEntryScope } from "./memoryEntryScope.js";
+import type { SemanticLookupOptions, SemanticWriteResult } from "./memoryStoreTypes.js";
+import { logMemoryEvent } from "./memoryLog.js";
 
 export interface SemanticMemoryStoreLike {
   findSimilar(
     projectId: string,
     questionNorm: string,
     limit?: number,
+    options?: SemanticLookupOptions,
   ): Promise<Array<{ entry: SpotlightMemoryEntry; score: number }>>;
-  putWithOptionalEmbedding(entry: SpotlightMemoryEntry): Promise<void>;
+  putWithOptionalEmbedding(
+    entry: SpotlightMemoryEntry,
+  ): Promise<SemanticWriteResult>;
   touch(entryId: string): void | Promise<void>;
-  count(projectId?: string): number;
-  deleteEntry(entryId: string): boolean;
-  deleteAll(projectId: string): number;
+  count(projectId?: string): number | Promise<number>;
+  listEntries(limit?: number): SpotlightMemoryEntry[] | Promise<SpotlightMemoryEntry[]>;
+  deleteEntry(entryId: string): boolean | Promise<boolean>;
+  deleteAll(projectId: string): number | Promise<number>;
 }
 
 export interface ExactMemoryStoreLike {
@@ -31,9 +41,10 @@ export interface ExactMemoryStoreLike {
   putExact(cacheKey: string, entry: SpotlightMemoryEntry): Promise<void>;
   hasExact(cacheKey: string): Promise<boolean>;
   touch(entryId: string): Promise<void>;
-  listEntries(limit?: number): SpotlightMemoryEntry[];
-  deleteEntry(entryId: string): boolean;
-  deleteAll(projectId: string): number;
+  listEntries(limit?: number): SpotlightMemoryEntry[] | Promise<SpotlightMemoryEntry[]>;
+  deleteEntry(entryId: string): boolean | Promise<boolean>;
+  deleteAll(projectId: string): number | Promise<number>;
+  count?(projectId?: string): number | Promise<number>;
 }
 
 export interface PackMemoryStores {
@@ -42,9 +53,44 @@ export interface PackMemoryStores {
   semantic: SemanticMemoryStoreLike;
   gate: MemoryGate;
   backends: {
-    exact: "file" | "redis";
-    semantic: "sqlite" | "milvus";
+    exact: ExactMemoryBackend;
+    semantic: SemanticMemoryBackend;
+    countsAvailable: boolean;
   };
+}
+
+async function resolveStoreCount(
+  store: { count?(projectId?: string): number | Promise<number> },
+  projectId: string,
+): Promise<number> {
+  if (!store.count) return 0;
+  return Promise.resolve(store.count(projectId));
+}
+
+async function refreshLocalMetaIfAvailable(params: {
+  paths: PackMemoryPaths;
+  exact: ExactMemoryStoreLike;
+  semantic: SemanticMemoryStoreLike;
+  projectId: string;
+  backends: PackMemoryStores["backends"];
+}): Promise<void> {
+  if (!params.backends.countsAvailable) {
+    refreshPackMemoryMeta({
+      paths: params.paths,
+      exactBackend: params.backends.exact,
+      semanticBackend: params.backends.semantic,
+      countsAvailable: false,
+    });
+    return;
+  }
+  refreshPackMemoryMeta({
+    paths: params.paths,
+    exactCount: (await Promise.resolve(params.exact.listEntries(Number.MAX_SAFE_INTEGER))).length,
+    semanticCount: await resolveStoreCount(params.semantic, params.projectId),
+    exactBackend: params.backends.exact,
+    semanticBackend: params.backends.semantic,
+    countsAvailable: true,
+  });
 }
 
 function createCompositeMemoryStores(
@@ -52,11 +98,16 @@ function createCompositeMemoryStores(
   exact: ExactMemoryStoreLike,
   semantic: SemanticMemoryStoreLike,
   projectId: string,
+  backends: PackMemoryStores["backends"],
 ): { reader: MemoryStoreReader; writer: MemoryStoreWriter } {
   const reader: MemoryStoreReader = {
     getExact: (cacheKey) => exact.getExact(cacheKey),
-    findSemantic: (pid, questionNorm, limit) =>
-      semantic.findSimilar(pid, questionNorm, limit),
+    findSemantic: (pid, questionNorm, limit, lookupScopes) =>
+      semantic.findSimilar(pid, questionNorm, limit, {
+        scopes: lookupScopes as
+          | Array<{ scope: MemoryEntryScope; sessionId?: string }>
+          | undefined,
+      }),
     touch: async (entryId) => {
       await exact.touch(entryId);
       await semantic.touch(entryId);
@@ -65,11 +116,23 @@ function createCompositeMemoryStores(
   const writer: MemoryStoreWriter = {
     putExact: (cacheKey, entry) => exact.putExact(cacheKey, entry),
     putSemantic: async (entry) => {
-      await semantic.putWithOptionalEmbedding(entry);
-      refreshPackMemoryMeta({
+      const result = await semantic.putWithOptionalEmbedding(entry);
+      if (!result.written) {
+        logMemoryEvent("semantic_write_skipped", {
+          projectId: entry.projectId,
+          entryId: entry.id,
+          reason: result.skippedReason,
+          exactBackend: backends.exact,
+          semanticBackend: backends.semantic,
+        });
+        return;
+      }
+      await refreshLocalMetaIfAvailable({
         paths,
-        exactCount: exact.listEntries(Number.MAX_SAFE_INTEGER).length,
-        semanticCount: semantic.count(projectId),
+        exact,
+        semantic,
+        projectId,
+        backends,
       });
     },
     hasExact: (cacheKey) => exact.hasExact(cacheKey),
@@ -82,34 +145,46 @@ function createExactStore(params: {
   projectId: string;
   tenantId?: string;
   lruMax?: number;
-}): ExactMemoryStoreLike {
+}): { store: ExactMemoryStoreLike; backend: ExactMemoryBackend } {
   const backend = resolveExactMemoryBackend();
   if (backend === "redis" && RedisExactMemoryStore.isAvailable()) {
-    return new RedisExactMemoryStore({
-      projectId: params.projectId,
-      tenantId: params.tenantId,
-      lruMax: params.lruMax,
-    });
+    return {
+      backend: "redis",
+      store: new RedisExactMemoryStore({
+        projectId: params.projectId,
+        tenantId: params.tenantId,
+        lruMax: params.lruMax,
+      }),
+    };
   }
-  return new ExactMemoryStore({
-    paths: params.paths,
-    lruMax: params.lruMax,
-  });
+  return {
+    backend: "file",
+    store: new ExactMemoryStore({
+      paths: params.paths,
+      lruMax: params.lruMax,
+    }),
+  };
 }
 
 function createSemanticStore(params: {
   paths: PackMemoryPaths;
   projectId: string;
   tenantId?: string;
-}): SemanticMemoryStoreLike {
-  const backend = resolveSemanticMemoryBackend();
+}): { store: SemanticMemoryStoreLike; backend: SemanticMemoryBackend } {
+  const backend = resolveEffectiveSemanticMemoryBackend();
   if (backend === "milvus" && MilvusSemanticMemoryStore.isAvailable()) {
-    return new MilvusSemanticMemoryStore({
-      projectId: params.projectId,
-      tenantId: params.tenantId,
-    });
+    return {
+      backend: "milvus",
+      store: new MilvusSemanticMemoryStore({
+        projectId: params.projectId,
+        tenantId: params.tenantId,
+      }),
+    };
   }
-  return new SemanticMemoryStore({ paths: params.paths });
+  return {
+    backend: "sqlite",
+    store: new SemanticMemoryStore({ paths: params.paths }),
+  };
 }
 
 export function createPackMemoryStores(params: {
@@ -120,56 +195,62 @@ export function createPackMemoryStores(params: {
   lruMax?: number;
 }): PackMemoryStores {
   const paths = resolvePackMemoryDir(params.packsRoot, params.projectId);
-  const exactBackend = resolveExactMemoryBackend();
-  const semanticBackend = resolveSemanticMemoryBackend();
-  const exact = createExactStore({
+  const { store: exact, backend: exactBackend } = createExactStore({
     paths,
     projectId: params.projectId,
     tenantId: params.tenantId,
     lruMax: params.lruMax,
   });
-  const semantic = createSemanticStore({
+  const { store: semantic, backend: semanticBackend } = createSemanticStore({
     paths,
     projectId: params.projectId,
     tenantId: params.tenantId,
   });
+  const backends = {
+    exact: exactBackend,
+    semantic: semanticBackend,
+    countsAvailable: !isRemoteMemoryBackend({
+      exact: exactBackend,
+      semantic: semanticBackend,
+    }),
+  };
   const { reader, writer } = createCompositeMemoryStores(
     paths,
     exact,
     semantic,
     params.projectId,
+    backends,
   );
   const gate = createMemoryGate(reader, writer, params.gateConfig);
-  refreshPackMemoryMeta({
+  void refreshLocalMetaIfAvailable({
     paths,
-    exactCount: exact.listEntries(Number.MAX_SAFE_INTEGER).length,
-    semanticCount: semantic.count(params.projectId),
+    exact,
+    semantic,
+    projectId: params.projectId,
+    backends,
   });
   return {
     paths,
     exact,
     semantic,
     gate,
-    backends: {
-      exact:
-        exactBackend === "redis" && RedisExactMemoryStore.isAvailable()
-          ? "redis"
-          : "file",
-      semantic:
-        semanticBackend === "milvus" && MilvusSemanticMemoryStore.isAvailable()
-          ? "milvus"
-          : "sqlite",
-    },
+    backends,
   };
 }
 
 export { ExactMemoryStore } from "./exactStore.js";
 export { SemanticMemoryStore } from "./semanticStore.js";
-export { MilvusSemanticMemoryStore } from "./milvusSemanticStore.js";
+export {
+  MilvusSemanticMemoryStore,
+  isMilvusEmbeddingReady,
+  validateMilvusEmbedding,
+} from "./milvusSemanticStore.js";
 export { RedisExactMemoryStore } from "./redisExactStore.js";
 export {
   resolveExactMemoryBackend,
   resolveSemanticMemoryBackend,
+  resolveEffectiveSemanticMemoryBackend,
+  isRemoteMemoryBackend,
 } from "./memoryBackends.js";
 export {
   buildCacheKey,
@@ -208,6 +289,15 @@ export {
   resolveSpotlightMilvusDb,
   SPOTLIGHT_MILVUS_SEMANTIC_COLLECTION,
 } from "./milvusClient.js";
+export type {
+  SemanticLookupOptions,
+  SemanticWriteResult,
+} from "./memoryStoreTypes.js";
+export {
+  resolveMemoryEntryScopeFields,
+  entryMatchesLookupScopes,
+  isMemoryEntryExpired,
+} from "./memoryEntryScope.js";
 export {
   FILE_MEMORY_ENTRYPOINT,
   appendSpotlightFileMemory,

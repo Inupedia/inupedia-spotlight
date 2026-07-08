@@ -204,7 +204,7 @@ describe("SemanticMemoryStore", () => {
     if (lookup.hit) {
       expect(["exact", "semantic"]).toContain(lookup.result.source);
     }
-    expect(reloaded.semantic.count("demo")).toBe(1);
+    await expect(reloaded.semantic.count("demo")).resolves.toBe(1);
   });
 
   it("keeps session memory isolated while allowing project fallback", async () => {
@@ -369,11 +369,11 @@ describe("ExactMemoryStore admin", () => {
       confidence: 0.95,
     });
 
-    const listed = exact.listEntries(10);
+    const listed = await exact.listEntries(10);
     expect(listed).toHaveLength(1);
     expect(listed[0]?.answer).toBe("listed answer");
 
-    expect(exact.deleteEntry(listed[0]!.id)).toBe(true);
-    expect(exact.listEntries(10)).toHaveLength(0);
+    expect(await exact.deleteEntry(listed[0]!.id)).toBe(true);
+    expect(await exact.listEntries(10)).toHaveLength(0);
   });
 });

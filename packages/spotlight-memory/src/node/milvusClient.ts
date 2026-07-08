@@ -3,7 +3,7 @@ import type { MilvusClient } from "@zilliz/milvus2-sdk-node";
 let client: MilvusClient | null = null;
 let dbReady = false;
 
-export const SPOTLIGHT_MILVUS_SEMANTIC_COLLECTION = "spotlight_gate_semantic";
+export const SPOTLIGHT_MILVUS_SEMANTIC_COLLECTION = "spotlight_gate_semantic_v2";
 
 export function resolveSpotlightMilvusUri(): string | null {
   return process.env.SPOTLIGHT_MILVUS_URI?.trim() || null;

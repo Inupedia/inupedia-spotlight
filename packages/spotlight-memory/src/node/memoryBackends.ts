@@ -1,3 +1,7 @@
+import { MilvusSemanticMemoryStore } from "./milvusSemanticStore.js";
+import { resolveEmbeddingProviderFromEnv } from "./embeddingProvider.js";
+import { isSpotlightMilvusConfigured } from "./milvusClient.js";
+
 export type SemanticMemoryBackend = "sqlite" | "milvus";
 export type ExactMemoryBackend = "file" | "redis";
 
@@ -15,4 +19,21 @@ export function resolveExactMemoryBackend(): ExactMemoryBackend {
   if (raw === "redis") return "redis";
   if (process.env.SPOTLIGHT_REDIS_URL?.trim()) return "redis";
   return "file";
+}
+
+/** Milvus semantic requires a working embedding provider; otherwise fall back to SQLite. */
+export function resolveEffectiveSemanticMemoryBackend(): SemanticMemoryBackend {
+  const requested = resolveSemanticMemoryBackend();
+  if (requested !== "milvus") return "sqlite";
+  if (!isSpotlightMilvusConfigured()) return "sqlite";
+  if (!MilvusSemanticMemoryStore.isAvailable()) return "sqlite";
+  if (!resolveEmbeddingProviderFromEnv()) return "sqlite";
+  return "milvus";
+}
+
+export function isRemoteMemoryBackend(params: {
+  exact: ExactMemoryBackend;
+  semantic: SemanticMemoryBackend;
+}): boolean {
+  return params.exact !== "file" || params.semantic !== "sqlite";
 }

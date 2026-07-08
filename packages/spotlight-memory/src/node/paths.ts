@@ -29,19 +29,25 @@ export function resolvePackMemoryDir(
   };
 }
 
+import type { ExactMemoryBackend, SemanticMemoryBackend } from "./memoryBackends.js";
+
 export interface PackMemoryMeta {
   version: string;
-  exactCount: number;
-  semanticCount: number;
+  exactCount?: number;
+  semanticCount?: number;
   updatedAt: string;
+  exactBackend?: ExactMemoryBackend;
+  semanticBackend?: SemanticMemoryBackend;
+  countsAvailable?: boolean;
 }
 
 export function defaultPackMemoryMeta(): PackMemoryMeta {
   return {
-    version: "1",
+    version: "2",
     exactCount: 0,
     semanticCount: 0,
     updatedAt: new Date().toISOString(),
+    countsAvailable: true,
   };
 }
 

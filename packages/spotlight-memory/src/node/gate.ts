@@ -10,6 +10,7 @@ import { classifyMemoryKind, isMemoryKindAllowedForRead } from "../classify.js";
 import { normalizeQuestion } from "../normalize.js";
 import { isMemoryEntryStale } from "../stale.js";
 import { buildCacheKey, createMemoryEntryId } from "./cacheKey.js";
+import type { MemoryEntryScope } from "./memoryEntryScope.js";
 
 export interface MemoryStoreReader {
   getExact(cacheKey: string): Promise<import("@inupedia/spotlight-protocol").SpotlightMemoryEntry | null>;
@@ -17,6 +18,7 @@ export interface MemoryStoreReader {
     projectId: string,
     questionNorm: string,
     limit?: number,
+    lookupScopes?: Array<{ scope: MemoryEntryScope; sessionId?: string }>,
   ): Promise<
     Array<{
       entry: import("@inupedia/spotlight-protocol").SpotlightMemoryEntry;
@@ -49,7 +51,7 @@ export interface MemoryGate {
   write(input: SpotlightMemoryWriteInput): Promise<SpotlightMemoryWriteResult>;
 }
 
-type MemoryScope = "project" | "session";
+type MemoryScope = MemoryEntryScope;
 type ScopedMemoryEntry = SpotlightMemoryEntry & {
   scope?: MemoryScope;
   sessionId?: string;
@@ -84,17 +86,20 @@ function resolveLookupScopes(input: ScopedLookupInput): Array<{
   return [{ scope: "session", sessionId }, { scope: "project" }];
 }
 
-function entryMatchesLookupScope(
-  entry: SpotlightMemoryEntry,
-  scopes: Array<{ scope: MemoryScope; sessionId?: string }>,
-): boolean {
-  const scopedEntry = entry as ScopedMemoryEntry;
-  const entryScope = scopedEntry.scope ?? "project";
-  return scopes.some((scope) => {
-    if (scope.scope !== entryScope) return false;
-    if (entryScope === "session") return scopedEntry.sessionId === scope.sessionId;
-    return true;
-  });
+function pickViableSemanticHit<T extends { entry: SpotlightMemoryEntry; score: number }>(
+  candidates: T[],
+  params: {
+    threshold: number;
+    invalidation: SpotlightMemoryLookupInput["invalidation"];
+  },
+): T | null {
+  const viable = candidates
+    .filter((candidate) => candidate.score >= params.threshold)
+    .filter(
+      (candidate) => !isMemoryEntryStale(candidate.entry, params.invalidation),
+    )
+    .filter((candidate) => isMemoryKindAllowedForRead(candidate.entry.kind));
+  return viable[0] ?? null;
 }
 
 export function createMemoryGate(
@@ -134,7 +139,7 @@ export function createMemoryGate(
         const exact = await reader.getExact(cacheKey);
         if (exact) {
           if (isMemoryEntryStale(exact, input.invalidation)) {
-            return finishMiss("stale");
+            continue;
           }
           if (!isMemoryKindAllowedForRead(exact.kind)) {
             return finishMiss("kind_blocked");
@@ -153,31 +158,45 @@ export function createMemoryGate(
       }
 
       if (!input.exactOnly && semanticEnabled) {
-        const semantic = (
-          await reader.findSemantic(input.projectId, questionNorm, 20)
-        ).filter((candidate) =>
-          entryMatchesLookupScope(candidate.entry, lookupScopes),
-        );
-        const top = semantic.find((c) => c.score >= semanticThreshold);
-        if (top) {
-          if (isMemoryEntryStale(top.entry, input.invalidation)) {
-            return finishMiss("stale");
+        let bestScore = 0;
+        let sawStaleAboveThreshold = false;
+        for (const scope of lookupScopes) {
+          const semantic = await reader.findSemantic(
+            input.projectId,
+            questionNorm,
+            20,
+            [scope],
+          );
+          const top = pickViableSemanticHit(semantic, {
+            threshold: semanticThreshold,
+            invalidation: input.invalidation,
+          });
+          if (top) {
+            await reader.touch(top.entry.id);
+            return {
+              hit: true,
+              result: {
+                source: "semantic",
+                entry: top.entry,
+                confidence: top.score,
+                lookupLatencyMs: performance.now() - started,
+              },
+            };
           }
-          if (!isMemoryKindAllowedForRead(top.entry.kind)) {
-            return finishMiss("kind_blocked");
+          for (const candidate of semantic) {
+            if (candidate.score > bestScore) bestScore = candidate.score;
+            if (
+              candidate.score >= semanticThreshold &&
+              isMemoryEntryStale(candidate.entry, input.invalidation)
+            ) {
+              sawStaleAboveThreshold = true;
+            }
           }
-          await reader.touch(top.entry.id);
-          return {
-            hit: true,
-            result: {
-              source: "semantic",
-              entry: top.entry,
-              confidence: top.score,
-              lookupLatencyMs: performance.now() - started,
-            },
-          };
         }
-        if (semantic.length && semantic[0].score < semanticThreshold) {
+        if (sawStaleAboveThreshold) {
+          return finishMiss("stale");
+        }
+        if (bestScore > 0 && bestScore < semanticThreshold) {
           return finishMiss("below_threshold");
         }
       }
@@ -217,24 +236,23 @@ export function createMemoryGate(
         return { written: false, skippedReason: "duplicate" };
       }
 
-      const entry: ScopedMemoryEntry =
-        {
-          id: createMemoryEntryId(),
-          projectId: input.projectId,
-          scope: scope.scope,
-          sessionId: scope.sessionId,
-          questionNorm,
-          questionRaw: input.question,
-          kind,
-          answer: input.answer,
-          plan: input.plan,
-          invalidation: input.invalidation,
-          ttlSec: input.ttlSec ?? SPOTLIGHT_MEMORY_DEFAULT_TTL_SEC[kind],
-          createdAt: Date.now(),
-          hitCount: 0,
-          confidence: input.confidence,
-          sourceRunId: input.sourceRunId,
-        };
+      const entry: ScopedMemoryEntry = {
+        id: createMemoryEntryId(),
+        projectId: input.projectId,
+        scope: scope.scope,
+        sessionId: scope.sessionId,
+        questionNorm,
+        questionRaw: input.question,
+        kind,
+        answer: input.answer,
+        plan: input.plan,
+        invalidation: input.invalidation,
+        ttlSec: input.ttlSec ?? SPOTLIGHT_MEMORY_DEFAULT_TTL_SEC[kind],
+        createdAt: Date.now(),
+        hitCount: 0,
+        confidence: input.confidence,
+        sourceRunId: input.sourceRunId,
+      };
 
       await writer.putExact(cacheKey, entry);
       await writer.putSemantic(entry);
