@@ -492,7 +492,8 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
         lastAssistantReply: session.getLastAssistantContent(),
         invokedSkills: session.invokedSkills,
         skillPermissionGrants: session.skillPermissionGrants,
-        memoryEnabled: memoryPreference.enabled,
+        memoryReadEnabled: memoryPreference.enabled,
+        memoryWriteEnabled: true,
       },
       runtimeState: {
         activeDomain: runtime.activeDomain,
