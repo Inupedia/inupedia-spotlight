@@ -4,9 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   classifyMemoryKind,
-  clampMemoryTtlSec,
   isMemoryEntryStale,
-  MEMORY_TTL_MAX_SEC,
   normalizeQuestion,
 } from "../src/index.js";
 import {
@@ -36,6 +34,26 @@ describe("buildCacheKey", () => {
       invalidation: { assetsVersion: "v2" },
     });
     expect(a).not.toBe(b);
+  });
+
+  it("changes when knowledge version or session scope changes", () => {
+    const base = {
+      projectId: "p1",
+      questionNorm: "abc",
+      invalidation: { knowledgeIndexVersion: "k1" },
+    };
+    const project = buildCacheKey(base);
+    const session = buildCacheKey({
+      ...base,
+      scope: "session",
+      sessionId: "s1",
+    });
+    const changedKnowledge = buildCacheKey({
+      ...base,
+      invalidation: { knowledgeIndexVersion: "k2" },
+    });
+    expect(session).not.toBe(project);
+    expect(changedKnowledge).not.toBe(project);
   });
 });
 
@@ -84,6 +102,19 @@ describe("isMemoryEntryStale", () => {
 
   it("invalidates data_snapshot on assets version change", () => {
     expect(isMemoryEntryStale(entry, { assetsVersion: "v2" })).toBe(true);
+  });
+
+  it("invalidates qa_answer on knowledge version change", () => {
+    expect(
+      isMemoryEntryStale(
+        {
+          ...entry,
+          kind: "qa_answer",
+          invalidation: { knowledgeIndexVersion: "k1" },
+        },
+        { knowledgeIndexVersion: "k2" },
+      ),
+    ).toBe(true);
   });
 });
 
@@ -171,6 +202,65 @@ describe("SemanticMemoryStore", () => {
     }
     expect(reloaded.semantic.count("demo")).toBe(1);
   });
+
+  it("keeps session memory isolated while allowing project fallback", async () => {
+    tempRoot = mkdtempSync(join(tmpdir(), "spotlight-memory-scope-"));
+    const packsRoot = join(tempRoot, "packs");
+    mkdirSync(join(packsRoot, "demo"), { recursive: true });
+    const stores = createPackMemoryStores({
+      packsRoot,
+      projectId: "demo",
+      gateConfig: { semanticThreshold: 0.55 },
+    });
+    const invalidation = { catalogVersion: "c1" };
+    await stores.gate.write({
+      projectId: "demo",
+      question: "项目概况是什么",
+      kind: "qa_answer",
+      answer: "这是公共项目概况。",
+      invalidation,
+      confidence: 0.95,
+    });
+    await stores.gate.write({
+      projectId: "demo",
+      sessionId: "s1",
+      question: "我的当前任务是什么",
+      kind: "qa_answer",
+      answer: "这是 s1 的私有任务。",
+      invalidation,
+      confidence: 0.95,
+    });
+
+    const ownSession = await stores.gate.lookup({
+      projectId: "demo",
+      sessionId: "s1",
+      question: "我的当前任务是什么",
+      invalidation,
+      exactOnly: true,
+    });
+    expect(ownSession.hit).toBe(true);
+
+    const otherSession = await stores.gate.lookup({
+      projectId: "demo",
+      sessionId: "s2",
+      question: "我的当前任务是什么",
+      invalidation,
+      exactOnly: true,
+    });
+    expect(otherSession.hit).toBe(false);
+
+    const projectFallback = await stores.gate.lookup({
+      projectId: "demo",
+      sessionId: "s2",
+      question: "项目概况是什么",
+      invalidation,
+      exactOnly: true,
+    });
+    expect(projectFallback.hit).toBe(true);
+    if (projectFallback.hit) {
+      expect(projectFallback.result.entry.answer).toContain("公共");
+    }
+  });
 });
 
 describe("cosineSimilarity", () => {
@@ -212,12 +302,5 @@ describe("ExactMemoryStore admin", () => {
 
     expect(exact.deleteEntry(listed[0]!.id)).toBe(true);
     expect(exact.listEntries(10)).toHaveLength(0);
-  });
-});
-
-describe("memory ttl cap", () => {
-  it("clamps ttl to 24 hours max", () => {
-    expect(clampMemoryTtlSec(604_800)).toBe(MEMORY_TTL_MAX_SEC);
-    expect(clampMemoryTtlSec(86_400)).toBe(86_400);
   });
 });

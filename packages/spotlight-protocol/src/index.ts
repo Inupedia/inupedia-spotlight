@@ -255,6 +255,7 @@ export {
   type SpotlightMemoryMiss,
   type SpotlightMemoryPlan,
   type SpotlightMemoryReplayMeta,
+  type SpotlightMemoryScope,
   type SpotlightMemoryWriteInput,
   type SpotlightMemoryWriteResult,
 } from "./memory.js";

@@ -22,8 +22,16 @@ export function isMemoryEntryStale(
     ctx.catalogVersion != null &&
     entry.invalidation.catalogVersion !== ctx.catalogVersion;
 
+  const knowledgeChanged =
+    entry.invalidation.knowledgeIndexVersion != null &&
+    ctx.knowledgeIndexVersion != null &&
+    entry.invalidation.knowledgeIndexVersion !== ctx.knowledgeIndexVersion;
+
   if (assetsChanged && entry.kind === "data_snapshot") return true;
   if (catalogChanged && (entry.kind === "action_plan" || entry.kind === "routing_hint")) {
+    return true;
+  }
+  if (knowledgeChanged && (entry.kind === "qa_answer" || entry.kind === "routing_hint")) {
     return true;
   }
 

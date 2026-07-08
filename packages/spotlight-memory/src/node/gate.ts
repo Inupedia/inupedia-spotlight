@@ -1,6 +1,7 @@
 import {
   SPOTLIGHT_MEMORY_DEFAULT_TTL_SEC,
   type SpotlightMemoryGateResult,
+  type SpotlightMemoryEntry,
   type SpotlightMemoryLookupInput,
   type SpotlightMemoryWriteInput,
   type SpotlightMemoryWriteResult,
@@ -8,7 +9,6 @@ import {
 import { classifyMemoryKind, isMemoryKindAllowedForRead } from "../classify.js";
 import { normalizeQuestion } from "../normalize.js";
 import { isMemoryEntryStale } from "../stale.js";
-import { clampMemoryTtlSec } from "../ttl.js";
 import { buildCacheKey, createMemoryEntryId } from "./cacheKey.js";
 
 export interface MemoryStoreReader {
@@ -49,6 +49,54 @@ export interface MemoryGate {
   write(input: SpotlightMemoryWriteInput): Promise<SpotlightMemoryWriteResult>;
 }
 
+type MemoryScope = "project" | "session";
+type ScopedMemoryEntry = SpotlightMemoryEntry & {
+  scope?: MemoryScope;
+  sessionId?: string;
+};
+type ScopedLookupInput = SpotlightMemoryLookupInput & {
+  scope?: MemoryScope;
+  sessionId?: string;
+};
+type ScopedWriteInput = SpotlightMemoryWriteInput & {
+  scope?: MemoryScope;
+  sessionId?: string;
+};
+
+function resolveWriteScope(input: {
+  scope?: MemoryScope;
+  sessionId?: string;
+}): { scope: MemoryScope; sessionId?: string } {
+  if (input.scope === "project") return { scope: "project" };
+  if (input.scope === "session" || input.sessionId?.trim()) {
+    const sessionId = input.sessionId?.trim();
+    return sessionId ? { scope: "session", sessionId } : { scope: "project" };
+  }
+  return { scope: "project" };
+}
+
+function resolveLookupScopes(input: ScopedLookupInput): Array<{
+  scope: MemoryScope;
+  sessionId?: string;
+}> {
+  const sessionId = input.sessionId?.trim();
+  if (input.scope === "project" || !sessionId) return [{ scope: "project" }];
+  return [{ scope: "session", sessionId }, { scope: "project" }];
+}
+
+function entryMatchesLookupScope(
+  entry: SpotlightMemoryEntry,
+  scopes: Array<{ scope: MemoryScope; sessionId?: string }>,
+): boolean {
+  const scopedEntry = entry as ScopedMemoryEntry;
+  const entryScope = scopedEntry.scope ?? "project";
+  return scopes.some((scope) => {
+    if (scope.scope !== entryScope) return false;
+    if (entryScope === "session") return scopedEntry.sessionId === scope.sessionId;
+    return true;
+  });
+}
+
 export function createMemoryGate(
   reader: MemoryStoreReader,
   writer: MemoryStoreWriter,
@@ -74,37 +122,41 @@ export function createMemoryGate(
       const questionNorm = normalizeQuestion(input.question);
       if (!questionNorm) return finishMiss("not_found");
 
-      const cacheKey = buildCacheKey({
-        projectId: input.projectId,
-        questionNorm,
-        invalidation: input.invalidation,
-      });
+      const lookupScopes = resolveLookupScopes(input as ScopedLookupInput);
+      for (const scope of lookupScopes) {
+        const cacheKey = buildCacheKey({
+          projectId: input.projectId,
+          ...scope,
+          questionNorm,
+          invalidation: input.invalidation,
+        });
 
-      const exact = await reader.getExact(cacheKey);
-      if (exact) {
-        if (isMemoryEntryStale(exact, input.invalidation)) {
-          return finishMiss("stale");
+        const exact = await reader.getExact(cacheKey);
+        if (exact) {
+          if (isMemoryEntryStale(exact, input.invalidation)) {
+            return finishMiss("stale");
+          }
+          if (!isMemoryKindAllowedForRead(exact.kind)) {
+            return finishMiss("kind_blocked");
+          }
+          await reader.touch(exact.id);
+          return {
+            hit: true,
+            result: {
+              source: scope.scope === "session" ? "session" : "exact",
+              entry: exact,
+              confidence: 1,
+              lookupLatencyMs: performance.now() - started,
+            },
+          };
         }
-        if (!isMemoryKindAllowedForRead(exact.kind)) {
-          return finishMiss("kind_blocked");
-        }
-        await reader.touch(exact.id);
-        return {
-          hit: true,
-          result: {
-            source: "exact",
-            entry: exact,
-            confidence: 1,
-            lookupLatencyMs: performance.now() - started,
-          },
-        };
       }
 
       if (!input.exactOnly && semanticEnabled) {
-        const semantic = await reader.findSemantic(
-          input.projectId,
-          questionNorm,
-          5,
+        const semantic = (
+          await reader.findSemantic(input.projectId, questionNorm, 20)
+        ).filter((candidate) =>
+          entryMatchesLookupScope(candidate.entry, lookupScopes),
         );
         const top = semantic.find((c) => c.score >= semanticThreshold);
         if (top) {
@@ -152,8 +204,11 @@ export function createMemoryGate(
       }
 
       const questionNorm = normalizeQuestion(input.question);
+      const scopedInput = input as ScopedWriteInput;
+      const scope = resolveWriteScope(scopedInput);
       const cacheKey = buildCacheKey({
         projectId: input.projectId,
+        ...scope,
         questionNorm,
         invalidation: input.invalidation,
       });
@@ -162,19 +217,19 @@ export function createMemoryGate(
         return { written: false, skippedReason: "duplicate" };
       }
 
-      const entry: import("@inupedia/spotlight-protocol").SpotlightMemoryEntry =
+      const entry: ScopedMemoryEntry =
         {
           id: createMemoryEntryId(),
           projectId: input.projectId,
+          scope: scope.scope,
+          sessionId: scope.sessionId,
           questionNorm,
           questionRaw: input.question,
           kind,
           answer: input.answer,
           plan: input.plan,
           invalidation: input.invalidation,
-          ttlSec: clampMemoryTtlSec(
-            input.ttlSec ?? SPOTLIGHT_MEMORY_DEFAULT_TTL_SEC[kind],
-          ),
+          ttlSec: input.ttlSec ?? SPOTLIGHT_MEMORY_DEFAULT_TTL_SEC[kind],
           createdAt: Date.now(),
           hitCount: 0,
           confidence: input.confidence,

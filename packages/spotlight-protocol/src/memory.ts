@@ -7,6 +7,7 @@ export type SpotlightMemoryEntryKind =
   | "data_snapshot";
 
 export type SpotlightMemoryHitSource = "exact" | "semantic" | "session";
+export type SpotlightMemoryScope = "project" | "session";
 
 /** Version pins — entry invalid when context versions diverge. */
 export interface SpotlightMemoryInvalidationContext {
@@ -26,6 +27,8 @@ export interface SpotlightMemoryPlan {
 export interface SpotlightMemoryEntry {
   id: string;
   projectId: string;
+  scope?: SpotlightMemoryScope;
+  sessionId?: string;
   questionNorm: string;
   questionRaw?: string;
   kind: SpotlightMemoryEntryKind;
@@ -45,6 +48,7 @@ export interface SpotlightMemoryLookupInput {
   projectId: string;
   question: string;
   invalidation: SpotlightMemoryInvalidationContext;
+  scope?: SpotlightMemoryScope;
   sessionId?: string;
   /** Skip semantic layer (e.g. tests). */
   exactOnly?: boolean;
@@ -74,6 +78,8 @@ export type SpotlightMemoryGateResult =
 export interface SpotlightMemoryWriteInput {
   projectId: string;
   question: string;
+  scope?: SpotlightMemoryScope;
+  sessionId?: string;
   kind: SpotlightMemoryEntryKind;
   answer?: string;
   plan?: SpotlightMemoryPlan;
@@ -103,7 +109,7 @@ export const SPOTLIGHT_MEMORY_DEFAULT_TTL_SEC: Record<
   number
 > = {
   qa_answer: 86_400,
-  action_plan: 86_400,
-  routing_hint: 86_400,
+  action_plan: 604_800,
+  routing_hint: 604_800,
   data_snapshot: 1_800,
 };
