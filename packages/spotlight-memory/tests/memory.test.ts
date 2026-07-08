@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,9 +8,13 @@ import {
   normalizeQuestion,
 } from "../src/index.js";
 import {
+  appendSpotlightFileMemory,
+  buildSpotlightFileMemoryPrompt,
   buildCacheKey,
   createMemoryGate,
   createPackMemoryStores,
+  resolveAgentMemoryEntrypoint,
+  resolveSpotlightFileMemoryPaths,
 } from "../src/node/index.js";
 import type { SpotlightMemoryEntry } from "@inupedia/spotlight-protocol";
 
@@ -260,6 +264,75 @@ describe("SemanticMemoryStore", () => {
     if (projectFallback.hit) {
       expect(projectFallback.result.entry.answer).toContain("公共");
     }
+  });
+});
+
+describe("file memory", () => {
+  let tempRoot = "";
+
+  afterEach(() => {
+    if (tempRoot) rmSync(tempRoot, { recursive: true, force: true });
+    tempRoot = "";
+  });
+
+  it("loads project, auto, session, and agent memory into a prompt", async () => {
+    tempRoot = mkdtempSync(join(tmpdir(), "spotlight-file-memory-"));
+    const cwd = join(tempRoot, "workspace", "app");
+    mkdirSync(cwd, { recursive: true });
+    writeFileSync(join(cwd, "CLAUDE.md"), "Project rule: use metric units.", "utf8");
+
+    const memoryBase = join(tempRoot, "memory");
+    const paths = resolveSpotlightFileMemoryPaths({
+      projectId: "demo/project",
+      sessionId: "s1",
+      baseDir: memoryBase,
+    });
+    mkdirSync(paths.autoDir, { recursive: true });
+    writeFileSync(paths.autoEntrypoint, "Auto memory: prefer tunnel context.", "utf8");
+    mkdirSync(paths.sessionDir!, { recursive: true });
+    writeFileSync(paths.sessionEntrypoint!, "Session memory: user is comparing reports.", "utf8");
+
+    const agentPath = resolveAgentMemoryEntrypoint({
+      projectId: "demo/project",
+      agentType: "planner",
+      scope: "user",
+      baseDir: memoryBase,
+      cwd,
+    });
+    mkdirSync(join(agentPath, ".."), { recursive: true });
+    writeFileSync(agentPath, "Agent memory: ask for missing time range.", "utf8");
+
+    const prompt = await buildSpotlightFileMemoryPrompt({
+      projectId: "demo/project",
+      sessionId: "s1",
+      baseDir: memoryBase,
+      cwd,
+      agent: { type: "planner", scope: "user" },
+    });
+
+    expect(prompt).toContain("Project rule");
+    expect(prompt).toContain("Auto memory");
+    expect(prompt).toContain("Session memory");
+    expect(prompt).toContain("Agent memory");
+  });
+
+  it("appends memory entries as markdown", async () => {
+    tempRoot = mkdtempSync(join(tmpdir(), "spotlight-file-memory-append-"));
+    const filePath = resolveSpotlightFileMemoryPaths({
+      projectId: "demo",
+      baseDir: tempRoot,
+    }).autoEntrypoint;
+    await appendSpotlightFileMemory({
+      filePath,
+      heading: "Preference",
+      content: "用户偏好中文回答。",
+    });
+    const content = await buildSpotlightFileMemoryPrompt({
+      projectId: "demo",
+      baseDir: tempRoot,
+      includeProjectFiles: false,
+    });
+    expect(content).toContain("用户偏好中文回答");
   });
 });
 

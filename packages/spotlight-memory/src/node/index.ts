@@ -95,3 +95,20 @@ export {
   type EmbeddingProvider,
   resolveEmbeddingProviderFromEnv,
 } from "./embeddingProvider.js";
+export {
+  FILE_MEMORY_ENTRYPOINT,
+  appendSpotlightFileMemory,
+  buildSpotlightFileMemoryPrompt,
+  ensureSpotlightFileMemoryEntrypoints,
+  isSpotlightFileMemoryPath,
+  loadSpotlightFileMemories,
+  resolveAgentMemoryDir,
+  resolveAgentMemoryEntrypoint,
+  resolveSpotlightFileMemoryPaths,
+  type BuildSpotlightFileMemoryPromptOptions,
+  type LoadSpotlightFileMemoryOptions,
+  type ResolveSpotlightFileMemoryPathsOptions,
+  type SpotlightFileMemoryInfo,
+  type SpotlightFileMemoryPaths,
+  type SpotlightFileMemoryScope,
+} from "./fileMemory.js";
