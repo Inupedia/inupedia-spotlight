@@ -2,6 +2,7 @@ import { serializeSkillsForRemote } from "@inupedia/spotlight-client";
 import type { HostToolEffect } from "@inupedia/spotlight-protocol";
 import { getSkillsPoolForRun } from "../skills/index.js";
 import { useAgentSessionStore } from "../session/agentSession.js";
+import { useSpotlightMemoryPreferenceStore } from "../store/memoryPreferenceStore.js";
 import { useSpotlightRuntimeStore } from "../store/runtimeStore.js";
 import { SPOTLIGHT_PIPELINE_STEP_IDS } from "../store/pipeline/constants.js";
 import {
@@ -101,6 +102,15 @@ type RemoteRunEvent =
       at: number;
       iteration: number;
       content: string;
+    }
+  | {
+      type: "agent_memory_updated";
+      at: number;
+      projectId: string;
+      tenantId?: string;
+      action: "remember" | "forget";
+      slug?: string;
+      reason?: string;
     };
 
 type RemoteRunCompletedEvent = Extract<
@@ -466,6 +476,7 @@ export async function warmupSpotlightRemoteContext(
 async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
   const session = useAgentSessionStore();
   const runtime = useSpotlightRuntimeStore();
+  const memoryPreference = useSpotlightMemoryPreferenceStore();
   const hostManifest = await ensureHostToolsManifest(signal);
   return {
     hostManifest,
@@ -485,6 +496,7 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
         lastAssistantReply: session.getLastAssistantContent(),
         invokedSkills: session.invokedSkills,
         skillPermissionGrants: session.skillPermissionGrants,
+        memoryEnabled: memoryPreference.memoryEnabled,
       },
       runtimeState: {
         activeDomain: runtime.activeDomain,

@@ -66,6 +66,10 @@ export {
 
 export { useSpotlightRuntimeStore } from "./store/runtimeStore.js";
 export { useAgentSessionStore } from "./session/agentSession.js";
+export {
+  useSpotlightMemoryPreferenceStore,
+  readSpotlightMemoryEnabled,
+} from "./store/memoryPreferenceStore.js";
 
 export {
   getSkillsPoolForRun,

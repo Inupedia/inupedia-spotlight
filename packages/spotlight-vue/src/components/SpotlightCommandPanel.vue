@@ -6,10 +6,16 @@
       aria-modal="true"
       aria-label="指令面板"
     >
-      <div v-if="deckKicker" class="spotlight-command-deck" aria-hidden="true">
-        <span class="spotlight-command-deck-kicker">{{ deckKicker }}</span>
-        <span class="spotlight-command-deck-line" />
+      <div class="spotlight-command-deck" aria-hidden="true">
+        <span v-if="deckKicker" class="spotlight-command-deck-kicker">{{
+          deckKicker
+        }}</span>
+        <span v-if="deckKicker" class="spotlight-command-deck-line" />
         <span class="spotlight-command-deck-status">{{ badgeLabel }}</span>
+        <label class="spotlight-memory-toggle">
+          <input v-model="memoryPreference.enabled" type="checkbox" />
+          <span>使用记忆</span>
+        </label>
       </div>
       <div class="spotlight-orbit" aria-hidden="true">
         <span />
@@ -171,6 +177,7 @@
 import { nextTick, ref, toRef } from "vue";
 import { storeToRefs } from "pinia";
 import { useSpotlightStore } from "../store/spotlightStore.js";
+import { useSpotlightMemoryPreferenceStore } from "../store/memoryPreferenceStore.js";
 import { useSpotlightPanelUi } from "../composables/useSpotlightPanelUi.js";
 import InspiraCardSpotlight from "./InspiraCardSpotlight.vue";
 import OfficialBorderBeam from "./OfficialBorderBeam.vue";
@@ -191,6 +198,7 @@ const props = withDefaults(
 );
 
 const store = useSpotlightStore();
+const memoryPreference = useSpotlightMemoryPreferenceStore();
 const { loading, pipelinePhase, lastMemoryReplay } = storeToRefs(store);
 const inputRef = ref<HTMLInputElement | null>(null);
 

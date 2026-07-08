@@ -90,6 +90,10 @@ export interface SpotlightSessionState {
   lastAssistantReply?: string | null;
   invokedSkills?: SpotlightSessionInvokedSkill[];
   skillPermissionGrants?: string[];
+  /** 是否启用 Gate + 文件记忆；默认 true。 */
+  memoryEnabled?: boolean;
+  /** 多租户命名空间（可选）。 */
+  tenantId?: string;
 }
 
 export interface SpotlightRuntimeState {

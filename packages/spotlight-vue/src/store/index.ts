@@ -28,3 +28,7 @@ export {
 
 export { useSpotlightRuntimeStore } from "./runtimeStore.js";
 export { useAgentSessionStore } from "../session/agentSession.js";
+export {
+  useSpotlightMemoryPreferenceStore,
+  readSpotlightMemoryEnabled,
+} from "./memoryPreferenceStore.js";
