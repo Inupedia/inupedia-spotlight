@@ -109,32 +109,33 @@ onUnmounted(() => {
   max-height: 32vh;
   overflow: hidden auto;
   border-radius: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  border: 1px solid rgba(148, 163, 184, 0.35);
   background: linear-gradient(
-    180deg,
-    rgba(15, 23, 42, 0.92),
-    rgba(2, 6, 23, 0.94)
+    165deg,
+    rgba(255, 255, 255, 0.96),
+    rgba(240, 253, 250, 0.94)
   );
   box-shadow:
-    0 18px 36px rgba(2, 6, 23, 0.42),
-    inset 0 0 0 1px rgba(15, 23, 42, 0.45);
-  color: #e2e8f0;
+    0 18px 36px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  color: #0f172a;
   padding: 10px 12px;
   pointer-events: auto;
 }
 
 .live2d-speech-bubble.is-speaking {
-  border-color: rgba(34, 211, 238, 0.45);
+  border-color: rgba(20, 184, 166, 0.5);
   box-shadow:
-    0 20px 40px rgba(6, 182, 212, 0.22),
-    inset 0 0 0 1px rgba(8, 145, 178, 0.28);
+    0 20px 40px rgba(20, 184, 166, 0.16),
+    0 0 0 1px rgba(14, 165, 233, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .live2d-speech-head {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #7dd3fc;
+  color: #0d9488;
   font-size: 12px;
   line-height: 1;
 }
@@ -144,7 +145,7 @@ onUnmounted(() => {
   height: 8px;
   border-radius: 999px;
   background: currentcolor;
-  box-shadow: 0 0 12px currentcolor;
+  box-shadow: 0 0 10px rgba(20, 184, 166, 0.45);
 }
 
 .live2d-speech-bubble.is-speaking .live2d-speech-dot {
@@ -157,6 +158,7 @@ onUnmounted(() => {
   word-break: break-word;
   font-size: 13px;
   line-height: 1.55;
+  color: #334155;
 }
 
 .speech-bubble-enter-active,

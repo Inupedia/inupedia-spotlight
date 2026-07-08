@@ -2,7 +2,7 @@
   <MdPreview
     :id="editorId"
     :model-value="displayValue"
-    theme="dark"
+    theme="light"
     preview-theme="github"
     code-theme="github"
     class="thinking-bar-md-preview"
