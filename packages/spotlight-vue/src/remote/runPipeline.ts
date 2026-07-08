@@ -63,13 +63,9 @@ type RemoteRunEvent =
         replayedAt: number;
         kind: string;
       };
-      sessionPatch?: {
-        invokedSkills?: Array<{
-          skillName: string;
-          invokedAt: number;
-          args?: string;
-        }>;
-      };
+      sessionPatch?: Partial<
+        import("@inupedia/spotlight-protocol").SpotlightSessionState
+      >;
     }
   | {
       type: "run_error";
@@ -496,7 +492,7 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
         lastAssistantReply: session.getLastAssistantContent(),
         invokedSkills: session.invokedSkills,
         skillPermissionGrants: session.skillPermissionGrants,
-        memoryEnabled: memoryPreference.memoryEnabled,
+        memoryEnabled: memoryPreference.enabled,
       },
       runtimeState: {
         activeDomain: runtime.activeDomain,
@@ -587,16 +583,15 @@ export async function runRemoteSpotlightPipeline(
         }
         await applyRemoteEvent(api, event);
         if (event.type === "run_completed") {
-          if (event.sessionPatch?.invokedSkills) {
-            useAgentSessionStore().setInvokedSkills(
-              event.sessionPatch.invokedSkills,
-            );
+          if (event.sessionPatch) {
+            useAgentSessionStore().applySessionPatch(event.sessionPatch);
           }
           completed = event;
           return {
             command: null,
             usedLegacyFallback: event.usedQueryLoop,
             memoryReplay: event.memoryReplay ?? null,
+            assistantReply: event.assistantReply,
           };
         }
       }

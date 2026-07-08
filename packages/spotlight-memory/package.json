@@ -1,6 +1,6 @@
 {
   "name": "@inupedia/spotlight-memory",
-  "version": "0.1.10",
+  "version": "0.2.0",
   "description": "Memory Gate, exact/semantic cache stores for Inupedia Spotlight",
   "type": "module",
   "license": "MIT",
@@ -32,7 +32,9 @@
     "prepack": "pnpm run build"
   },
   "dependencies": {
-    "@inupedia/spotlight-protocol": "workspace:*"
+    "@inupedia/spotlight-protocol": "workspace:*",
+    "@zilliz/milvus2-sdk-node": "^2.5.5",
+    "ioredis": "^5.6.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

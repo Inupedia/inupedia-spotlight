@@ -7,7 +7,11 @@ function readInitialEnabled(): boolean {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw == null) return true;
-    return raw !== "false";
+    if (raw === "false") return false;
+    if (raw === "true") return true;
+    const parsed = JSON.parse(raw) as { enabled?: boolean };
+    if (typeof parsed.enabled === "boolean") return parsed.enabled;
+    return true;
   } catch {
     return true;
   }

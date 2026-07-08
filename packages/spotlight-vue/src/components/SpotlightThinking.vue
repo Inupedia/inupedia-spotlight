@@ -11,7 +11,7 @@
     <div class="thinking-bar-grid" aria-hidden="true" />
     <div class="thinking-bar-header">
       <div class="thinking-bar-title-stack">
-        <span class="thinking-bar-kicker">HYDRO PROCESS</span>
+        <span class="thinking-bar-kicker">Spotlight</span>
         <span class="thinking-bar-title">{{ titleText }}</span>
         <span v-if="memoryBadge" class="thinking-bar-memory-badge">{{
           memoryBadge
@@ -53,8 +53,8 @@
           :size="88"
           :duration="6"
           :border-width="1.5"
-          color-from="#c9a25d"
-          color-to="#5d8f9b"
+          color-from="#0A84FF"
+          color-to="#64D2FF"
         />
         <div class="thinking-bar-step-inner">
           <span class="thinking-bar-step-icon">{{
@@ -1371,16 +1371,26 @@ function getFileIcon(path: string): string {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-  border-radius: 22px;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Display",
+    "SF Pro Text",
+    "Helvetica Neue",
+    system-ui,
+    sans-serif;
+  background: rgba(28, 28, 30, 0.88);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    0 24px 80px rgba(2, 6, 23, 0.48),
-    0 0 0 1px rgba(148, 163, 184, 0.18);
-  color: #e2e8f0;
+    0 24px 80px rgba(0, 0, 0, 0.45),
+    0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.92);
   z-index: 10000;
   overflow: hidden;
   opacity: 0;
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(40px) saturate(1.8);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
   transition:
     opacity 0.28s ease,
     transform 0.28s ease,
@@ -2290,38 +2300,17 @@ function getFileIcon(path: string): string {
 
 .thinking-bar {
   width: min(980px, calc(100vw - 56px));
-  border-radius: 8px;
-  border: 1px solid rgba(96, 142, 154, 0.3);
-  background:
-    radial-gradient(
-      circle at 18% 0%,
-      rgba(45, 111, 132, 0.16),
-      transparent 30%
-    ),
-    linear-gradient(135deg, rgba(8, 30, 45, 0.96), rgba(3, 15, 28, 0.94));
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(28, 28, 30, 0.88);
   box-shadow:
-    0 30px 90px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(255, 255, 255, 0.035);
+    0 24px 80px rgba(0, 0, 0, 0.45),
+    0 0 0 0.5px rgba(255, 255, 255, 0.06);
   isolation: isolate;
 }
 
 .thinking-bar-grid {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background-image:
-    repeating-linear-gradient(
-      175deg,
-      transparent 0,
-      transparent 34px,
-      rgba(96, 165, 168, 0.04) 35px,
-      transparent 38px
-    ),
-    linear-gradient(rgba(125, 157, 169, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(125, 157, 169, 0.03) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: linear-gradient(180deg, black 0, transparent 82%);
+  display: none;
 }
 
 .thinking-bar-header,
@@ -2331,18 +2320,14 @@ function getFileIcon(path: string): string {
 }
 
 .thinking-bar-header {
-  padding: 18px 20px;
-  border-bottom-color: rgba(96, 142, 154, 0.24);
-  background: linear-gradient(
-    90deg,
-    rgba(13, 48, 64, 0.42),
-    rgba(4, 18, 31, 0)
-  );
+  padding: 16px 18px;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
 }
 
 .thinking-bar-title-stack {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -2350,28 +2335,30 @@ function getFileIcon(path: string): string {
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  margin-top: 2px;
-  padding: 2px 8px;
+  margin-top: 4px;
+  padding: 3px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(112, 172, 150, 0.34);
-  background: rgba(112, 172, 150, 0.12);
-  color: #8fc6b2;
+  border: 1px solid rgba(10, 132, 255, 0.28);
+  background: rgba(10, 132, 255, 0.14);
+  color: #64d2ff;
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .thinking-bar-kicker {
-  color: #9bb8c2;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
+  color: rgba(235, 235, 245, 0.52);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 .thinking-bar-title {
-  color: #edf7f8;
-  font-size: 20px;
-  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .thinking-bar-metrics {

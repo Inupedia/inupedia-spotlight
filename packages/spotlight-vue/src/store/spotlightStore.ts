@@ -608,6 +608,11 @@ export const useSpotlightStore = defineStore("spotlight", {
           if (outcome.memoryReplay) {
             this.lastMemoryReplay = outcome.memoryReplay;
           }
+          const session = useAgentSessionStore();
+          session.pushTurn("user", userQuestion, "main_task");
+          if (outcome.assistantReply?.trim()) {
+            session.pushTurn("assistant", outcome.assistantReply, "main_task");
+          }
         } catch (remoteError) {
           if (!this.isPipelineRunActive(runId)) return;
           if (isAbortError(remoteError)) {

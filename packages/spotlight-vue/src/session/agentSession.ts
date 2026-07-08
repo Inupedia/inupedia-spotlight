@@ -9,6 +9,11 @@ import type {
   PendingTask,
 } from "../types/session.js";
 import type { SpotlightSessionInvokedSkill } from "@inupedia/spotlight-protocol";
+import {
+  readPersistedAgentSession,
+  snapshotAgentSession,
+  writePersistedAgentSession,
+} from "./agentSessionPersistence.js";
 
 const MAX_RECENT_TURNS = 8;
 const SUMMARY_WINDOW_SIZE = 4;
@@ -99,18 +104,35 @@ function renderConversationContext(params: {
   return parts.join("\n\n");
 }
 
+function persistAgentSession(state: {
+  sessionId: string;
+  activeTaskId: string | null;
+  activeTopic: string | null;
+  pendingTask: PendingTask | null;
+  conversationSummary: string;
+  summarizedTurnCount: number;
+  conversationHistory: ConversationTurn[];
+  invokedSkills: SpotlightSessionInvokedSkill[];
+  skillPermissionGrants: string[];
+}) {
+  writePersistedAgentSession(snapshotAgentSession(state));
+}
+
 export const useAgentSessionStore = defineStore("agentSession", {
-  state: () => ({
-    sessionId: generateSessionId(),
-    activeTaskId: null as string | null,
-    activeTopic: null as string | null,
-    pendingTask: null as PendingTask | null,
-    conversationSummary: "",
-    summarizedTurnCount: 0,
-    conversationHistory: [] as ConversationTurn[],
-    invokedSkills: [] as SpotlightSessionInvokedSkill[],
-    skillPermissionGrants: [] as string[],
-  }),
+  state: () => {
+    const persisted = readPersistedAgentSession();
+    return {
+      sessionId: persisted?.sessionId ?? generateSessionId(),
+      activeTaskId: persisted?.activeTaskId ?? null,
+      activeTopic: persisted?.activeTopic ?? null,
+      pendingTask: persisted?.pendingTask ?? null,
+      conversationSummary: persisted?.conversationSummary ?? "",
+      summarizedTurnCount: persisted?.summarizedTurnCount ?? 0,
+      conversationHistory: persisted?.conversationHistory ?? [],
+      invokedSkills: persisted?.invokedSkills ?? [],
+      skillPermissionGrants: persisted?.skillPermissionGrants ?? [],
+    };
+  },
   actions: {
     compactTurnsIntoSummary(turnCount: number) {
       if (turnCount <= 0) return;
@@ -122,6 +144,7 @@ export const useAgentSessionStore = defineStore("agentSession", {
       );
       this.summarizedTurnCount += compactedTurns.length;
       this.conversationHistory = this.conversationHistory.slice(turnCount);
+      persistAgentSession(this.$state);
     },
     resetSession() {
       this.sessionId = generateSessionId();
@@ -133,27 +156,34 @@ export const useAgentSessionStore = defineStore("agentSession", {
       this.conversationHistory = [];
       this.invokedSkills = [];
       this.skillPermissionGrants = [];
+      persistAgentSession(this.$state);
     },
     setActiveTask(id: string | null) {
       this.activeTaskId = id;
+      persistAgentSession(this.$state);
     },
     setInvokedSkills(skills: SpotlightSessionInvokedSkill[]) {
       this.invokedSkills = skills;
+      persistAgentSession(this.$state);
     },
     grantSkillPermission(skillName: string) {
       if (this.skillPermissionGrants.includes(skillName)) return;
       this.skillPermissionGrants.push(skillName);
+      persistAgentSession(this.$state);
     },
     setActiveTopic(topic: string | null) {
       this.activeTopic = topic;
+      persistAgentSession(this.$state);
     },
     /** 挂起当前任务，用于用户插问时 */
     setPendingTask(task: PendingTask | null) {
       this.pendingTask = task;
+      persistAgentSession(this.$state);
     },
     /** 清除挂起任务（用户选择不继续或导览结束） */
     clearPendingTask() {
       this.pendingTask = null;
+      persistAgentSession(this.$state);
     },
     pushTurn(
       role: ConversationTurn["role"],
@@ -167,6 +197,7 @@ export const useAgentSessionStore = defineStore("agentSession", {
         purpose,
       });
       this.compactConversationHistory();
+      persistAgentSession(this.$state);
     },
     /** 最近 N 轮对话（用于上下文压缩） */
     getRecentTurns(n: number): ConversationTurn[] {
@@ -224,6 +255,41 @@ export const useAgentSessionStore = defineStore("agentSession", {
         }
       }
       return null;
+    },
+    applySessionPatch(patch: {
+      sessionId?: string;
+      activeTaskId?: string | null;
+      activeTopic?: string | null;
+      pendingTask?: PendingTask | null;
+      conversationSummary?: string;
+      summarizedTurnCount?: number;
+      conversationHistory?: ConversationTurn[];
+      lastAssistantReply?: string | null;
+      invokedSkills?: SpotlightSessionInvokedSkill[];
+      skillPermissionGrants?: string[];
+      memoryEnabled?: boolean;
+      tenantId?: string;
+    }) {
+      if (patch.sessionId) this.sessionId = patch.sessionId;
+      if (patch.activeTaskId !== undefined) this.activeTaskId = patch.activeTaskId;
+      if (patch.activeTopic !== undefined) this.activeTopic = patch.activeTopic;
+      if (patch.pendingTask !== undefined) this.pendingTask = patch.pendingTask;
+      if (patch.conversationSummary !== undefined) {
+        this.conversationSummary = patch.conversationSummary;
+      }
+      if (patch.summarizedTurnCount !== undefined) {
+        this.summarizedTurnCount = patch.summarizedTurnCount;
+      }
+      if (patch.conversationHistory?.length) {
+        this.conversationHistory = patch.conversationHistory;
+      }
+      if (patch.invokedSkills?.length) {
+        this.invokedSkills = patch.invokedSkills;
+      }
+      if (patch.skillPermissionGrants?.length) {
+        this.skillPermissionGrants = patch.skillPermissionGrants;
+      }
+      persistAgentSession(this.$state);
     },
   },
 });

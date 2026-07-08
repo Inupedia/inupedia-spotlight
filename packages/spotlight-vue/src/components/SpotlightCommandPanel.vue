@@ -6,21 +6,29 @@
       aria-modal="true"
       aria-label="指令面板"
     >
-      <div class="spotlight-command-deck" aria-hidden="true">
-        <span v-if="deckKicker" class="spotlight-command-deck-kicker">{{
-          deckKicker
-        }}</span>
-        <span v-if="deckKicker" class="spotlight-command-deck-line" />
-        <span class="spotlight-command-deck-status">{{ badgeLabel }}</span>
-        <label class="spotlight-memory-toggle">
-          <input v-model="memoryPreference.enabled" type="checkbox" />
-          <span>使用记忆</span>
-        </label>
-      </div>
-      <div class="spotlight-orbit" aria-hidden="true">
-        <span />
-        <span />
-        <span />
+      <div class="spotlight-command-deck">
+        <div class="spotlight-command-deck-meta">
+          <span v-if="deckKicker" class="spotlight-command-deck-kicker">{{
+            deckKicker
+          }}</span>
+          <span class="spotlight-command-deck-status">{{ badgeLabel }}</span>
+        </div>
+        <button
+          type="button"
+          class="spotlight-apple-switch"
+          role="switch"
+          :aria-checked="memoryPreference.enabled"
+          :aria-label="memoryPreference.enabled ? '关闭记忆' : '开启记忆'"
+          @click="memoryPreference.toggle()"
+        >
+          <span
+            class="spotlight-apple-switch-track"
+            :class="{ 'is-on': memoryPreference.enabled }"
+          >
+            <span class="spotlight-apple-switch-thumb" />
+          </span>
+          <span class="spotlight-apple-switch-label">记忆</span>
+        </button>
       </div>
       <div
         v-if="store.pendingSkillPermission"
@@ -55,7 +63,7 @@
       <InspiraCardSpotlight
         class="spotlight-input-shell"
         :gradient-size="260"
-        gradient-color="rgba(74, 124, 142, 0.16)"
+        gradient-color="rgba(10, 132, 255, 0.12)"
         :gradient-opacity="1"
       >
         <div
@@ -89,9 +97,6 @@
           </div>
         </div>
         <div v-else class="spotlight-input-wrap" :class="`is-${uiState}`">
-          <div class="spotlight-input-prefix" aria-hidden="true">
-            <span class="spotlight-input-prefix-core" />
-          </div>
           <!-- prettier-ignore -->
           <input
             ref="inputRef"
@@ -103,7 +108,6 @@
             @keydown.down.prevent="store.selectNext"
             @keydown.up.prevent="store.selectPrev"
           >
-          <span class="spotlight-input-scanline" aria-hidden="true" />
           <div class="spotlight-agent-badge" :class="`is-${uiState}`">
             <span class="spotlight-agent-badge-dot" />
             <span>{{ badgeLabel }}</span>
