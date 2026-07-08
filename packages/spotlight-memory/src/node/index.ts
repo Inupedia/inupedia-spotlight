@@ -22,6 +22,8 @@ export interface SemanticMemoryStoreLike {
   putWithOptionalEmbedding(entry: SpotlightMemoryEntry): Promise<void>;
   touch(entryId: string): void | Promise<void>;
   count(projectId?: string): number;
+  deleteEntry(entryId: string): boolean;
+  deleteAll(projectId: string): number;
 }
 
 export interface ExactMemoryStoreLike {
@@ -30,6 +32,8 @@ export interface ExactMemoryStoreLike {
   hasExact(cacheKey: string): Promise<boolean>;
   touch(entryId: string): Promise<void>;
   listEntries(limit?: number): SpotlightMemoryEntry[];
+  deleteEntry(entryId: string): boolean;
+  deleteAll(projectId: string): number;
 }
 
 export interface PackMemoryStores {
