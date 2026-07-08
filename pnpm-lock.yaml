@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@pixi/core': 7.4.3
+
 importers:
 
   .:
@@ -607,7 +610,7 @@ packages:
     resolution: {integrity: sha512-UnI4MNFmP86Hvrh9ZHjXcof6HAvW/Y1lGw4d0hutCCB/Sl4576QfHmeQFX0xmeuJh70mUHC2O9Tw9rqQZv9svw==}
     peerDependencies:
       '@pixi/assets': ^7.0.0
-      '@pixi/core': ^7.0.0
+      '@pixi/core': 7.4.3
       '@pixi/display': ^7.0.0
       '@pixi/graphics': ^7.0.0
       '@pixi/mesh': ^7.0.0
@@ -617,7 +620,7 @@ packages:
   '@pixi-spine/base@4.0.6':
     resolution: {integrity: sha512-m7tbwGF9LTWoDP3/p1lj7tPYUiZroFGJa3hqCpDT24oP0+qPwm81zhvOddcvKpm9WvyG7EahQfncayXMNm0n7A==}
     peerDependencies:
-      '@pixi/core': ^7.0.0
+      '@pixi/core': 7.4.3
       '@pixi/display': ^7.0.0
       '@pixi/graphics': ^7.0.0
       '@pixi/mesh': ^7.0.0
@@ -635,13 +638,13 @@ packages:
     peerDependencies:
       '@pixi-spine/base': ^4.0.0
       '@pixi/assets': ' ^7.0.0'
-      '@pixi/core': ^7.0.0
+      '@pixi/core': 7.4.3
 
   '@pixi-spine/runtime-3.8@4.0.6':
     resolution: {integrity: sha512-caHEFt7Iwzercec5cOI+Sf2tzOT4ejNAn6ZjBurWAEeXZ8YCaj41PTnlnJAh6ex80AP3WWFJcbnqcXV/6G0sMA==}
     peerDependencies:
       '@pixi-spine/base': ^4.0.0
-      '@pixi/core': ^7.0.0
+      '@pixi/core': 7.4.3
 
   '@pixi/assets@7.4.3':
     resolution: {integrity: sha512-StvjiJBSp/j9hHkGu8AFHNvwYUazXq64WhyhytztyDMRkg/l/cL7EcttY5T0qZNWlIpccdr60LUKrWDOuMpkiw==}

@@ -18,6 +18,11 @@
     "node": ">=22",
     "pnpm": ">=9"
   },
+  "pnpm": {
+    "overrides": {
+      "@pixi/core": "7.4.3"
+    }
+  },
   "devDependencies": {
     "@types/node": "^24.10.1",
     "@vitejs/plugin-vue": "^6.0.3",
