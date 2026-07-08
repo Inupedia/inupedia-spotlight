@@ -1,9 +1,15 @@
 .spotlight-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.38);
-  backdrop-filter: blur(20px) saturate(1.2);
-  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  background:
+    radial-gradient(
+      120% 80% at 50% 0%,
+      rgba(186, 230, 253, 0.28) 0%,
+      rgba(240, 253, 250, 0.08) 42%,
+      rgba(15, 23, 42, 0.22) 100%
+    );
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
   z-index: 9999;
   display: flex;
   align-items: flex-start;
@@ -32,23 +38,36 @@
     sans-serif;
   background:
     linear-gradient(
-      180deg,
-      rgba(44, 44, 46, 0.78) 0%,
-      rgba(28, 28, 30, 0.84) 100%
+      165deg,
+      rgba(255, 255, 255, 0.92) 0%,
+      rgba(248, 250, 252, 0.88) 52%,
+      rgba(240, 253, 250, 0.86) 100%
     );
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
   box-shadow:
-    0 28px 90px rgba(0, 0, 0, 0.52),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 0 0 0.5px rgba(255, 255, 255, 0.04);
-  padding: 18px 18px 16px;
-  color: rgba(255, 255, 255, 0.94);
+    0 24px 64px rgba(15, 23, 42, 0.12),
+    0 8px 24px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  padding: 16px 16px 14px;
+  color: #0f172a;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  backdrop-filter: blur(48px) saturate(1.85);
-  -webkit-backdrop-filter: blur(48px) saturate(1.85);
+  gap: 12px;
+  backdrop-filter: blur(40px) saturate(1.35);
+  -webkit-backdrop-filter: blur(40px) saturate(1.35);
+}
+
+.spotlight-panel.is-memory-on {
+  border-color: rgba(45, 212, 191, 0.42);
+  box-shadow:
+    0 24px 64px rgba(15, 23, 42, 0.12),
+    0 0 0 1px rgba(45, 212, 191, 0.12),
+    0 12px 36px rgba(45, 212, 191, 0.1);
+}
+
+.spotlight-panel-beam {
+  z-index: 2;
 }
 
 .spotlight-permission-banner {
@@ -57,9 +76,9 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(44, 44, 46, 0.72);
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .spotlight-permission-banner-body {
@@ -68,11 +87,11 @@
   gap: 4px;
   font-size: 13px;
   line-height: 1.45;
-  color: rgba(235, 235, 245, 0.72);
+  color: #475569;
 }
 
 .spotlight-permission-banner-body strong {
-  color: rgba(255, 255, 255, 0.96);
+  color: #0f172a;
   font-weight: 600;
 }
 
@@ -101,13 +120,13 @@
 }
 
 .spotlight-permission-btn.is-approve {
-  background: #0a84ff;
+  background: linear-gradient(135deg, #14b8a6, #0ea5e9);
   color: #fff;
 }
 
 .spotlight-permission-btn.is-dismiss {
-  background: rgba(118, 118, 128, 0.24);
-  color: rgba(255, 255, 255, 0.92);
+  background: rgba(148, 163, 184, 0.18);
+  color: #334155;
 }
 
 .spotlight-input-shell,
@@ -115,7 +134,7 @@
   position: relative;
   width: 100%;
   min-width: 0;
-  border-radius: 12px;
+  border-radius: 14px;
   box-sizing: border-box;
 }
 
@@ -128,10 +147,10 @@
   min-width: 0;
   min-height: 48px;
   padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
   box-sizing: border-box;
-  background: rgba(118, 118, 128, 0.18);
+  background: rgba(255, 255, 255, 0.78);
   transition:
     border-color 0.2s ease,
     background 0.2s ease,
@@ -146,16 +165,16 @@
   width: 100%;
   min-height: 48px;
   padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(118, 118, 128, 0.18);
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.78);
   box-sizing: border-box;
 }
 
 .spotlight-voice-text {
   font-size: 15px;
   line-height: 1.4;
-  color: rgba(255, 255, 255, 0.88);
+  color: #334155;
 }
 
 .spotlight-voice-mic {
@@ -164,26 +183,26 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: #ff453a;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(248, 250, 252, 0.9);
+  color: #ef4444;
 }
 
 .spotlight-voice-shell.is-transcribing .spotlight-voice-mic {
-  color: #0a84ff;
+  color: #0ea5e9;
 }
 
 .spotlight-input-wrap.is-running {
-  border-color: rgba(10, 132, 255, 0.45);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.12);
+  border-color: rgba(14, 165, 233, 0.45);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
 }
 
 .spotlight-input-wrap.is-done {
-  border-color: rgba(48, 209, 88, 0.35);
+  border-color: rgba(16, 185, 129, 0.42);
 }
 
 .spotlight-input-wrap.is-error {
-  border-color: rgba(255, 69, 58, 0.45);
+  border-color: rgba(239, 68, 68, 0.45);
 }
 
 .spotlight-input {
@@ -192,14 +211,14 @@
   border: 0;
   outline: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.96);
+  color: #0f172a;
   font-size: 17px;
   font-weight: 400;
   letter-spacing: -0.01em;
 }
 
 .spotlight-input::placeholder {
-  color: rgba(235, 235, 245, 0.42);
+  color: #94a3b8;
 }
 
 .spotlight-agent-badge {
@@ -209,9 +228,9 @@
   flex-shrink: 0;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(235, 235, 245, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(248, 250, 252, 0.92);
+  color: #64748b;
   font-size: 12px;
   font-weight: 600;
 }
@@ -220,31 +239,31 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: rgba(235, 235, 245, 0.45);
+  background: #94a3b8;
 }
 
 .spotlight-agent-badge.is-running {
-  color: #64d2ff;
+  color: #0284c7;
 }
 
 .spotlight-agent-badge.is-running .spotlight-agent-badge-dot {
-  background: #0a84ff;
+  background: #0ea5e9;
 }
 
 .spotlight-agent-badge.is-done {
-  color: #30d158;
+  color: #059669;
 }
 
 .spotlight-agent-badge.is-done .spotlight-agent-badge-dot {
-  background: #30d158;
+  background: #10b981;
 }
 
 .spotlight-agent-badge.is-error {
-  color: #ff453a;
+  color: #dc2626;
 }
 
 .spotlight-agent-badge.is-error .spotlight-agent-badge-dot {
-  background: #ff453a;
+  background: #ef4444;
 }
 
 .spotlight-command-deck {
@@ -252,7 +271,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 32px;
+  min-height: 28px;
+  position: relative;
+  z-index: 3;
 }
 
 .spotlight-command-deck-meta {
@@ -263,76 +284,96 @@
 }
 
 .spotlight-command-deck-kicker {
-  color: rgba(235, 235, 245, 0.52);
+  color: #64748b;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
 .spotlight-command-deck-status {
-  color: rgba(255, 255, 255, 0.88);
+  color: #0f172a;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
-.spotlight-apple-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  padding: 4px 0;
+.spotlight-memory-dot-btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -8px -6px -8px 0;
+  padding: 0;
   border: 0;
+  border-radius: 999px;
   background: transparent;
   cursor: pointer;
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
+  transition: transform 0.18s ease;
 }
 
-.spotlight-apple-switch:focus-visible {
+.spotlight-memory-dot-btn:active {
+  transform: scale(0.94);
+}
+
+.spotlight-memory-dot-btn:focus-visible {
   outline: none;
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.35);
 }
 
-.spotlight-apple-switch:focus-visible .spotlight-apple-switch-track {
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.35);
-}
-
-.spotlight-apple-switch-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: rgba(235, 235, 245, 0.78);
-  letter-spacing: -0.01em;
-}
-
-.spotlight-apple-switch-track {
+.spotlight-memory-dot {
   position: relative;
-  width: 51px;
-  height: 31px;
-  border-radius: 999px;
-  background: rgba(120, 120, 128, 0.32);
-  transition: background 0.22s ease;
-}
-
-.spotlight-apple-switch-track.is-on {
-  background: #30d158;
-}
-
-.spotlight-apple-switch-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 27px;
-  height: 27px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow:
-    0 3px 8px rgba(0, 0, 0, 0.15),
-    0 1px 1px rgba(0, 0, 0, 0.16);
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #cbd5e1;
+  transition:
+    background 0.28s ease,
+    box-shadow 0.28s ease,
+    transform 0.28s ease;
 }
 
-.spotlight-apple-switch-track.is-on .spotlight-apple-switch-thumb {
-  transform: translateX(20px);
+.spotlight-memory-dot.is-on {
+  background: #14b8a6;
+  box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.45);
+  animation: spotlight-memory-dot-pulse 3.2s ease-in-out infinite;
+}
+
+.spotlight-memory-dot.is-on::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  border: 1px solid rgba(45, 212, 191, 0.35);
+  opacity: 0;
+  animation: spotlight-memory-dot-ring 3.2s ease-in-out infinite;
+}
+
+@keyframes spotlight-memory-dot-pulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.28);
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 6px rgba(20, 184, 166, 0);
+    transform: scale(1);
+  }
+}
+
+@keyframes spotlight-memory-dot-ring {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.15);
+  }
 }
 
 .spotlight-list {
@@ -341,9 +382,9 @@
   list-style: none;
   max-height: min(54vh, 480px);
   overflow: auto;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(44, 44, 46, 0.55);
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.62);
 }
 
 .spotlight-item {
@@ -360,15 +401,15 @@
 
 .spotlight-item:hover,
 .spotlight-item.is-selected {
-  background: rgba(118, 118, 128, 0.24);
+  background: rgba(241, 245, 249, 0.95);
 }
 
 .spotlight-item.is-selected {
-  background: rgba(10, 132, 255, 0.18);
+  background: rgba(204, 251, 241, 0.72);
 }
 
 .spotlight-item-label {
-  color: rgba(255, 255, 255, 0.94);
+  color: #0f172a;
   font-size: 15px;
   font-weight: 400;
   letter-spacing: -0.01em;
@@ -376,7 +417,7 @@
 
 .spotlight-item-hint,
 .spotlight-list-divider {
-  color: rgba(235, 235, 245, 0.48);
+  color: #94a3b8;
   font-size: 12px;
   font-weight: 500;
 }
@@ -393,7 +434,7 @@
   content: "";
   flex: 1;
   height: 0.5px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(148, 163, 184, 0.28);
 }
 
 .spotlight-voice-mic-icon {
@@ -422,17 +463,17 @@
 }
 
 .spotlight-voice-shell.is-recording {
-  border-color: rgba(255, 69, 58, 0.35);
-  box-shadow: 0 0 0 3px rgba(255, 69, 58, 0.1);
+  border-color: rgba(239, 68, 68, 0.35);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
 }
 
 .spotlight-voice-shell.is-transcribing {
-  border-color: rgba(10, 132, 255, 0.35);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.1);
+  border-color: rgba(14, 165, 233, 0.35);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.08);
 }
 
 .spotlight-voice-beam {
-  display: none;
+  display: block;
 }
 
 .spotlight-item--empty {
@@ -464,10 +505,12 @@
   .spotlight-backdrop,
   .spotlight-panel,
   .spotlight-input-wrap,
-  .spotlight-apple-switch-track,
-  .spotlight-apple-switch-thumb,
+  .spotlight-memory-dot,
+  .spotlight-memory-dot.is-on::after,
   .spotlight-item,
-  .spotlight-permission-btn {
+  .spotlight-permission-btn,
+  .spotlight-memory-dot-btn {
     transition: none;
+    animation: none;
   }
 }

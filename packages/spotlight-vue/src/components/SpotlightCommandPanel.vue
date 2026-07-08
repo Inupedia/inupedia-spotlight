@@ -2,10 +2,20 @@
   <div class="spotlight-backdrop" @click.self="store.close">
     <div
       class="spotlight-panel"
+      :class="{ 'is-memory-on': memoryPreference.enabled }"
       role="dialog"
       aria-modal="true"
       aria-label="指令面板"
     >
+      <OfficialBorderBeam
+        v-if="memoryPreference.enabled"
+        class="spotlight-panel-beam"
+        :size="120"
+        :duration="22"
+        :border-width="1.5"
+        color-from="#5eead4"
+        color-to="#38bdf8"
+      />
       <div class="spotlight-command-deck">
         <div class="spotlight-command-deck-meta">
           <span v-if="deckKicker" class="spotlight-command-deck-kicker">{{
@@ -15,19 +25,23 @@
         </div>
         <button
           type="button"
-          class="spotlight-apple-switch"
+          class="spotlight-memory-dot-btn"
           role="switch"
           :aria-checked="memoryPreference.enabled"
-          :aria-label="memoryPreference.enabled ? '关闭记忆' : '开启记忆'"
+          :aria-label="
+            memoryPreference.enabled
+              ? '关闭记忆（仍会继续更新缓存）'
+              : '开启记忆'
+          "
+          :title="
+            memoryPreference.enabled ? '记忆已开启' : '记忆已关闭，仅更新缓存'
+          "
           @click="memoryPreference.toggle()"
         >
           <span
-            class="spotlight-apple-switch-track"
+            class="spotlight-memory-dot"
             :class="{ 'is-on': memoryPreference.enabled }"
-          >
-            <span class="spotlight-apple-switch-thumb" />
-          </span>
-          <span class="spotlight-apple-switch-label">记忆</span>
+          />
         </button>
       </div>
       <div
@@ -63,7 +77,7 @@
       <InspiraCardSpotlight
         class="spotlight-input-shell"
         :gradient-size="260"
-        gradient-color="rgba(10, 132, 255, 0.12)"
+        gradient-color="rgba(45, 212, 191, 0.14)"
         :gradient-opacity="1"
       >
         <div

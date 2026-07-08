@@ -1,6 +1,6 @@
 {
   "name": "@inupedia/spotlight-client",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "HTTP/SSE helpers and host tool bridge for Inupedia Spotlight (monorepo workspace package)",
   "type": "module",
   "license": "MIT",

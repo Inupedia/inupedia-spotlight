@@ -17,7 +17,7 @@ function readInitialEnabled(): boolean {
   }
 }
 
-/** 用户是否启用 Gate + Agent 文件记忆（持久化到 localStorage）。 */
+/** 用户是否启用记忆回放（关闭时仍写入 Gate 缓存，供后续开启时使用）。 */
 export const useSpotlightMemoryPreferenceStore = defineStore(
   "spotlightMemoryPreference",
   () => {
