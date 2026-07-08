@@ -82,7 +82,7 @@ export class MilvusSemanticMemoryStore {
           {
             name: "entry_json",
             data_type: DataType.VarChar,
-            max_length: 65_536,
+            max_length: 65_535,
           },
           {
             name: "embedding",
