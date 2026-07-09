@@ -2,6 +2,58 @@
 
 Spotlight **宿主侧执行层** + **Inupedia skills/service 标准**。
 
+## Framework-neutral Host Core
+
+`createSpotlightHostCore` 是任意 frontend 接入 Spotlight SaaS 的最小核心。它不依赖 Vue、DOM、Pinia、Cesium，也不要求项目提供 scene/tab。
+
+```ts
+import { createSpotlightHostCore } from "@inupedia/spotlight-client";
+
+const hostCore = createSpotlightHostCore({
+  actions: [
+    {
+      name: "ui.openSettings",
+      displayName: "Open settings",
+      description: "打开设置面板",
+      handler: () => openSettings(),
+    },
+  ],
+  readables: [
+    {
+      id: "route",
+      description: "当前页面",
+      value: () => router.currentRoute.value.name,
+    },
+  ],
+  onToolComplete(toolName, input, result) {
+    telemetry.record(toolName, input, result);
+  },
+});
+
+hostCore.listTools();
+await hostCore.runTool("ui.openSettings", {});
+hostCore.getUiContext();
+```
+
+Vanilla frontend 也可以直接用：
+
+```ts
+const unregister = hostCore.registerAction({
+  name: "cart.checkout",
+  description: "提交购物车",
+  handler: async ({ cartId }) => checkout(String(cartId)),
+});
+
+unregister();
+```
+
+核心概念只有两类：
+
+- `readables`：把当前 UI/业务状态以 `{ description, value }` 暴露给 Spotlight。
+- `actions`：把 frontend 可执行动作以 `{ name, description, handler }` 暴露成 host tools。
+
+ydjm 的 `ensureMainScene`、`ensureSmallTab`、Cesium scene 等能力不是 SDK 必填项。需要这类导航前置能力的项目，可以继续通过旧 `@agent` registry 兼容桥注入。
+
 ## Service 注入（单一 `@agent`）
 
 在函数上方加一行 `@agent`；**scene / tab / host 由文件路径 + name 自动推断**。

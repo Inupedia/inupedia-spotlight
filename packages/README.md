@@ -5,8 +5,8 @@ Monorepo packages extracted from ydjm-construction-map for productization.
 | Package | npm name | Role |
 |---------|----------|------|
 | `spotlight-protocol` | `@inupedia/spotlight-protocol` | Shared wire types (client ↔ server) |
-| `spotlight-client` | `@inupedia/spotlight-client` | HTTP, manifest, host tool bridge |
-| `spotlight-vue` | `@inupedia/spotlight-vue` | Vue plugin, UI shell, `defineSpotlightHost` |
+| `spotlight-client` | `@inupedia/spotlight-client` | HTTP, manifest, framework-neutral host core |
+| `spotlight-vue` | `@inupedia/spotlight-vue` | Vue plugin, UI shell, `defineSpotlightCapabilityHost` |
 | `spotlight-memory` | `@inupedia/spotlight-memory` | Memory Gate, exact/semantic cache stores |
 
 ## Build
@@ -73,18 +73,37 @@ app.use(SpotlightVue, {
 
 ```typescript
 // spotlight.config.ts
-import { defineSpotlightApp, readSpotlightEnv } from "@inupedia/spotlight-vue";
-import { buildAgentServiceHost } from "@inupedia/spotlight-client";
-import { mySpotlightHost } from "@/service/agent/host";
+import {
+  defineSpotlightConfig,
+  defineSpotlightCapabilityHost,
+  readSpotlightEnv,
+} from "@inupedia/spotlight-vue";
 
 const skillModules = import.meta.glob<string>(
   "../../.inupedia/skills/**/SKILL.md",
   { eager: true, query: "?raw", import: "default" },
 );
 
-export default defineSpotlightApp({
+const host = defineSpotlightCapabilityHost({
+  actions: [
+    {
+      name: "ui.openSettings",
+      description: "打开设置面板",
+      handler: () => openSettings(),
+    },
+  ],
+  readables: [
+    {
+      id: "route",
+      description: "当前页面",
+      value: () => router.currentRoute.value.name,
+    },
+  ],
+});
+
+export default defineSpotlightConfig({
   ...readSpotlightEnv(import.meta.env, { projectId: "my-app" }),
-  ...mySpotlightHost, // listTools, runTool, operate, getUiContext…
+  host,
   skills: skillModules,
 });
 ```
@@ -92,7 +111,10 @@ export default defineSpotlightApp({
 | 你写 | SDK 提供 |
 |------|----------|
 | `.inupedia/skills/*/SKILL.md` + references/scripts | 名录、`skill.invoke`、附录打包 |
-| `src/service/agent/capabilities/**/*.ts` | `@agent` + `resolveAgentMeta`, `buildAgentServiceHost` |
+| `actions/readables/workflows/metadata` | `createSpotlightHostCore`, Vue lifecycle adapter, host manifest |
+| 可选 `src/service/agent/capabilities/**/*.ts` | 旧 `@agent` registry 兼容桥 |
 | `.inupedia/skills/_template` 复制新 skill | `validateSkillFrontmatter` |
+
+不要复制 ydjm 的 scene/tab/Cesium 模型。那些是 ydjm host app 自己注入的 capabilities，不是 Spotlight SDK 前提。
 
 `spotlight-server` remains a deployable service in this workspace; publish separately as Docker image.

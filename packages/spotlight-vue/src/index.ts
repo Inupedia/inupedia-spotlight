@@ -24,6 +24,16 @@ export {
   type SpotlightHostSkillsInput,
 } from "./host/defineHost.js";
 export {
+  defineSpotlightCapabilityHost,
+  type DefineSpotlightCapabilityHostOptions,
+} from "./host/capabilityHost.js";
+export {
+  getDefaultSpotlightHostCore,
+  useSpotlightAction,
+  useSpotlightReadable,
+  type UseSpotlightHostCoreOptions,
+} from "./composables/useSpotlightHostCore.js";
+export {
   normalizeSkillsOption,
   type SpotlightHostSkillsOption,
 } from "./host/normalizeSkills.js";

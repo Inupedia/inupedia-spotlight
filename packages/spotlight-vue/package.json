@@ -1,6 +1,6 @@
 {
   "name": "@inupedia/spotlight-vue",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Vue plugin and config entry for Inupedia Spotlight (monorepo workspace package)",
   "type": "module",
   "license": "MIT",
@@ -94,6 +94,7 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
+    "test": "vitest run",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "build:js": "vite build",
     "build:types": "vue-tsc -p tsconfig.build.json",
@@ -131,6 +132,7 @@
   "devDependencies": {
     "@inspira-ui/plugins": "^0.0.2",
     "@vitejs/plugin-vue": "^6.0.3",
+    "jsdom": "^27.4.0",
     "md-editor-v3": "^6.4.1",
     "pinia": "^3.0.4",
     "prettier": "^3.8.1",

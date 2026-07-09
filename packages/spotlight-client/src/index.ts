@@ -23,6 +23,16 @@ export {
   type SpotlightHostToolHandlerContext,
 } from "./host.js";
 export {
+  createSpotlightHostCore,
+  type SpotlightActionContext,
+  type SpotlightFrontendAction,
+  type SpotlightHostCore,
+  type SpotlightHostCoreEvent,
+  type SpotlightHostCoreOptions,
+  type SpotlightHostCoreSubscriber,
+  type SpotlightReadableContext,
+} from "./hostCore.js";
+export {
   bridgeAgentRegistryToHostTools,
   type AgentRegistryBridgeDeps,
   type AgentRegistryTool,
