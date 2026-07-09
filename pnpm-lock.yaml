@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@pixi/core': 7.4.3
+
 importers:
 
   .:
@@ -103,6 +106,13 @@ importers:
       yaml:
         specifier: ^2.8.4
         version: 2.9.0
+    optionalDependencies:
+      '@pixi-spine/all-3.8':
+        specifier: ^4.0.6
+        version: 4.0.6(@pixi/assets@7.4.3(@pixi/core@7.0.0))(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))
+      pixi.js:
+        specifier: ^8.9.2
+        version: 8.19.0
     devDependencies:
       '@inspira-ui/plugins':
         specifier: ^0.0.2
@@ -131,13 +141,6 @@ importers:
       vue-tsc:
         specifier: ^3.2.2
         version: 3.3.6(typescript@5.9.3)
-    optionalDependencies:
-      '@pixi-spine/all-3.8':
-        specifier: ^4.0.6
-        version: 4.0.6(@pixi/assets@7.4.3(@pixi/core@7.0.0))(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))
-      pixi.js:
-        specifier: ^8.9.2
-        version: 8.19.0
 
 packages:
 
@@ -667,7 +670,7 @@ packages:
     resolution: {integrity: sha512-UnI4MNFmP86Hvrh9ZHjXcof6HAvW/Y1lGw4d0hutCCB/Sl4576QfHmeQFX0xmeuJh70mUHC2O9Tw9rqQZv9svw==}
     peerDependencies:
       '@pixi/assets': ^7.0.0
-      '@pixi/core': ^7.0.0
+      '@pixi/core': 7.4.3
       '@pixi/display': ^7.0.0
       '@pixi/graphics': ^7.0.0
       '@pixi/mesh': ^7.0.0
@@ -677,7 +680,7 @@ packages:
   '@pixi-spine/base@4.0.6':
     resolution: {integrity: sha512-m7tbwGF9LTWoDP3/p1lj7tPYUiZroFGJa3hqCpDT24oP0+qPwm81zhvOddcvKpm9WvyG7EahQfncayXMNm0n7A==}
     peerDependencies:
-      '@pixi/core': ^7.0.0
+      '@pixi/core': 7.4.3
       '@pixi/display': ^7.0.0
       '@pixi/graphics': ^7.0.0
       '@pixi/mesh': ^7.0.0
@@ -695,13 +698,13 @@ packages:
     peerDependencies:
       '@pixi-spine/base': ^4.0.0
       '@pixi/assets': ' ^7.0.0'
-      '@pixi/core': ^7.0.0
+      '@pixi/core': 7.4.3
 
   '@pixi-spine/runtime-3.8@4.0.6':
     resolution: {integrity: sha512-caHEFt7Iwzercec5cOI+Sf2tzOT4ejNAn6ZjBurWAEeXZ8YCaj41PTnlnJAh6ex80AP3WWFJcbnqcXV/6G0sMA==}
     peerDependencies:
       '@pixi-spine/base': ^4.0.0
-      '@pixi/core': ^7.0.0
+      '@pixi/core': 7.4.3
 
   '@pixi/assets@7.4.3':
     resolution: {integrity: sha512-StvjiJBSp/j9hHkGu8AFHNvwYUazXq64WhyhytztyDMRkg/l/cL7EcttY5T0qZNWlIpccdr60LUKrWDOuMpkiw==}
@@ -2802,7 +2805,7 @@ snapshots:
   '@pixi-spine/all-3.8@4.0.6(@pixi/assets@7.4.3(@pixi/core@7.0.0))(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))':
     dependencies:
       '@pixi-spine/base': 4.0.6(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))
-      '@pixi-spine/loader-3.8': 4.0.6(86bb3408bf61c73e054ef799754ca317)
+      '@pixi-spine/loader-3.8': 4.0.6(f5qldcu2bdd6dnq3ahgohdfxbu)
       '@pixi-spine/loader-base': 4.0.6(@pixi-spine/base@4.0.6(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/assets@7.4.3(@pixi/core@7.0.0))(@pixi/core@7.0.0)
       '@pixi-spine/runtime-3.8': 4.0.6(@pixi-spine/base@4.0.6(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/core@7.0.0)
       '@pixi/assets': 7.4.3(@pixi/core@7.0.0)
@@ -2824,7 +2827,7 @@ snapshots:
       '@pixi/sprite': 7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))
     optional: true
 
-  '@pixi-spine/loader-3.8@4.0.6(86bb3408bf61c73e054ef799754ca317)':
+  '@pixi-spine/loader-3.8@4.0.6(f5qldcu2bdd6dnq3ahgohdfxbu)':
     dependencies:
       '@pixi-spine/loader-base': 4.0.6(@pixi-spine/base@4.0.6(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/assets@7.4.3(@pixi/core@7.0.0))(@pixi/core@7.0.0)
       '@pixi-spine/runtime-3.8': 4.0.6(@pixi-spine/base@4.0.6(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/graphics@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh-extras@7.4.3(@pixi/core@7.0.0)(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/mesh@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0)))(@pixi/sprite@7.4.3(@pixi/core@7.0.0)(@pixi/display@7.4.3(@pixi/core@7.0.0))))(@pixi/core@7.0.0)
