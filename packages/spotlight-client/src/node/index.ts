@@ -13,3 +13,16 @@ export {
   type SkillScanMode,
   type SkillScanResult,
 } from "./capabilities/skillScanner.js";
+export {
+  validateAgentSkillMarkdown,
+  type AgentSkillDiagnostic,
+  type AgentSkillDiagnosticCode,
+  type AgentSkillDiagnosticSeverity,
+  type AgentSkillValidationResult,
+  type ValidatedAgentSkill,
+  type ValidateAgentSkillMarkdownInput,
+} from "./capabilities/skillValidator.js";
+export {
+  validateScannedSkill,
+  type ValidateScannedSkillInput,
+} from "./capabilities/skillFileValidator.js";

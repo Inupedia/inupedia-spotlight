@@ -49,6 +49,14 @@ const imports = [
       if ("createNodeSkillScriptRunner" in mod) {
         throw new Error(\`\${this.id} leaked Node-only createNodeSkillScriptRunner\`);
       }
+      for (const nodeOnlyExport of [
+        "validateAgentSkillMarkdown",
+        "validateScannedSkill",
+      ]) {
+        if (nodeOnlyExport in mod) {
+          throw new Error(\`\${this.id} leaked Node-only \${nodeOnlyExport}\`);
+        }
+      }
     },
   },
   {
@@ -57,6 +65,8 @@ const imports = [
       assertExport(mod, "createNodeSkillScriptRunner", this.id);
       assertExport(mod, "joinSkillScriptPath", this.id);
       assertExport(mod, "scanProjectSkills", this.id);
+      assertExport(mod, "validateAgentSkillMarkdown", this.id);
+      assertExport(mod, "validateScannedSkill", this.id);
     },
   },
   {

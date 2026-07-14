@@ -47,6 +47,9 @@ importers:
       magic-string:
         specifier: ^0.30.21
         version: 0.30.21
+      yaml:
+        specifier: ^2.8.4
+        version: 2.9.0
     devDependencies:
       '@types/babel__traverse':
         specifier: ^7.28.0

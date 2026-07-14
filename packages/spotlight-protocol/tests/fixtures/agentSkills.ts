@@ -25,14 +25,14 @@ export const AGENT_SKILL_FIXTURES_V1: AgentSkillFixtureV1[] = [
     expectedDiagnosticCodes: [],
   },
   {
-    id: "valid-unicode",
+    id: "invalid-unicode-name",
     directoryName: "现场监控",
     skillMarkdown: skillMarkdown([
       "name: 现场监控",
       "description: 查询现场监控点。用户询问摄像头或视频通道时使用。",
     ]),
-    valid: true,
-    expectedDiagnosticCodes: [],
+    valid: false,
+    expectedDiagnosticCodes: ["SKILL_NAME_INVALID_FORMAT"],
   },
   {
     id: "invalid-frontmatter-missing",

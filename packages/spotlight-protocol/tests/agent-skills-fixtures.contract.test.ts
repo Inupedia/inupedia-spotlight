@@ -12,7 +12,7 @@ describe("Agent Skills fixture oracle", () => {
     expect(ids).toEqual(
       new Set([
         "valid-basic",
-        "valid-unicode",
+        "invalid-unicode-name",
         "invalid-frontmatter-missing",
         "invalid-name-directory-mismatch",
         "invalid-unknown-top-level-field",
