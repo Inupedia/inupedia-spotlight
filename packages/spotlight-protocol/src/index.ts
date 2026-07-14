@@ -1,6 +1,7 @@
 /** Shared Spotlight protocol types (client ↔ spotlight-server). */
 
 export * from "./capabilities.js";
+export * from "./capabilitySecurity.js";
 
 export type ToolExecutionTarget = "runtime" | "host";
 
@@ -52,11 +53,7 @@ export interface AgentStep {
 }
 
 export type SpotlightStepContentChannel =
-  | "body"
-  | "planning"
-  | "answer"
-  | "tool"
-  | "trace";
+  "body" | "planning" | "answer" | "tool" | "trace";
 
 /** Host-reported UI context; keep generic for SaaS consumers. */
 export type AgentUiContext = Record<string, unknown>;
@@ -124,9 +121,7 @@ export type AssetType =
   | "scene_target";
 
 export type SpotlightSkillResponseStrategy =
-  | "direct_answer"
-  | "tool_answer"
-  | "clarify";
+  "direct_answer" | "tool_answer" | "clarify";
 
 export interface SpotlightSkill {
   name: string;
