@@ -1,6 +1,6 @@
 {
   "name": "@inupedia/spotlight-memory",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "description": "Memory Gate, exact/semantic cache stores for Inupedia Spotlight",
   "type": "module",
   "license": "MIT",
