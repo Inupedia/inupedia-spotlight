@@ -1,5 +1,7 @@
 /** Shared Spotlight protocol types (client ↔ spotlight-server). */
 
+export * from "./capabilities.js";
+
 export type ToolExecutionTarget = "runtime" | "host";
 
 export interface HostToolEffect {
