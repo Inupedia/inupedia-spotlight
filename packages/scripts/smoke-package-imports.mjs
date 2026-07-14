@@ -56,6 +56,7 @@ const imports = [
     assert(mod) {
       assertExport(mod, "createNodeSkillScriptRunner", this.id);
       assertExport(mod, "joinSkillScriptPath", this.id);
+      assertExport(mod, "scanProjectSkills", this.id);
     },
   },
   {
