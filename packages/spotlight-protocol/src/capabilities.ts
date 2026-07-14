@@ -263,10 +263,7 @@ export interface ToolConfirmationGrantV1 {
 }
 
 export type CapabilityCallTerminalStateV1 =
-  | "succeeded"
-  | "failed"
-  | "rejected"
-  | "unknown_outcome";
+  "succeeded" | "failed" | "rejected" | "unknown_outcome";
 
 export type CapabilityChannelClientMessageV1 =
   | CapabilityClientHelloV1
@@ -276,5 +273,4 @@ export type CapabilityChannelClientMessageV1 =
   | HostActionResultV2;
 
 export type CapabilityChannelServerMessageV1 =
-  | CapabilityHeartbeatV1
-  | HostActionRequestV2;
+  CapabilityHeartbeatV1 | HostActionRequestV2;
