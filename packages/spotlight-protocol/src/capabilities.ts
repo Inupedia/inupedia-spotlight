@@ -66,6 +66,7 @@ export interface ResolvedToolRefV1 {
 export interface CapabilityArtifactRefV1 {
   digest: string;
   manifestDigest: string;
+  skillManifestDigest?: string;
   toolManifestDigest: string;
   byteLength: number;
 }
@@ -186,15 +187,22 @@ export type RenewCapabilityLeaseResultV1 =
 
 export interface CapabilityClientHelloV1 {
   type: "client_hello";
+  protocolVersion: typeof SPOTLIGHT_CAPABILITY_PROTOCOL_V1;
   capabilityChannelToken: string;
+  browserInstanceId: string;
+  tabInstanceId: string;
 }
 
 export interface CapabilityHeartbeatV1 {
   type: "heartbeat";
+  sessionId: string;
+  capabilitySnapshotId: string;
   leaseId: string;
   leaseVersion: number;
   connectionId: string;
   connectionEpoch: number;
+  browserInstanceId: string;
+  tabInstanceId: string;
   sentAt: string;
 }
 
@@ -205,9 +213,41 @@ export interface HostActionFenceV2 {
   sessionId: string;
   capabilitySnapshotId: string;
   leaseId: string;
+  leaseVersion: number;
   connectionId: string;
   connectionEpoch: number;
+  browserInstanceId: string;
+  tabInstanceId: string;
   tool: ResolvedToolRefV1;
+}
+
+export interface CapabilityChannelReadyV1 {
+  type: "channel_ready";
+  leaseId: string;
+  leaseVersion: number;
+  connectionId: string;
+  connectionEpoch: number;
+}
+
+export interface CapabilityChannelFencedV1 {
+  type: "channel_fenced";
+  code: "CAPABILITY_LEASE_FENCED" | "CAPABILITY_LEASE_REVOKED";
+  message: string;
+}
+
+export interface MigrateSessionCapabilityRequestV1 {
+  expectedBindingVersion: number;
+  frontendBuildId: string;
+  capabilityArtifact: CapabilityArtifactRefV1;
+  liveTools: Array<{ name: string; version: string }>;
+}
+
+export interface CapabilityArtifactAttestationV1 {
+  schemaVersion: "spotlight.capability-attestation/1";
+  projectId: string;
+  frontendBuildId: string;
+  artifact: CapabilityArtifactRefV1;
+  createdAt: string;
 }
 
 export interface HostActionRequestV2 extends HostActionFenceV2 {
@@ -273,4 +313,7 @@ export type CapabilityChannelClientMessageV1 =
   | HostActionResultV2;
 
 export type CapabilityChannelServerMessageV1 =
-  CapabilityHeartbeatV1 | HostActionRequestV2;
+  | CapabilityHeartbeatV1
+  | CapabilityChannelReadyV1
+  | CapabilityChannelFencedV1
+  | HostActionRequestV2;

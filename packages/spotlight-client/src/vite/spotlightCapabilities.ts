@@ -198,6 +198,11 @@ export function spotlightCapabilities(
         fileName: "capability-build-info.json",
         source: `${current.virtualModule.canonicalBuildInfoJson}\n`,
       });
+      this.emitFile({
+        type: "asset",
+        fileName: `capability-artifacts/${current.result.buildInfo.artifactDigest}.tar.gz`,
+        source: current.result.archive,
+      });
     },
   };
 }

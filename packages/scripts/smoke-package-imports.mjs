@@ -337,10 +337,13 @@ const imports = [
         nodeMod.canonicalizeJson(buildInfo),
       );
       if (
-        emitted.length !== 1 ||
+        emitted.length !== 2 ||
         emitted[0].type !== "asset" ||
         emitted[0].fileName !== "capability-build-info.json" ||
-        emitted[0].source !== canonicalBuildInfo + "\\n"
+        emitted[0].source !== canonicalBuildInfo + "\\n" ||
+        emitted[1].type !== "asset" ||
+        emitted[1].fileName !== "capability-artifacts/" + buildInfo.artifactDigest + ".tar.gz" ||
+        !(emitted[1].source instanceof Uint8Array)
       ) {
         throw new Error(\`\${this.id} emitted non-canonical build-info assets\`);
       }

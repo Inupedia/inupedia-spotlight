@@ -1,11 +1,12 @@
 import type { FrontendToolDescriptorV1 } from "@inupedia/spotlight-protocol";
+import type { FrontendToolDefinitionV1 } from "../tools/frontendTool.js";
 
 import type { SkillRootInput, SkillScanDiagnostic } from "../node/capabilities/skillScanner.js";
 import type { AgentSkillDiagnostic } from "../node/capabilities/skillValidator.js";
 
 export interface SpotlightCapabilityProjectBuildV1 {
   projectId: string;
-  tools: readonly FrontendToolDescriptorV1[];
+  tools: readonly (FrontendToolDescriptorV1 | FrontendToolDefinitionV1)[];
 }
 
 export interface SpotlightCapabilitiesOptionsV1 {
@@ -21,6 +22,7 @@ export interface CapabilityBuildInfoV1 {
   artifactVersion: "spotlight.capability-artifact/1";
   artifactDigest: string;
   manifestDigest: string;
+  skillManifestDigest: string;
   toolManifestDigest: string;
   byteLength: number;
 }

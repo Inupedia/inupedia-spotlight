@@ -664,11 +664,16 @@ describe("spotlightCapabilities", () => {
 
       await hook(plugin.generateBundle).call({ emitFile });
 
-      expect(emitFile).toHaveBeenCalledTimes(1);
+      expect(emitFile).toHaveBeenCalledTimes(2);
       expect(emitFile).toHaveBeenCalledWith({
         type: "asset",
         fileName: "capability-build-info.json",
         source: `${canonicalJson}\n`,
+      });
+      expect(emitFile).toHaveBeenCalledWith({
+        type: "asset",
+        fileName: `capability-artifacts/${generated.capabilityBuildInfo.artifactDigest}.tar.gz`,
+        source: expect.any(Uint8Array),
       });
       expect(source).not.toContain("/api/spotlight/capabilities");
       await expect(generated.openUploadStream()).rejects.toMatchObject({

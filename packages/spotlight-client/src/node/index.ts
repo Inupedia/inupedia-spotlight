@@ -66,3 +66,8 @@ export {
   type BuiltToolManifestV1,
   type ToolManifestV1,
 } from "./capabilities/toolManifest.js";
+export {
+  buildSkillManifestV1,
+  type CapabilitySkillManifestEntryV1,
+  type CapabilitySkillManifestV1,
+} from "./capabilities/skillManifest.js";

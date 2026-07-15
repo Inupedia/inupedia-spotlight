@@ -26,6 +26,7 @@ import {
 } from "./httpConfig.js";
 import { ensureSpotlightMeta } from "./meta.js";
 import type { SpotlightPipelineRunOutcome } from "./types.js";
+import { getSpotlightCapabilityRuntime } from "../createSpotlight.js";
 
 const activeRunBySignal = new WeakMap<AbortSignal, string>();
 
@@ -474,11 +475,24 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
   const runtime = useSpotlightRuntimeStore();
   const memoryPreference = useSpotlightMemoryPreferenceStore();
   const hostManifest = await ensureHostToolsManifest(signal);
+  const capabilityRuntime = getSpotlightCapabilityRuntime();
+  const capability = capabilityRuntime
+    ? await capabilityRuntime.connect({
+        sessionId: session.sessionId,
+        browserInstanceId: persistentRuntimeId("spotlight.browser-instance", localStorage),
+        tabInstanceId: persistentRuntimeId("spotlight.tab-instance", sessionStorage),
+        signal,
+      })
+    : undefined;
   return {
     hostManifest,
     payload: {
       projectId: getSpotlightProjectId(),
       sessionId: session.sessionId,
+      ...(capability ? {
+        capabilitySnapshotId: capability.handshake.capabilitySnapshotId,
+        sessionBindingVersion: capability.handshake.sessionBindingVersion,
+      } : {}),
       userQuestion,
       uiContext: getSpotlightConfig().getUiContext?.() ?? {},
       sessionState: {
@@ -506,6 +520,14 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
       skills: serializeSkillsForRemote(getSkillsPoolForRun()),
     },
   };
+}
+
+function persistentRuntimeId(key: string, storage: Storage): string {
+  const existing = storage.getItem(key);
+  if (existing) return existing;
+  const created = globalThis.crypto.randomUUID();
+  storage.setItem(key, created);
+  return created;
 }
 
 export async function runRemoteSpotlightPipeline(

@@ -102,6 +102,7 @@ describe("buildViteCapabilitiesV1", () => {
       artifactVersion: "spotlight.capability-artifact/1",
       artifactDigest: expect.stringMatching(/^sha256:[a-f\d]{64}$/),
       manifestDigest: expect.stringMatching(/^sha256:[a-f\d]{64}$/),
+      skillManifestDigest: expect.stringMatching(/^sha256:[a-f\d]{64}$/),
       toolManifestDigest: expect.stringMatching(/^sha256:[a-f\d]{64}$/),
       byteLength: result.archive.byteLength,
     });

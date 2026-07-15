@@ -78,6 +78,35 @@ function validateProject(
   };
 }
 
+function safeToolDescriptors(
+  tools: SpotlightCapabilityProjectBuildV1["tools"],
+): FrontendToolDescriptorArray {
+  return tools.map((tool, index) => {
+    if (isProxy(tool)) {
+      throw new CapabilityArtifactError(
+        "ARTIFACT_JSON_UNSUPPORTED_VALUE",
+        `Tool descriptor ${index} must not be a Proxy`,
+      );
+    }
+    if (tool === null || typeof tool !== "object" || Array.isArray(tool)) {
+      invalidInput(`Tool descriptor ${index} must be a plain object`);
+    }
+    const result: Record<string, unknown> = {};
+    for (const key of Reflect.ownKeys(tool)) {
+      if (typeof key !== "string") invalidInput(`Tool descriptor ${index} contains a symbol field`);
+      const descriptor = Object.getOwnPropertyDescriptor(tool, key);
+      if (!descriptor?.enumerable || !("value" in descriptor)) {
+        throw new CapabilityArtifactError(
+          "ARTIFACT_JSON_UNSUPPORTED_VALUE",
+          `Tool descriptor ${index}.${key} must be an enumerable data property`,
+        );
+      }
+      if (key !== "execute") result[key] = descriptor.value;
+    }
+    return result as unknown as FrontendToolDescriptorArray[number];
+  });
+}
+
 function throwDiagnostic(
   diagnostic: SkillScanDiagnostic | AgentSkillDiagnostic,
 ): never {
@@ -120,7 +149,7 @@ export async function buildViteCapabilitiesV1(input: {
 }): Promise<CapabilityPluginBuildResultV1> {
   const project = validateProject(input.project);
   const toolManifest = buildToolManifestV1(
-    project.tools as FrontendToolDescriptorArray,
+    safeToolDescriptors(project.tools),
   );
   const frontendBuildId = input.options?.frontendBuildId;
   if (
@@ -200,6 +229,7 @@ export async function buildViteCapabilitiesV1(input: {
     artifactVersion: artifact.artifactVersion,
     artifactDigest: artifact.artifactDigest,
     manifestDigest: artifact.manifestDigest,
+    skillManifestDigest: artifact.skillManifestDigest,
     toolManifestDigest: artifact.toolManifestDigest,
     byteLength: artifact.byteLength,
   });

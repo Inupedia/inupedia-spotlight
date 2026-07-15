@@ -70,8 +70,11 @@ describe("spotlight.capabilities/1 wire contract", () => {
       sessionId: "session-1",
       capabilitySnapshotId: "snapshot-1",
       leaseId: "lease-1",
+      leaseVersion: 1,
       connectionId: "connection-1",
       connectionEpoch: 1,
+      browserInstanceId: "browser-1",
+      tabInstanceId: "tab-1",
       tool: browserTool,
       input: { channelId: "camera-1" },
       deadlineAt: "2026-07-14T00:00:30.000Z",
@@ -79,6 +82,7 @@ describe("spotlight.capabilities/1 wire contract", () => {
     } satisfies HostActionRequestV2;
 
     expect(request.connectionEpoch).toBe(1);
+    expect(request.leaseVersion).toBe(1);
     expectTypeOf(request).toMatchTypeOf<HostActionRequestV2>();
     expectTypeOf<SessionCapabilityBindingV1>().not.toBeAny();
   });

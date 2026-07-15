@@ -171,3 +171,10 @@ export type { ToolResult, ToolTraceEvent } from "./types/toolResult.js";
 export type { SessionControlIntent } from "./types/session.js";
 export type { HandlerApi, SpotlightContext } from "./store/pipeline/types.js";
 export type { SpotlightVideoChannelId } from "./store/types.js";
+export {
+  createSpotlight,
+  SPOTLIGHT_CAPABILITY_RUNTIME_KEY,
+  type CreateSpotlightOptionsV1,
+  type SpotlightCapabilityRuntimeV1,
+  type SpotlightPluginV1,
+} from "./createSpotlight.js";

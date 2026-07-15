@@ -229,13 +229,20 @@ function addPayload(
 
 export function buildCapabilityFileMapV1(input: {
   skills: CanonicalSkillInputV1[];
+  skillManifestBytes?: Uint8Array;
   toolManifestBytes: Uint8Array;
 }): BuiltCapabilityFileMapV1 {
   const root = readDataRecord(
     input,
     "Capability file-map input",
-    new Set(["skills", "toolManifestBytes"]),
+    new Set(["skills", "skillManifestBytes", "toolManifestBytes"]),
   );
+  if (root.skillManifestBytes !== undefined && (
+    isProxy(root.skillManifestBytes) ||
+    !(root.skillManifestBytes instanceof Uint8Array)
+  )) {
+    invalidInput("skillManifestBytes must be a Uint8Array");
+  }
   if (
     isProxy(root.toolManifestBytes) ||
     !(root.toolManifestBytes instanceof Uint8Array)
@@ -245,6 +252,14 @@ export function buildCapabilityFileMapV1(input: {
   const skills = readDenseDataArray(root.skills, "skills");
   const payloads: CapabilityPayloadFileV1[] = [];
   const seenPaths = new Set<string>();
+
+  if (root.skillManifestBytes instanceof Uint8Array) {
+    addPayload(
+      payloads,
+      seenPaths,
+      createPayload("skill-manifest.json", root.skillManifestBytes, "application/json"),
+    );
+  }
 
   addPayload(
     payloads,
@@ -319,10 +334,11 @@ export function buildCapabilityFileMapV1(input: {
 
 export function computeArtifactDigestV1(input: {
   manifestDigest: string;
+  skillManifestDigest?: string;
   toolManifestDigest: string;
   payloads: Array<Pick<CapabilityPayloadFileV1, "path" | "sha256">>;
 }): string {
-  if (!SHA256_DIGEST.test(input.manifestDigest) || !SHA256_DIGEST.test(input.toolManifestDigest)) {
+  if (!SHA256_DIGEST.test(input.manifestDigest) || (input.skillManifestDigest !== undefined && !SHA256_DIGEST.test(input.skillManifestDigest)) || !SHA256_DIGEST.test(input.toolManifestDigest)) {
     throw new CapabilityArtifactError(
       "ARTIFACT_JSON_NOT_IJSON",
       "Artifact preimage contains an invalid manifest digest",
@@ -344,6 +360,7 @@ export function computeArtifactDigestV1(input: {
     canonicalizeJson({
       artifactVersion: "spotlight.capability-artifact/1",
       manifestDigest: input.manifestDigest,
+      ...(input.skillManifestDigest ? { skillManifestDigest: input.skillManifestDigest } : {}),
       toolManifestDigest: input.toolManifestDigest,
       payloadDigests,
     }),

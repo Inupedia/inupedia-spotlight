@@ -126,3 +126,28 @@ export {
   type SkillScriptRunResult,
 } from "./skillScriptPath.js";
 export type { AgentDef } from "./agentDecoratorTypes.js";
+export {
+  createFrontendToolRegistry,
+  defineFrontendTool,
+  defineSpotlightProject,
+  projectToolDescriptors,
+  type FrontendToolDefinitionV1,
+  type FrontendToolHandlerContextV1,
+  type FrontendToolRegistryV1,
+  type SpotlightProjectV1,
+} from "./tools/frontendTool.js";
+export {
+  createCapabilityClient,
+  type CapabilityConnectInputV1,
+  type CapabilityConnectResultV1,
+  type CreateCapabilityClientOptionsV1,
+} from "./capabilities/handshake.js";
+export {
+  createCapabilityChannel,
+  type CapabilityChannelV1,
+} from "./capabilities/channel.js";
+export {
+  createHostActionExecutor,
+  type CapabilityExecutionFenceV1,
+} from "./capabilities/hostActionExecutor.js";
+export { SpotlightCapabilityError } from "./capabilities/errors.js";
