@@ -1,4 +1,5 @@
-import { lstat, readFile, readdir } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, open, readdir, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import type { CanonicalSkillInputV1 } from "./capabilityArtifactTypes.js";
@@ -38,6 +39,16 @@ export interface LoadedCanonicalSkillsV1 {
   expandedBytes: number;
 }
 
+interface PathIdentity {
+  dev: bigint;
+  ino: bigint;
+}
+
+interface DirectoryPin extends PathIdentity {
+  path: string;
+  canonicalPath: string;
+}
+
 const compareUtf8 = (left: string, right: string): number =>
   Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
 
@@ -57,6 +68,183 @@ function unsafe(message: string): CapabilitySkillLoadErrorV1 {
   );
 }
 
+function hasSameIdentity(left: PathIdentity, right: PathIdentity): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+function validateSkillDefinitions(
+  projectRoot: string,
+  skills: readonly ScannedSkill[],
+): void {
+  const sortedNames = [...skills].map((skill) => skill.name).sort(compareUtf8);
+  for (let index = 1; index < sortedNames.length; index += 1) {
+    if (sortedNames[index] === sortedNames[index - 1]) {
+      throw unsafe(`Duplicate Skill name is not allowed: ${sortedNames[index]}`);
+    }
+  }
+
+  const sortedDirectories = skills
+    .map((skill) => resolve(projectRoot, skill.directory))
+    .sort(compareUtf8);
+  for (
+    let parentIndex = 0;
+    parentIndex < sortedDirectories.length;
+    parentIndex += 1
+  ) {
+    const parent = sortedDirectories[parentIndex]!;
+    for (
+      let candidateIndex = parentIndex + 1;
+      candidateIndex < sortedDirectories.length;
+      candidateIndex += 1
+    ) {
+      const candidate = sortedDirectories[candidateIndex]!;
+      if (parent === candidate || isContained(parent, candidate)) {
+        throw unsafe(
+          `Duplicate or overlapping Skill directories are not allowed: ${parent} and ${candidate}`,
+        );
+      }
+    }
+  }
+}
+
+async function pinDirectory(
+  directory: string,
+  canonicalSkillRoot?: string,
+): Promise<DirectoryPin> {
+  try {
+    const before = await lstat(directory, { bigint: true });
+    if (before.isSymbolicLink() || !before.isDirectory()) {
+      throw unsafe(`Skill directory is not a regular directory: ${directory}`);
+    }
+    const canonicalPath = await realpath(directory);
+    const after = await lstat(directory, { bigint: true });
+    if (
+      after.isSymbolicLink() ||
+      !after.isDirectory() ||
+      !hasSameIdentity(before, after)
+    ) {
+      throw unsafe(`Skill directory changed while inspected: ${directory}`);
+    }
+    if (
+      canonicalSkillRoot !== undefined &&
+      !isContained(canonicalSkillRoot, canonicalPath)
+    ) {
+      throw unsafe(`Skill directory resolves outside its root: ${directory}`);
+    }
+    return {
+      path: directory,
+      canonicalPath,
+      dev: after.dev,
+      ino: after.ino,
+    };
+  } catch (error) {
+    if (error instanceof CapabilitySkillLoadErrorV1) throw error;
+    throw unsafe(`Cannot securely inspect Skill directory: ${directory}`);
+  }
+}
+
+async function validateDirectory(pin: DirectoryPin): Promise<void> {
+  try {
+    const stat = await lstat(pin.path, { bigint: true });
+    const canonicalPath = await realpath(pin.path);
+    if (
+      stat.isSymbolicLink() ||
+      !stat.isDirectory() ||
+      !hasSameIdentity(pin, stat) ||
+      canonicalPath !== pin.canonicalPath
+    ) {
+      throw unsafe(`Skill directory changed during traversal: ${pin.path}`);
+    }
+  } catch (error) {
+    if (error instanceof CapabilitySkillLoadErrorV1) throw error;
+    throw unsafe(`Cannot revalidate Skill directory: ${pin.path}`);
+  }
+}
+
+async function readBoundedFile(
+  candidate: string,
+  parent: DirectoryPin,
+  canonicalSkillRoot: string,
+  remainingBytes: number,
+): Promise<Buffer> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    await validateDirectory(parent);
+    const pathBefore = await lstat(candidate, { bigint: true });
+    if (pathBefore.isSymbolicLink() || !pathBefore.isFile()) {
+      throw unsafe(`Non-regular Skill entry is not allowed: ${candidate}`);
+    }
+    const canonicalBefore = await realpath(candidate);
+    if (!isContained(canonicalSkillRoot, canonicalBefore)) {
+      throw unsafe(`Skill file resolves outside its directory: ${candidate}`);
+    }
+
+    // O_NOFOLLOW closes the final-component race on platforms that expose it.
+    // The handle/path identity and canonical containment checks below are the
+    // explicit safe fallback where the flag is unavailable.
+    const noFollow =
+      typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
+    handle = await open(candidate, constants.O_RDONLY | noFollow);
+    const opened = await handle.stat({ bigint: true });
+    const pathAfterOpen = await lstat(candidate, { bigint: true });
+    const canonicalAfterOpen = await realpath(candidate);
+    await validateDirectory(parent);
+    if (
+      !opened.isFile() ||
+      pathAfterOpen.isSymbolicLink() ||
+      !pathAfterOpen.isFile() ||
+      !hasSameIdentity(pathBefore, opened) ||
+      !hasSameIdentity(opened, pathAfterOpen) ||
+      pathBefore.size !== opened.size ||
+      canonicalBefore !== canonicalAfterOpen ||
+      !isContained(canonicalSkillRoot, canonicalAfterOpen)
+    ) {
+      throw unsafe(`Skill file changed before reading: ${candidate}`);
+    }
+
+    const chunks: Buffer[] = [];
+    let bytesRead = 0;
+    const maximumRead = remainingBytes + 1;
+    while (bytesRead < maximumRead) {
+      const buffer = Buffer.allocUnsafe(
+        Math.min(64 * 1024, maximumRead - bytesRead),
+      );
+      const result = await handle.read(buffer, 0, buffer.byteLength, null);
+      if (result.bytesRead === 0) break;
+      chunks.push(buffer.subarray(0, result.bytesRead));
+      bytesRead += result.bytesRead;
+    }
+
+    const openedAfterRead = await handle.stat({ bigint: true });
+    const pathAfterRead = await lstat(candidate, { bigint: true });
+    const canonicalAfterRead = await realpath(candidate);
+    await validateDirectory(parent);
+    if (
+      pathAfterRead.isSymbolicLink() ||
+      !pathAfterRead.isFile() ||
+      !hasSameIdentity(opened, openedAfterRead) ||
+      !hasSameIdentity(openedAfterRead, pathAfterRead) ||
+      opened.size !== openedAfterRead.size ||
+      canonicalAfterOpen !== canonicalAfterRead ||
+      !isContained(canonicalSkillRoot, canonicalAfterRead)
+    ) {
+      throw unsafe(`Skill file changed while reading: ${candidate}`);
+    }
+    if (bytesRead > remainingBytes) {
+      throw new CapabilitySkillLoadErrorV1(
+        "CAPABILITY_EXPANDED_SIZE_EXCEEDED",
+        `Expanded size exceeds ${CAPABILITY_SKILL_LIMITS_V1.maxExpandedBytes} bytes`,
+      );
+    }
+    return Buffer.concat(chunks, bytesRead);
+  } catch (error) {
+    if (error instanceof CapabilitySkillLoadErrorV1) throw error;
+    throw unsafe(`Cannot securely read Skill file: ${candidate}`);
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
 export async function loadCanonicalSkillsV1(
   input: LoadCanonicalSkillsInputV1,
 ): Promise<LoadedCanonicalSkillsV1> {
@@ -68,6 +256,14 @@ export async function loadCanonicalSkillsV1(
   }
 
   const projectRoot = resolve(input.projectRoot);
+  validateSkillDefinitions(projectRoot, input.skills);
+  let canonicalProjectRoot: string;
+  try {
+    canonicalProjectRoot = await realpath(projectRoot);
+  } catch {
+    throw unsafe(`Cannot resolve project root: ${projectRoot}`);
+  }
+
   const loadedSkills: CanonicalSkillInputV1[] = [];
   const watchedFiles: string[] = [];
   let fileCount = 0;
@@ -81,38 +277,35 @@ export async function loadCanonicalSkillsV1(
       throw unsafe(`Skill directory escapes project root: ${skill.directory}`);
     }
 
-    let directoryStat;
-    try {
-      directoryStat = await lstat(skillDirectory);
-    } catch {
-      throw unsafe(`Cannot inspect Skill directory: ${skill.directory}`);
-    }
-    if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
+    const skillRoot = await pinDirectory(skillDirectory);
+    if (!isContained(canonicalProjectRoot, skillRoot.canonicalPath)) {
       throw unsafe(
-        `Skill directory is not a regular directory: ${skill.directory}`,
+        `Skill directory resolves outside project root: ${skill.directory}`,
       );
     }
-
     const files: CanonicalSkillInputV1["files"] = [];
 
-    const walk = async (directory: string): Promise<void> => {
+    const walk = async (directory: DirectoryPin): Promise<void> => {
+      await validateDirectory(directory);
       let entries;
       try {
-        entries = await readdir(directory, { withFileTypes: true });
+        entries = await readdir(directory.path, { withFileTypes: true });
       } catch {
-        throw unsafe(`Cannot read Skill directory: ${directory}`);
+        throw unsafe(`Cannot read Skill directory: ${directory.path}`);
       }
+      await validateDirectory(directory);
 
       entries.sort((left, right) => compareUtf8(left.name, right.name));
       for (const entry of entries) {
-        const candidate = resolve(directory, entry.name);
+        await validateDirectory(directory);
+        const candidate = resolve(directory.path, entry.name);
         if (!isContained(skillDirectory, candidate)) {
           throw unsafe(`Skill entry escapes its directory: ${candidate}`);
         }
 
         let stat;
         try {
-          stat = await lstat(candidate);
+          stat = await lstat(candidate, { bigint: true });
         } catch {
           throw unsafe(`Cannot inspect Skill entry: ${candidate}`);
         }
@@ -120,7 +313,9 @@ export async function loadCanonicalSkillsV1(
           throw unsafe(`Symbolic links are not allowed in Skills: ${candidate}`);
         }
         if (stat.isDirectory()) {
-          await walk(candidate);
+          const child = await pinDirectory(candidate, skillRoot.canonicalPath);
+          await walk(child);
+          await validateDirectory(directory);
           continue;
         }
         if (!stat.isFile()) {
@@ -135,29 +330,23 @@ export async function loadCanonicalSkillsV1(
           );
         }
 
-        let bytes;
-        try {
-          bytes = await readFile(candidate);
-        } catch {
-          throw unsafe(`Cannot read Skill file: ${candidate}`);
-        }
+        const bytes = await readBoundedFile(
+          candidate,
+          directory,
+          skillRoot.canonicalPath,
+          CAPABILITY_SKILL_LIMITS_V1.maxExpandedBytes - expandedBytes,
+        );
         expandedBytes += bytes.byteLength;
-        if (expandedBytes > CAPABILITY_SKILL_LIMITS_V1.maxExpandedBytes) {
-          throw new CapabilitySkillLoadErrorV1(
-            "CAPABILITY_EXPANDED_SIZE_EXCEEDED",
-            `Expanded size ${expandedBytes} exceeds ${CAPABILITY_SKILL_LIMITS_V1.maxExpandedBytes} bytes`,
-          );
-        }
-
         files.push({
           relativePath: toPosix(relative(skillDirectory, candidate)),
           bytes,
         });
         watchedFiles.push(candidate);
       }
+      await validateDirectory(directory);
     };
 
-    await walk(skillDirectory);
+    await walk(skillRoot);
     files.sort((left, right) =>
       compareUtf8(left.relativePath, right.relativePath),
     );

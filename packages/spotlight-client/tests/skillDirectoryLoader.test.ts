@@ -1,11 +1,73 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  rename,
+  rm,
+  symlink,
+  truncate,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { platform } from "node:process";
 import { promisify } from "node:util";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const fsRace = vi.hoisted(() => ({
+  afterLstatPath: "",
+  afterLstat: undefined as undefined | (() => Promise<void>),
+  afterReaddirPath: "",
+  afterReaddir: undefined as undefined | (() => Promise<void>),
+  blockedOutsideReadPath: "",
+  outsideReadAttempts: 0,
+  unboundedReadFileCalls: 0,
+  openedReadBytes: 0,
+}));
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    lstat: vi.fn(async (...args: Parameters<typeof actual.lstat>) => {
+      const stat = await actual.lstat(...args);
+      if (String(args[0]) === fsRace.afterLstatPath && fsRace.afterLstat) {
+        const action = fsRace.afterLstat;
+        fsRace.afterLstat = undefined;
+        await action();
+      }
+      return stat;
+    }),
+    readdir: vi.fn(async (...args: Parameters<typeof actual.readdir>) => {
+      const entries = await actual.readdir(...args as [never]);
+      if (String(args[0]) === fsRace.afterReaddirPath && fsRace.afterReaddir) {
+        const action = fsRace.afterReaddir;
+        fsRace.afterReaddir = undefined;
+        await action();
+      }
+      return entries;
+    }),
+    readFile: vi.fn(async (...args: Parameters<typeof actual.readFile>) => {
+      fsRace.unboundedReadFileCalls += 1;
+      if (String(args[0]) === fsRace.blockedOutsideReadPath) {
+        fsRace.outsideReadAttempts += 1;
+        throw new Error("test blocked outside-content read");
+      }
+      return actual.readFile(...args);
+    }),
+    open: vi.fn(async (...args: Parameters<typeof actual.open>) => {
+      const handle = await actual.open(...args);
+      const originalRead = handle.read.bind(handle);
+      handle.read = vi.fn(async (...readArgs: Parameters<typeof handle.read>) => {
+        const result = await originalRead(...readArgs);
+        fsRace.openedReadBytes += result.bytesRead;
+        return result;
+      }) as typeof handle.read;
+      return handle;
+    }),
+  };
+});
 
 import {
   CAPABILITY_SKILL_LIMITS_V1,
@@ -54,6 +116,14 @@ async function writeSkill(
 }
 
 afterEach(async () => {
+  fsRace.afterLstatPath = "";
+  fsRace.afterLstat = undefined;
+  fsRace.afterReaddirPath = "";
+  fsRace.afterReaddir = undefined;
+  fsRace.blockedOutsideReadPath = "";
+  fsRace.outsideReadAttempts = 0;
+  fsRace.unboundedReadFileCalls = 0;
+  fsRace.openedReadBytes = 0;
   await Promise.all(
     temporaryDirectories
       .splice(0)
@@ -210,6 +280,70 @@ describe("loadCanonicalSkillsV1", () => {
     ).rejects.toMatchObject({ code: "CAPABILITY_SKILL_LIMIT_EXCEEDED" });
   });
 
+  it("accepts exactly 200 uniquely rooted Skills", async () => {
+    const projectRoot = await createProject();
+    const skills = Array.from(
+      { length: CAPABILITY_SKILL_LIMITS_V1.maxSkills },
+      (_, index) => scannedSkill(`skill-${String(index).padStart(3, "0")}`),
+    );
+    await Promise.all(
+      skills.map((skill) =>
+        writeSkill(projectRoot, skill.name, { "SKILL.md": "" }),
+      ),
+    );
+
+    const result = await loadCanonicalSkillsV1({ projectRoot, skills });
+
+    expect(result.skills).toHaveLength(CAPABILITY_SKILL_LIMITS_V1.maxSkills);
+    expect(result.fileCount).toBe(CAPABILITY_SKILL_LIMITS_V1.maxSkills);
+  });
+
+  it.each([
+    [
+      "duplicate Skill names",
+      [scannedSkill("same"), scannedSkill("same", ".agents/skills/other")],
+    ],
+    [
+      "duplicate Skill directories",
+      [
+        scannedSkill("one", ".agents/skills/shared"),
+        scannedSkill("two", ".agents/skills/shared"),
+      ],
+    ],
+    [
+      "parent and child Skill directories",
+      [
+        scannedSkill("parent", ".agents/skills/nested"),
+        scannedSkill("child", ".agents/skills/nested/child"),
+      ],
+    ],
+    [
+      "non-adjacent parent and child Skill directories",
+      [
+        scannedSkill("parent", ".agents/skills/a"),
+        scannedSkill("sibling", ".agents/skills/a-elsewhere"),
+        scannedSkill("child", ".agents/skills/a/child"),
+      ],
+    ],
+  ])("rejects %s deterministically", async (_label, skills) => {
+    const projectRoot = await createProject();
+    await Promise.all(
+      [...new Set(skills.map((skill) => skill.directory))].map(
+        async (directory) => {
+          const absolute = join(projectRoot, ...directory.split("/"));
+          await mkdir(absolute, { recursive: true });
+          await writeFile(join(absolute, "SKILL.md"), "safe", "utf8");
+        },
+      ),
+    );
+
+    await expect(
+      loadCanonicalSkillsV1({ projectRoot, skills }),
+    ).rejects.toMatchObject({
+      code: "CAPABILITY_SKILL_ENTRY_UNSAFE",
+    });
+  });
+
   it("rejects the 2,001st file", async () => {
     const projectRoot = await createProject();
     const directory = join(projectRoot, ".agents/skills/files");
@@ -233,6 +367,24 @@ describe("loadCanonicalSkillsV1", () => {
     ).rejects.toMatchObject({ code: "CAPABILITY_FILE_LIMIT_EXCEEDED" });
   });
 
+  it("accepts exactly 2,000 files", async () => {
+    const projectRoot = await createProject();
+    const directory = join(projectRoot, ".agents/skills/files");
+    await mkdir(directory, { recursive: true });
+    await Promise.all(
+      Array.from({ length: CAPABILITY_SKILL_LIMITS_V1.maxFiles }, (_, index) =>
+        writeFile(join(directory, `file-${String(index).padStart(4, "0")}`), ""),
+      ),
+    );
+
+    const result = await loadCanonicalSkillsV1({
+      projectRoot,
+      skills: [scannedSkill("files")],
+    });
+
+    expect(result.fileCount).toBe(CAPABILITY_SKILL_LIMITS_V1.maxFiles);
+  });
+
   it("rejects 20 MiB plus one byte", async () => {
     const projectRoot = await createProject();
     await writeSkill(projectRoot, "large", {
@@ -249,5 +401,89 @@ describe("loadCanonicalSkillsV1", () => {
     ).rejects.toMatchObject({
       code: "CAPABILITY_EXPANDED_SIZE_EXCEEDED",
     });
+    expect(fsRace.unboundedReadFileCalls).toBe(0);
+    expect(fsRace.openedReadBytes).toBeLessThanOrEqual(
+      CAPABILITY_SKILL_LIMITS_V1.maxExpandedBytes + 1,
+    );
+  });
+
+  it("accepts exactly 20 MiB", async () => {
+    const projectRoot = await createProject();
+    await writeSkill(projectRoot, "large", {
+      "SKILL.md": Buffer.alloc(CAPABILITY_SKILL_LIMITS_V1.maxExpandedBytes),
+    });
+
+    const result = await loadCanonicalSkillsV1({
+      projectRoot,
+      skills: [scannedSkill("large")],
+    });
+
+    expect(result.expandedBytes).toBe(
+      CAPABILITY_SKILL_LIMITS_V1.maxExpandedBytes,
+    );
+  });
+
+  it("reads only the remaining budget plus one byte from a larger file", async () => {
+    const projectRoot = await createProject();
+    const candidate = join(projectRoot, ".agents/skills/large/SKILL.md");
+    await writeSkill(projectRoot, "large", { "SKILL.md": "" });
+    await truncate(
+      candidate,
+      CAPABILITY_SKILL_LIMITS_V1.maxExpandedBytes + 1024 * 1024,
+    );
+
+    await expect(
+      loadCanonicalSkillsV1({
+        projectRoot,
+        skills: [scannedSkill("large")],
+      }),
+    ).rejects.toMatchObject({
+      code: "CAPABILITY_EXPANDED_SIZE_EXCEEDED",
+    });
+    expect(fsRace.unboundedReadFileCalls).toBe(0);
+    expect(fsRace.openedReadBytes).toBe(
+      CAPABILITY_SKILL_LIMITS_V1.maxExpandedBytes + 1,
+    );
+  });
+
+  it("does not observe outside content when a file is swapped after lstat", async () => {
+    const projectRoot = await createProject();
+    const outsideRoot = dirname(projectRoot);
+    const outside = join(outsideRoot, "outside-secret.txt");
+    const candidate = join(projectRoot, ".agents/skills/race/SKILL.md");
+    await writeSkill(projectRoot, "race", { "SKILL.md": "safe" });
+    await writeFile(outside, "must-not-be-read", "utf8");
+    fsRace.blockedOutsideReadPath = candidate;
+    fsRace.afterLstatPath = candidate;
+    fsRace.afterLstat = async () => {
+      await rm(candidate);
+      await symlink(outside, candidate);
+    };
+
+    await expect(
+      loadCanonicalSkillsV1({ projectRoot, skills: [scannedSkill("race")] }),
+    ).rejects.toMatchObject({ code: "CAPABILITY_SKILL_ENTRY_UNSAFE" });
+    expect(fsRace.outsideReadAttempts).toBe(0);
+  });
+
+  it("rejects a Skill-root swap after readdir before any outside content read", async () => {
+    const projectRoot = await createProject();
+    const outsideRoot = join(dirname(projectRoot), "outside-skill");
+    const skillRoot = join(projectRoot, ".agents/skills/race");
+    const movedRoot = `${skillRoot}-original`;
+    await writeSkill(projectRoot, "race", { "SKILL.md": "safe" });
+    await mkdir(outsideRoot);
+    await writeFile(join(outsideRoot, "SKILL.md"), "must-not-be-read", "utf8");
+    fsRace.blockedOutsideReadPath = join(skillRoot, "SKILL.md");
+    fsRace.afterReaddirPath = skillRoot;
+    fsRace.afterReaddir = async () => {
+      await rename(skillRoot, movedRoot);
+      await symlink(outsideRoot, skillRoot, "dir");
+    };
+
+    await expect(
+      loadCanonicalSkillsV1({ projectRoot, skills: [scannedSkill("race")] }),
+    ).rejects.toMatchObject({ code: "CAPABILITY_SKILL_ENTRY_UNSAFE" });
+    expect(fsRace.outsideReadAttempts).toBe(0);
   });
 });
