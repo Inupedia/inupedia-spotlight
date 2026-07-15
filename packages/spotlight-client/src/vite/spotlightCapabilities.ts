@@ -43,6 +43,11 @@ export function spotlightCapabilities(
   let server: ViteDevServer | undefined;
   let rebuildChain: Promise<void> = Promise.resolve();
   let relevantRoots: readonly string[] = [];
+  let removeServerListeners: (() => void) | undefined;
+  let finishInitialization!: () => void;
+  const initialization = new Promise<void>((resolveInitialization) => {
+    finishInitialization = resolveInitialization;
+  });
 
   const currentState = (): Readonly<CapabilityPluginStateV1> => {
     if (state === undefined) {
@@ -73,6 +78,50 @@ export function spotlightCapabilities(
     );
   };
 
+  const enqueueRebuild = (file: string): Promise<void> => {
+    if (command !== "serve" || root === undefined || !isRelevantFile(file)) {
+      return Promise.resolve();
+    }
+    const projectRoot = root;
+    const task = rebuildChain.then(async () => {
+      await initialization;
+      if (state === undefined) return;
+      try {
+        const result = await buildViteCapabilitiesV1({
+          root: projectRoot,
+          command: "serve",
+          project,
+          options,
+        });
+        const nextState = createState(result);
+        server?.watcher.add([...result.watchedFiles]);
+        const moduleNode = server?.moduleGraph.getModuleById(
+          RESOLVED_SPOTLIGHT_CAPABILITIES_MODULE_ID,
+        );
+        const previousState = state;
+        state = nextState;
+        try {
+          if (moduleNode !== undefined) {
+            server?.moduleGraph.invalidateModule(moduleNode);
+          }
+        } catch (error) {
+          state = previousState;
+          throw error;
+        }
+      } catch {
+        try {
+          server?.config.logger.error(
+            "[CAPABILITY_DEV_REBUILD_FAILED] Capability development rebuild failed.",
+          );
+        } catch {
+          // A development logger failure must not poison later rebuilds.
+        }
+      }
+    });
+    rebuildChain = task.catch(() => undefined);
+    return task;
+  };
+
   return {
     name: "spotlight-capabilities",
     configResolved(config) {
@@ -90,18 +139,40 @@ export function spotlightCapabilities(
       if (root === undefined || command === undefined) {
         throw new Error("Spotlight capabilities require resolved Vite config.");
       }
-      const result = await buildViteCapabilitiesV1({
-        root,
-        command,
-        project,
-        options,
-      });
-      state = createState(result);
-      for (const file of result.watchedFiles) this.addWatchFile(file);
+      try {
+        const result = await buildViteCapabilitiesV1({
+          root,
+          command,
+          project,
+          options,
+        });
+        state = createState(result);
+        for (const file of result.watchedFiles) this.addWatchFile(file);
+      } finally {
+        finishInitialization();
+      }
     },
     configureServer(viteServer) {
+      removeServerListeners?.();
       server = viteServer;
       viteServer.watcher.add([...relevantRoots]);
+      const add = (file: string) => enqueueRebuild(file);
+      const change = (file: string) => enqueueRebuild(file);
+      const unlink = (file: string) => enqueueRebuild(file);
+      viteServer.watcher.on("add", add);
+      viteServer.watcher.on("change", change);
+      viteServer.watcher.on("unlink", unlink);
+      const cleanup = () => {
+        viteServer.watcher.off("add", add);
+        viteServer.watcher.off("change", change);
+        viteServer.watcher.off("unlink", unlink);
+        viteServer.httpServer?.off("close", cleanup);
+        if (removeServerListeners === cleanup) {
+          removeServerListeners = undefined;
+        }
+      };
+      removeServerListeners = cleanup;
+      viteServer.httpServer?.once("close", cleanup);
       if (options?.devRuntimeUpload === false) return;
       viteServer.middlewares.use(
         createCapabilityDevMiddlewareV1(() => currentState().result),
@@ -116,39 +187,8 @@ export function spotlightCapabilities(
       if (id !== RESOLVED_SPOTLIGHT_CAPABILITIES_MODULE_ID) return null;
       return currentState().virtualModule.source;
     },
-    handleHotUpdate(context) {
-      if (
-        command !== "serve" ||
-        root === undefined ||
-        !isRelevantFile(context.file)
-      ) {
-        return;
-      }
-      const projectRoot = root;
-      rebuildChain = rebuildChain.then(async () => {
-        try {
-          const result = await buildViteCapabilitiesV1({
-            root: projectRoot,
-            command: "serve",
-            project,
-            options,
-          });
-          const nextState = createState(result);
-          server?.watcher.add([...result.watchedFiles]);
-          state = nextState;
-          const moduleNode = server?.moduleGraph.getModuleById(
-            RESOLVED_SPOTLIGHT_CAPABILITIES_MODULE_ID,
-          );
-          if (moduleNode !== undefined) {
-            server?.moduleGraph.invalidateModule(moduleNode);
-          }
-        } catch {
-          server?.config.logger.error(
-            "[CAPABILITY_DEV_REBUILD_FAILED] Capability development rebuild failed.",
-          );
-        }
-      });
-      return rebuildChain.then(() => []);
+    closeBundle() {
+      removeServerListeners?.();
     },
     generateBundle() {
       if (command !== "build") return;

@@ -155,6 +155,11 @@ async function createServeHarness(
   const invalidateModule = vi.fn();
   const loggerError = vi.fn();
   const watcherAdd = vi.fn();
+  const watcher = new EventEmitter() as EventEmitter & {
+    add: typeof watcherAdd;
+  };
+  watcher.add = watcherAdd;
+  const httpServer = new EventEmitter();
   const server = {
     middlewares: {
       use(
@@ -171,7 +176,8 @@ async function createServeHarness(
       getModuleById: vi.fn(() => moduleNode),
       invalidateModule,
     },
-    watcher: { add: watcherAdd },
+    watcher,
+    httpServer,
     config: { logger: { error: loggerError } },
   } as unknown as ViteDevServer;
 
@@ -193,9 +199,9 @@ async function createServeHarness(
     return loaded;
   }
 
-  async function update(file: string) {
-    const handleHotUpdate = hook(plugin.handleHotUpdate);
-    return handleHotUpdate.call({ addWatchFile }, { file, server });
+  async function update(event: "add" | "change" | "unlink", file: string) {
+    const listeners = watcher.listeners(event);
+    await Promise.all(listeners.map((listener) => listener(file)));
   }
 
   return {
@@ -207,6 +213,8 @@ async function createServeHarness(
     invalidateModule,
     loggerError,
     watcherAdd,
+    watcher,
+    httpServer,
     source,
     update,
   };
@@ -393,6 +401,21 @@ describe("spotlightCapabilities", () => {
     });
   });
 
+  it("removes every capability watcher listener when the development server closes", async () => {
+    const harness = await createServeHarness();
+
+    expect(harness.plugin.handleHotUpdate).toBeUndefined();
+    expect(harness.watcher.listenerCount("add")).toBe(1);
+    expect(harness.watcher.listenerCount("change")).toBe(1);
+    expect(harness.watcher.listenerCount("unlink")).toBe(1);
+
+    harness.httpServer.emit("close");
+
+    expect(harness.watcher.listenerCount("add")).toBe(0);
+    expect(harness.watcher.listenerCount("change")).toBe(0);
+    expect(harness.watcher.listenerCount("unlink")).toBe(0);
+  });
+
   it("rebuilds relevant add/change/unlink paths, replaces the exact route, and invalidates the virtual module", async () => {
     const harness = await createServeHarness();
     const middleware = harness.mounted[0]!;
@@ -404,7 +427,7 @@ describe("spotlightCapabilities", () => {
       "---\nname: monitoring\ndescription: Changed monitor\n---\nchanged\n",
       "utf8",
     );
-    await harness.update(harness.fixture.skillFile);
+    await harness.update("change", harness.fixture.skillFile);
     const changed = await importGeneratedSource(await harness.source());
     const changedDigest = changed.capabilityBuildInfo.artifactDigest as string;
     expect(changedDigest).not.toBe(initialDigest);
@@ -428,7 +451,7 @@ describe("spotlightCapabilities", () => {
       "---\nname: monitoring\ndescription: Changed monitor\n---\nchanged\n",
       "utf8",
     );
-    await harness.update(harness.fixture.skillFile);
+    await harness.update("change", harness.fixture.skillFile);
     const equivalent = await importGeneratedSource(await harness.source());
     expect(equivalent.capabilityBuildInfo.artifactDigest).toBe(changedDigest);
 
@@ -443,7 +466,7 @@ describe("spotlightCapabilities", () => {
       "---\nname: camera\ndescription: Open a camera\n---\ncamera\n",
       "utf8",
     );
-    await harness.update(addedFile);
+    await harness.update("add", addedFile);
     const added = await importGeneratedSource(await harness.source());
     expect(added.capabilityBuildInfo.artifactDigest).not.toBe(changedDigest);
     expect(harness.watcherAdd).toHaveBeenCalledWith(
@@ -451,7 +474,7 @@ describe("spotlightCapabilities", () => {
     );
 
     await unlink(addedFile);
-    await harness.update(addedFile);
+    await harness.update("unlink", addedFile);
     const unlinked = await importGeneratedSource(await harness.source());
     expect(unlinked.capabilityBuildInfo.artifactDigest).toBe(changedDigest);
 
@@ -464,7 +487,7 @@ describe("spotlightCapabilities", () => {
       recursive: true,
     });
     await writeFile(evilFile, "ignored", "utf8");
-    await harness.update(evilFile);
+    await harness.update("add", evilFile);
     expect(harness.invalidateModule).toHaveBeenCalledTimes(invalidationCount);
   });
 
@@ -477,7 +500,7 @@ describe("spotlightCapabilities", () => {
 
     await writeFile(harness.fixture.skillFile, "---\nname: broken\n", "utf8");
     await expect(
-      harness.update(harness.fixture.skillFile),
+      harness.update("change", harness.fixture.skillFile),
     ).resolves.not.toThrow();
 
     expect(await harness.source()).toBe(initialSource);
@@ -510,7 +533,7 @@ describe("spotlightCapabilities", () => {
       "---\nname: camera\ndescription: Open a camera\n---\ncamera\n",
       "utf8",
     );
-    await harness.update(customSkill);
+    await harness.update("add", customSkill);
     const after = await importGeneratedSource(await harness.source());
     expect(after.capabilityBuildInfo.artifactDigest).not.toBe(
       before.capabilityBuildInfo.artifactDigest,
@@ -521,7 +544,7 @@ describe("spotlightCapabilities", () => {
     const evilFile = join(evilDirectory, "SKILL.md");
     await mkdir(evilDirectory, { recursive: true });
     await writeFile(evilFile, "ignored", "utf8");
-    await harness.update(evilFile);
+    await harness.update("add", evilFile);
     expect(harness.invalidateModule).toHaveBeenCalledTimes(invalidations);
   });
 
@@ -562,8 +585,8 @@ describe("spotlightCapabilities", () => {
       .mockImplementationOnce(() => olderPromise)
       .mockImplementationOnce(() => newerPromise);
 
-    const first = harness.update(harness.fixture.skillFile);
-    const second = harness.update(harness.fixture.skillFile);
+    const first = harness.update("change", harness.fixture.skillFile);
+    const second = harness.update("change", harness.fixture.skillFile);
     await vi.waitFor(() => expect(buildSpy).toHaveBeenCalledTimes(1));
     resolveOlder(older);
     await vi.waitFor(() => expect(buildSpy).toHaveBeenCalledTimes(2));
