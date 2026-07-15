@@ -14,6 +14,14 @@ export {
   type SkillScanResult,
 } from "./capabilities/skillScanner.js";
 export {
+  CAPABILITY_SKILL_LIMITS_V1,
+  CapabilitySkillLoadErrorV1,
+  loadCanonicalSkillsV1,
+  type CapabilitySkillLoadErrorCodeV1,
+  type LoadCanonicalSkillsInputV1,
+  type LoadedCanonicalSkillsV1,
+} from "./capabilities/skillDirectoryLoader.js";
+export {
   validateAgentSkillMarkdown,
   type AgentSkillDiagnostic,
   type AgentSkillDiagnosticCode,
