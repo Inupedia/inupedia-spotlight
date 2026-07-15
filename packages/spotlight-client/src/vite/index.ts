@@ -1,5 +1,7 @@
 import type { SpotlightAgentIocOptions } from "./spotlightAgentIoc.js";
 
+import "./capabilityVirtualModuleTypes.js";
+
 export type { SpotlightAgentIocOptions };
 
 export { spotlightCapabilities } from "./spotlightCapabilities.js";

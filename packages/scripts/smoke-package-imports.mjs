@@ -56,6 +56,11 @@ try {
           pinia: "^3.0.0",
           vue: "^3.5.0",
         },
+        devDependencies: {
+          "@types/node": "^24.10.1",
+          typescript: "^5.9.3",
+          vite: "^7.3.1",
+        },
         pnpm: {
           overrides: {
             "@inupedia/spotlight-client": `file:${clientTarball}`,
@@ -77,6 +82,80 @@ try {
     ],
     consumerDir,
   );
+
+  writeFileSync(
+    join(consumerDir, "virtual-module-consumer.ts"),
+    `import { spotlightCapabilities } from "@inupedia/spotlight-client/vite";
+import {
+  capabilityBuildInfo,
+  openUploadStream,
+  type ArtifactUploadStreamV1,
+} from "virtual:spotlight/capabilities";
+
+const plugin = spotlightCapabilities({ projectId: "type-smoke", tools: [] });
+const upload: Promise<ArtifactUploadStreamV1> = openUploadStream();
+const digest: string = capabilityBuildInfo.artifactDigest;
+void [plugin, upload, digest];
+`,
+    "utf8",
+  );
+  writeFileSync(
+    join(consumerDir, "tsconfig.virtual.json"),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          target: "ES2022",
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          lib: ["ES2022", "DOM", "ESNext.Disposable"],
+          strict: true,
+          noEmit: true,
+          skipLibCheck: false,
+          types: ["node"],
+        },
+        files: ["virtual-module-consumer.ts"],
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  writeFileSync(
+    join(consumerDir, "root-only-consumer.ts"),
+    `import { createSpotlightHttp } from "@inupedia/spotlight-client";
+// @ts-expect-error The browser root must not declare Vite's virtual module.
+import { capabilityBuildInfo } from "virtual:spotlight/capabilities";
+void [createSpotlightHttp, capabilityBuildInfo];
+`,
+    "utf8",
+  );
+  writeFileSync(
+    join(consumerDir, "tsconfig.root-only.json"),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          target: "ES2022",
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          lib: ["ES2022", "DOM", "ESNext.Disposable"],
+          strict: true,
+          noEmit: true,
+          skipLibCheck: false,
+          types: ["node"],
+        },
+        files: ["root-only-consumer.ts"],
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  runPnpm(["exec", "tsc", "-p", "tsconfig.virtual.json"], consumerDir);
+  console.log(
+    "[smoke-types] @inupedia/spotlight-client/vite virtual module ok",
+  );
+  runPnpm(["exec", "tsc", "-p", "tsconfig.root-only.json"], consumerDir);
+  console.log("[smoke-types] @inupedia/spotlight-client root isolation ok");
 
   const runnerPath = join(consumerDir, "smoke.mjs");
   writeFileSync(
