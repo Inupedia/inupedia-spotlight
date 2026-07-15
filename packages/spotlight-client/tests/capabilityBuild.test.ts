@@ -321,6 +321,84 @@ describe("buildViteCapabilitiesV1", () => {
     });
   });
 
+  it("validates the exact hardened loader snapshot used by the artifact", async () => {
+    const root = await createProject();
+    await writeSkill(root);
+    const skillFile = join(root, ".agents/skills/monitoring/SKILL.md");
+    const packagedMarkdown = [
+      "---",
+      "name: monitoring",
+      "description: Packaged snapshot",
+      "unexpected-field: must-be-validated",
+      "---",
+      "Loaded after the path snapshot was validated.",
+      "",
+    ].join("\n");
+    vi.spyOn(nodeCapabilities, "loadCanonicalSkillsV1").mockResolvedValueOnce({
+      skills: [
+        {
+          name: "monitoring",
+          files: [
+            {
+              relativePath: "SKILL.md",
+              bytes: Buffer.from(packagedMarkdown, "utf8"),
+            },
+          ],
+        },
+      ],
+      watchedFiles: [skillFile],
+      fileCount: 1,
+      expandedBytes: Buffer.byteLength(packagedMarkdown),
+    });
+
+    await expect(
+      buildViteCapabilitiesV1({
+        root,
+        command: "build",
+        project: { projectId: "camera-console", tools: [] },
+        options: { frontendBuildId: "release-42" },
+      }),
+    ).rejects.toMatchObject({
+      code: "SKILL_UNKNOWN_TOP_LEVEL_FIELD",
+      severity: "error",
+    });
+  });
+
+  it("preserves reference diagnostics while validating loaded bytes", async () => {
+    const root = await createProject();
+    await writeSkill(root);
+    const directory = join(root, ".agents/skills/monitoring");
+    await writeFile(
+      join(directory, "SKILL.md"),
+      [
+        "---",
+        "name: monitoring",
+        "description: Monitor video channels",
+        "---",
+        "[outside](../outside.md)",
+        "[reference](references/channels.md)",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      join(directory, "references/channels.md"),
+      "[nested](nested.md)\n",
+      "utf8",
+    );
+
+    const result = await buildViteCapabilitiesV1({
+      root,
+      command: "serve",
+      project: { projectId: "camera-console", tools: [] },
+    });
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      "SKILL_REFERENCE_OUTSIDE_ROOT",
+      "SKILL_REFERENCE_CHAIN_DEEP",
+    ]);
+  });
+
   it("throws a stable strict scan collision before validating selected Skills", async () => {
     const root = await createProject();
     await writeBareSkill(root, ".agents/skills/camera");
