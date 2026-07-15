@@ -18,8 +18,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const fsRace = vi.hoisted(() => ({
   afterLstatPath: "",
   afterLstat: undefined as undefined | (() => Promise<void>),
-  afterReaddirPath: "",
-  afterReaddir: undefined as undefined | (() => Promise<void>),
+  beforeDirReadPath: "",
+  beforeDirRead: undefined as undefined | (() => Promise<void>),
+  observedDirectoryNames: [] as string[],
+  opendirCalls: 0,
+  afterReadPath: "",
+  afterRead: undefined as undefined | (() => Promise<void>),
   blockedOutsideReadPath: "",
   outsideReadAttempts: 0,
   unboundedReadFileCalls: 0,
@@ -39,14 +43,25 @@ vi.mock("node:fs/promises", async (importOriginal) => {
       }
       return stat;
     }),
-    readdir: vi.fn(async (...args: Parameters<typeof actual.readdir>) => {
-      const entries = await actual.readdir(...args as [never]);
-      if (String(args[0]) === fsRace.afterReaddirPath && fsRace.afterReaddir) {
-        const action = fsRace.afterReaddir;
-        fsRace.afterReaddir = undefined;
-        await action();
-      }
-      return entries;
+    opendir: vi.fn(async (...args: Parameters<typeof actual.opendir>) => {
+      const directoryPath = String(args[0]);
+      const directory = await actual.opendir(...args);
+      fsRace.opendirCalls += 1;
+      const originalRead = directory.read.bind(directory);
+      directory.read = vi.fn(async () => {
+        if (
+          directoryPath === fsRace.beforeDirReadPath &&
+          fsRace.beforeDirRead
+        ) {
+          const action = fsRace.beforeDirRead;
+          fsRace.beforeDirRead = undefined;
+          await action();
+        }
+        const entry = await originalRead();
+        if (entry) fsRace.observedDirectoryNames.push(entry.name);
+        return entry;
+      }) as typeof directory.read;
+      return directory;
     }),
     readFile: vi.fn(async (...args: Parameters<typeof actual.readFile>) => {
       fsRace.unboundedReadFileCalls += 1;
@@ -58,10 +73,16 @@ vi.mock("node:fs/promises", async (importOriginal) => {
     }),
     open: vi.fn(async (...args: Parameters<typeof actual.open>) => {
       const handle = await actual.open(...args);
+      const openedPath = String(args[0]);
       const originalRead = handle.read.bind(handle);
       handle.read = vi.fn(async (...readArgs: Parameters<typeof handle.read>) => {
         const result = await originalRead(...readArgs);
         fsRace.openedReadBytes += result.bytesRead;
+        if (openedPath === fsRace.afterReadPath && fsRace.afterRead) {
+          const action = fsRace.afterRead;
+          fsRace.afterRead = undefined;
+          await action();
+        }
         return result;
       }) as typeof handle.read;
       return handle;
@@ -118,8 +139,12 @@ async function writeSkill(
 afterEach(async () => {
   fsRace.afterLstatPath = "";
   fsRace.afterLstat = undefined;
-  fsRace.afterReaddirPath = "";
-  fsRace.afterReaddir = undefined;
+  fsRace.beforeDirReadPath = "";
+  fsRace.beforeDirRead = undefined;
+  fsRace.observedDirectoryNames = [];
+  fsRace.opendirCalls = 0;
+  fsRace.afterReadPath = "";
+  fsRace.afterRead = undefined;
   fsRace.blockedOutsideReadPath = "";
   fsRace.outsideReadAttempts = 0;
   fsRace.unboundedReadFileCalls = 0;
@@ -466,24 +491,95 @@ describe("loadCanonicalSkillsV1", () => {
     expect(fsRace.outsideReadAttempts).toBe(0);
   });
 
-  it("rejects a Skill-root swap after readdir before any outside content read", async () => {
+  it("enumerates a stable handle without disclosing pre-enumeration swap data", async () => {
     const projectRoot = await createProject();
-    const outsideRoot = join(dirname(projectRoot), "outside-skill");
+    const outsideRoot = join(
+      dirname(projectRoot),
+      "outside-before-enumeration",
+    );
     const skillRoot = join(projectRoot, ".agents/skills/race");
     const movedRoot = `${skillRoot}-original`;
     await writeSkill(projectRoot, "race", { "SKILL.md": "safe" });
     await mkdir(outsideRoot);
-    await writeFile(join(outsideRoot, "SKILL.md"), "must-not-be-read", "utf8");
-    fsRace.blockedOutsideReadPath = join(skillRoot, "SKILL.md");
-    fsRace.afterReaddirPath = skillRoot;
-    fsRace.afterReaddir = async () => {
+    await writeFile(join(outsideRoot, "OUTSIDE-NAME.txt"), "OUTSIDE-BYTES", "utf8");
+    fsRace.beforeDirReadPath = skillRoot;
+    fsRace.beforeDirRead = async () => {
       await rename(skillRoot, movedRoot);
       await symlink(outsideRoot, skillRoot, "dir");
     };
 
+    let thrown: unknown;
+    try {
+      await loadCanonicalSkillsV1({
+        projectRoot,
+        skills: [scannedSkill("race")],
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toMatchObject({ code: "CAPABILITY_SKILL_ENTRY_UNSAFE" });
+    expect(String((thrown as Error).message)).not.toContain("OUTSIDE-NAME");
+    expect(String((thrown as Error).message)).not.toContain("OUTSIDE-BYTES");
+    expect(fsRace.beforeDirRead).toBeUndefined();
+    expect(fsRace.observedDirectoryNames).not.toContain("OUTSIDE-NAME.txt");
+    expect(fsRace.openedReadBytes).toBe(0);
+  });
+
+  it("rejects same-size in-place mutation detected by file timestamps", async () => {
+    const projectRoot = await createProject();
+    const candidate = join(projectRoot, ".agents/skills/mutated/SKILL.md");
+    await writeSkill(projectRoot, "mutated", { "SKILL.md": "original" });
+    fsRace.afterReadPath = candidate;
+    fsRace.afterRead = async () => {
+      await writeFile(candidate, "modified", "utf8");
+    };
+
     await expect(
-      loadCanonicalSkillsV1({ projectRoot, skills: [scannedSkill("race")] }),
+      loadCanonicalSkillsV1({
+        projectRoot,
+        skills: [scannedSkill("mutated")],
+      }),
     ).rejects.toMatchObject({ code: "CAPABILITY_SKILL_ENTRY_UNSAFE" });
-    expect(fsRace.outsideReadAttempts).toBe(0);
+    expect(fsRace.afterRead).toBeUndefined();
+  });
+
+  it("rejects canonical Skill-directory aliases before walking content", async () => {
+    const projectRoot = await createProject();
+    const skillsRoot = join(projectRoot, ".agents/skills");
+    await writeSkill(projectRoot, "real", { "SKILL.md": "safe" });
+    await symlink(skillsRoot, join(projectRoot, ".agents/alias"), "dir");
+
+    await expect(
+      loadCanonicalSkillsV1({
+        projectRoot,
+        skills: [
+          scannedSkill("real", ".agents/skills/real"),
+          scannedSkill("alias", ".agents/alias/real"),
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "CAPABILITY_SKILL_ENTRY_UNSAFE" });
+    expect(fsRace.opendirCalls).toBe(0);
+  });
+
+  it("rejects canonical parent-child overlaps before walking content", async () => {
+    const projectRoot = await createProject();
+    const skillsRoot = join(projectRoot, ".agents/skills");
+    await writeSkill(projectRoot, "root", {
+      "SKILL.md": "parent",
+      "child/SKILL.md": "child",
+    });
+    await symlink(skillsRoot, join(projectRoot, ".agents/alias"), "dir");
+
+    await expect(
+      loadCanonicalSkillsV1({
+        projectRoot,
+        skills: [
+          scannedSkill("parent", ".agents/alias/root"),
+          scannedSkill("child", ".agents/skills/root/child"),
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "CAPABILITY_SKILL_ENTRY_UNSAFE" });
+    expect(fsRace.opendirCalls).toBe(0);
   });
 });

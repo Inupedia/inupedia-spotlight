@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { lstat, open, readdir, realpath } from "node:fs/promises";
+import { lstat, open, opendir, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import type { CanonicalSkillInputV1 } from "./capabilityArtifactTypes.js";
@@ -44,9 +44,21 @@ interface PathIdentity {
   ino: bigint;
 }
 
-interface DirectoryPin extends PathIdentity {
+interface PathSnapshot extends PathIdentity {
+  size: bigint;
+  mtimeNs: bigint;
+  ctimeNs: bigint;
+}
+
+interface DirectoryPin extends PathSnapshot {
   path: string;
   canonicalPath: string;
+}
+
+interface PinnedSkill {
+  skill: ScannedSkill;
+  directory: string;
+  root: DirectoryPin;
 }
 
 const compareUtf8 = (left: string, right: string): number =>
@@ -70,6 +82,15 @@ function unsafe(message: string): CapabilitySkillLoadErrorV1 {
 
 function hasSameIdentity(left: PathIdentity, right: PathIdentity): boolean {
   return left.dev === right.dev && left.ino === right.ino;
+}
+
+function hasSameSnapshot(left: PathSnapshot, right: PathSnapshot): boolean {
+  return (
+    hasSameIdentity(left, right) &&
+    left.size === right.size &&
+    left.mtimeNs === right.mtimeNs &&
+    left.ctimeNs === right.ctimeNs
+  );
 }
 
 function validateSkillDefinitions(
@@ -114,7 +135,7 @@ async function pinDirectory(
   try {
     const before = await lstat(directory, { bigint: true });
     if (before.isSymbolicLink() || !before.isDirectory()) {
-      throw unsafe(`Skill directory is not a regular directory: ${directory}`);
+      throw unsafe("Skill directory is not a regular directory");
     }
     const canonicalPath = await realpath(directory);
     const after = await lstat(directory, { bigint: true });
@@ -123,23 +144,26 @@ async function pinDirectory(
       !after.isDirectory() ||
       !hasSameIdentity(before, after)
     ) {
-      throw unsafe(`Skill directory changed while inspected: ${directory}`);
+      throw unsafe("Skill directory changed while inspected");
     }
     if (
       canonicalSkillRoot !== undefined &&
       !isContained(canonicalSkillRoot, canonicalPath)
     ) {
-      throw unsafe(`Skill directory resolves outside its root: ${directory}`);
+      throw unsafe("Skill directory resolves outside its root");
     }
     return {
       path: directory,
       canonicalPath,
       dev: after.dev,
       ino: after.ino,
+      size: after.size,
+      mtimeNs: after.mtimeNs,
+      ctimeNs: after.ctimeNs,
     };
   } catch (error) {
     if (error instanceof CapabilitySkillLoadErrorV1) throw error;
-    throw unsafe(`Cannot securely inspect Skill directory: ${directory}`);
+    throw unsafe("Cannot securely inspect Skill directory");
   }
 }
 
@@ -150,7 +174,7 @@ async function validateDirectory(pin: DirectoryPin): Promise<void> {
     if (
       stat.isSymbolicLink() ||
       !stat.isDirectory() ||
-      !hasSameIdentity(pin, stat) ||
+      !hasSameSnapshot(pin, stat) ||
       canonicalPath !== pin.canonicalPath
     ) {
       throw unsafe(`Skill directory changed during traversal: ${pin.path}`);
@@ -172,11 +196,11 @@ async function readBoundedFile(
     await validateDirectory(parent);
     const pathBefore = await lstat(candidate, { bigint: true });
     if (pathBefore.isSymbolicLink() || !pathBefore.isFile()) {
-      throw unsafe(`Non-regular Skill entry is not allowed: ${candidate}`);
+      throw unsafe("Non-regular Skill entry is not allowed");
     }
     const canonicalBefore = await realpath(candidate);
     if (!isContained(canonicalSkillRoot, canonicalBefore)) {
-      throw unsafe(`Skill file resolves outside its directory: ${candidate}`);
+      throw unsafe("Skill file resolves outside its directory");
     }
 
     // O_NOFOLLOW closes the final-component race on platforms that expose it.
@@ -196,10 +220,15 @@ async function readBoundedFile(
       !hasSameIdentity(pathBefore, opened) ||
       !hasSameIdentity(opened, pathAfterOpen) ||
       pathBefore.size !== opened.size ||
+      opened.size !== pathAfterOpen.size ||
+      pathBefore.mtimeNs !== opened.mtimeNs ||
+      pathBefore.ctimeNs !== opened.ctimeNs ||
+      opened.mtimeNs !== pathAfterOpen.mtimeNs ||
+      opened.ctimeNs !== pathAfterOpen.ctimeNs ||
       canonicalBefore !== canonicalAfterOpen ||
       !isContained(canonicalSkillRoot, canonicalAfterOpen)
     ) {
-      throw unsafe(`Skill file changed before reading: ${candidate}`);
+      throw unsafe("Skill file changed before reading");
     }
 
     const chunks: Buffer[] = [];
@@ -225,10 +254,15 @@ async function readBoundedFile(
       !hasSameIdentity(opened, openedAfterRead) ||
       !hasSameIdentity(openedAfterRead, pathAfterRead) ||
       opened.size !== openedAfterRead.size ||
+      openedAfterRead.size !== pathAfterRead.size ||
+      opened.mtimeNs !== openedAfterRead.mtimeNs ||
+      opened.ctimeNs !== openedAfterRead.ctimeNs ||
+      openedAfterRead.mtimeNs !== pathAfterRead.mtimeNs ||
+      openedAfterRead.ctimeNs !== pathAfterRead.ctimeNs ||
       canonicalAfterOpen !== canonicalAfterRead ||
       !isContained(canonicalSkillRoot, canonicalAfterRead)
     ) {
-      throw unsafe(`Skill file changed while reading: ${candidate}`);
+      throw unsafe("Skill file changed while reading");
     }
     if (bytesRead > remainingBytes) {
       throw new CapabilitySkillLoadErrorV1(
@@ -239,7 +273,7 @@ async function readBoundedFile(
     return Buffer.concat(chunks, bytesRead);
   } catch (error) {
     if (error instanceof CapabilitySkillLoadErrorV1) throw error;
-    throw unsafe(`Cannot securely read Skill file: ${candidate}`);
+    throw unsafe("Cannot securely read Skill file");
   } finally {
     await handle?.close().catch(() => undefined);
   }
@@ -264,34 +298,68 @@ export async function loadCanonicalSkillsV1(
     throw unsafe(`Cannot resolve project root: ${projectRoot}`);
   }
 
+  const sortedSkills = [...input.skills].sort((left, right) =>
+    compareUtf8(left.name, right.name),
+  );
+  const pinnedSkills: PinnedSkill[] = [];
+  for (const skill of sortedSkills) {
+    const directory = resolve(projectRoot, skill.directory);
+    if (!isContained(projectRoot, directory)) {
+      throw unsafe(`Skill directory escapes project root: ${skill.directory}`);
+    }
+    const root = await pinDirectory(directory);
+    if (!isContained(canonicalProjectRoot, root.canonicalPath)) {
+      throw unsafe(
+        `Skill directory resolves outside project root: ${skill.directory}`,
+      );
+    }
+    pinnedSkills.push({ skill, directory, root });
+  }
+
+  for (let leftIndex = 0; leftIndex < pinnedSkills.length; leftIndex += 1) {
+    const left = pinnedSkills[leftIndex]!;
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < pinnedSkills.length;
+      rightIndex += 1
+    ) {
+      const right = pinnedSkills[rightIndex]!;
+      if (
+        hasSameIdentity(left.root, right.root) ||
+        left.root.canonicalPath === right.root.canonicalPath ||
+        isContained(left.root.canonicalPath, right.root.canonicalPath) ||
+        isContained(right.root.canonicalPath, left.root.canonicalPath)
+      ) {
+        throw unsafe("Duplicate or overlapping Skill directories are not allowed");
+      }
+    }
+  }
+
   const loadedSkills: CanonicalSkillInputV1[] = [];
   const watchedFiles: string[] = [];
   let fileCount = 0;
   let expandedBytes = 0;
 
-  for (const skill of [...input.skills].sort((left, right) =>
-    compareUtf8(left.name, right.name),
-  )) {
-    const skillDirectory = resolve(projectRoot, skill.directory);
-    if (!isContained(projectRoot, skillDirectory)) {
-      throw unsafe(`Skill directory escapes project root: ${skill.directory}`);
-    }
-
-    const skillRoot = await pinDirectory(skillDirectory);
-    if (!isContained(canonicalProjectRoot, skillRoot.canonicalPath)) {
-      throw unsafe(
-        `Skill directory resolves outside project root: ${skill.directory}`,
-      );
-    }
+  for (const pinnedSkill of pinnedSkills) {
+    const { skill, directory: skillDirectory, root: skillRoot } = pinnedSkill;
     const files: CanonicalSkillInputV1["files"] = [];
 
     const walk = async (directory: DirectoryPin): Promise<void> => {
       await validateDirectory(directory);
-      let entries;
+      let directoryHandle: Awaited<ReturnType<typeof opendir>> | undefined;
+      const entries = [];
       try {
-        entries = await readdir(directory.path, { withFileTypes: true });
+        directoryHandle = await opendir(directory.path);
+        await validateDirectory(directory);
+        for (;;) {
+          const entry = await directoryHandle.read();
+          if (entry === null) break;
+          entries.push(entry);
+        }
       } catch {
         throw unsafe(`Cannot read Skill directory: ${directory.path}`);
+      } finally {
+        await directoryHandle?.close().catch(() => undefined);
       }
       await validateDirectory(directory);
 
@@ -300,17 +368,17 @@ export async function loadCanonicalSkillsV1(
         await validateDirectory(directory);
         const candidate = resolve(directory.path, entry.name);
         if (!isContained(skillDirectory, candidate)) {
-          throw unsafe(`Skill entry escapes its directory: ${candidate}`);
+          throw unsafe("Skill entry escapes its directory");
         }
 
         let stat;
         try {
           stat = await lstat(candidate, { bigint: true });
         } catch {
-          throw unsafe(`Cannot inspect Skill entry: ${candidate}`);
+          throw unsafe("Cannot inspect Skill entry");
         }
         if (stat.isSymbolicLink()) {
-          throw unsafe(`Symbolic links are not allowed in Skills: ${candidate}`);
+          throw unsafe("Symbolic links are not allowed in Skills");
         }
         if (stat.isDirectory()) {
           const child = await pinDirectory(candidate, skillRoot.canonicalPath);
@@ -319,7 +387,7 @@ export async function loadCanonicalSkillsV1(
           continue;
         }
         if (!stat.isFile()) {
-          throw unsafe(`Non-regular Skill entry is not allowed: ${candidate}`);
+          throw unsafe("Non-regular Skill entry is not allowed");
         }
 
         fileCount += 1;
