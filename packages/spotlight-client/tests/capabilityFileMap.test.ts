@@ -92,6 +92,51 @@ describe("buildCapabilityFileMapV1", () => {
     );
   });
 
+  it("rejects proxied arrays and bytes without executing traps", () => {
+    let traps = 0;
+    const trap = () => {
+      traps += 1;
+      return undefined;
+    };
+    const proxiedSkills = new Proxy([], {
+      get: trap,
+      getOwnPropertyDescriptor: trap,
+      getPrototypeOf: trap,
+      ownKeys() {
+        traps += 1;
+        return [];
+      },
+    });
+    expectArtifactError(
+      () =>
+        buildCapabilityFileMapV1({
+          skills: proxiedSkills,
+          toolManifestBytes: encode("{}"),
+        }),
+      "ARTIFACT_INPUT_INVALID",
+    );
+    expect(traps).toBe(0);
+
+    const proxiedBytes = new Proxy(encode("{}"), {
+      get: trap,
+      getOwnPropertyDescriptor: trap,
+      getPrototypeOf: trap,
+      ownKeys() {
+        traps += 1;
+        return [];
+      },
+    });
+    expectArtifactError(
+      () =>
+        buildCapabilityFileMapV1({
+          skills: [],
+          toolManifestBytes: proxiedBytes,
+        }),
+      "ARTIFACT_INPUT_INVALID",
+    );
+    expect(traps).toBe(0);
+  });
+
   it("maps and sorts Tool and Skill payloads independently of input order", () => {
     const toolManifestBytes = encode('{"schemaVersion":"spotlight.tool-manifest/1","tools":[]}');
     const result = buildCapabilityFileMapV1({

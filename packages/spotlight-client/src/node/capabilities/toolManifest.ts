@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isProxy } from "node:util/types";
 
 import type { FrontendToolDescriptorV1 } from "@inupedia/spotlight-protocol";
 
@@ -121,7 +122,7 @@ function validateToolDescriptor(
 export function buildToolManifestV1(
   tools: FrontendToolDescriptorV1[],
 ): BuiltToolManifestV1 {
-  if (!Array.isArray(tools)) {
+  if (isProxy(tools) || !Array.isArray(tools)) {
     invalidTool("Tool collection must be an array");
   }
   canonicalizeJson(tools);

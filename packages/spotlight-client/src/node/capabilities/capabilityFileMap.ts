@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isProxy } from "node:util/types";
 
 import {
   canonicalizeJson,
@@ -64,6 +65,7 @@ function isCanonicalArrayIndex(key: string): boolean {
 }
 
 function readDenseDataArray(value: unknown, label: string): unknown[] {
+  if (isProxy(value)) invalidInput(`${label} must not be a Proxy`);
   if (!Array.isArray(value)) invalidInput(`${label} must be an array`);
   const keys: string[] = [];
   for (const key of Reflect.ownKeys(value)) {
@@ -89,6 +91,7 @@ function readDataRecord(
   label: string,
   allowedFields: ReadonlySet<string>,
 ): Record<string, unknown> {
+  if (isProxy(value)) invalidInput(`${label} must not be a Proxy`);
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     invalidInput(`${label} must be a plain object`);
   }
@@ -233,7 +236,10 @@ export function buildCapabilityFileMapV1(input: {
     "Capability file-map input",
     new Set(["skills", "toolManifestBytes"]),
   );
-  if (!(root.toolManifestBytes instanceof Uint8Array)) {
+  if (
+    isProxy(root.toolManifestBytes) ||
+    !(root.toolManifestBytes instanceof Uint8Array)
+  ) {
     invalidInput("toolManifestBytes must be a Uint8Array");
   }
   const skills = readDenseDataArray(root.skills, "skills");
@@ -261,7 +267,7 @@ export function buildCapabilityFileMapV1(input: {
         new Set(["relativePath", "bytes", "mediaType"]),
       );
       validateRelativePath(file.relativePath);
-      if (!(file.bytes instanceof Uint8Array)) {
+      if (isProxy(file.bytes) || !(file.bytes instanceof Uint8Array)) {
         invalidInput(
           `skills[${skillIndex}].files[${fileIndex}].bytes must be a Uint8Array`,
         );

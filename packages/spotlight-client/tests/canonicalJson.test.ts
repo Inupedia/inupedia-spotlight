@@ -169,4 +169,35 @@ describe("canonicalizeJson", () => {
     );
     expect(performance.now() - startedAt).toBeLessThan(100);
   });
+
+  it("rejects Proxy values without executing any project traps", () => {
+    let traps = 0;
+    const value = new Proxy(
+      { visible: true },
+      {
+        get() {
+          traps += 1;
+          return true;
+        },
+        getOwnPropertyDescriptor() {
+          traps += 1;
+          return undefined;
+        },
+        getPrototypeOf() {
+          traps += 1;
+          return Object.prototype;
+        },
+        ownKeys() {
+          traps += 1;
+          return ["visible"];
+        },
+      },
+    );
+
+    expectArtifactError(
+      () => canonicalizeJson(value),
+      "ARTIFACT_JSON_UNSUPPORTED_VALUE",
+    );
+    expect(traps).toBe(0);
+  });
 });

@@ -45,6 +45,33 @@ describe("buildToolManifestV1", () => {
     );
   });
 
+  it("rejects a proxied Tool collection without executing traps", () => {
+    let traps = 0;
+    const tools = new Proxy([], {
+      get() {
+        traps += 1;
+        return undefined;
+      },
+      getOwnPropertyDescriptor() {
+        traps += 1;
+        return undefined;
+      },
+      getPrototypeOf() {
+        traps += 1;
+        return Array.prototype;
+      },
+      ownKeys() {
+        traps += 1;
+        return [];
+      },
+    });
+    expectArtifactError(
+      () => buildToolManifestV1(tools),
+      "ARTIFACT_TOOL_INVALID",
+    );
+    expect(traps).toBe(0);
+  });
+
   it("sorts tools by name and version without mutating the caller", () => {
     const tools = [tool("video.open", "2.0.0"), tool("camera.get", "1.0.0"), tool("video.open", "1.0.0")];
 

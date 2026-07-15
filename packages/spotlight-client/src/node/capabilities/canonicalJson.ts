@@ -1,4 +1,5 @@
 import canonicalize from "canonicalize";
+import { isProxy } from "node:util/types";
 
 import { CapabilityArtifactError } from "./capabilityArtifactError.js";
 
@@ -150,6 +151,14 @@ function validateJsonValue(
       "ARTIFACT_JSON_UNSUPPORTED_VALUE",
       path,
       `unsupported value type ${typeof value}`,
+    );
+  }
+
+  if (isProxy(value)) {
+    fail(
+      "ARTIFACT_JSON_UNSUPPORTED_VALUE",
+      path,
+      "Proxy values are not supported",
     );
   }
 
