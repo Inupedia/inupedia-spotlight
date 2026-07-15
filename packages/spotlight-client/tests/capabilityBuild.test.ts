@@ -399,6 +399,42 @@ describe("buildViteCapabilitiesV1", () => {
     ]);
   });
 
+  it("matches legacy containment for dotdot-prefixed loaded filenames", async () => {
+    const root = await createProject();
+    await writeSkill(root);
+    const directory = join(root, ".agents/skills/monitoring");
+    await writeFile(
+      join(directory, "SKILL.md"),
+      [
+        "---",
+        "name: monitoring",
+        "description: Monitor video channels",
+        "---",
+        "[dotdot-name](..evil.md)",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      join(directory, "..evil.md"),
+      "# Ordinary file with a dotdot-prefixed name\n",
+      "utf8",
+    );
+
+    const result = await buildViteCapabilitiesV1({
+      root,
+      command: "serve",
+      project: { projectId: "camera-console", tools: [] },
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: "SKILL_REFERENCE_OUTSIDE_ROOT",
+        severity: "warning",
+      }),
+    ]);
+  });
+
   it("throws a stable strict scan collision before validating selected Skills", async () => {
     const root = await createProject();
     await writeBareSkill(root, ".agents/skills/camera");

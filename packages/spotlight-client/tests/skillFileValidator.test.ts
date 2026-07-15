@@ -101,6 +101,32 @@ describe("validateScannedSkill", () => {
     ]);
   });
 
+  it("treats a dotdot-prefixed filename as outside by the shared containment rule", async () => {
+    const projectRoot = await createProject();
+    const skill = await writeScannedSkill(
+      projectRoot,
+      [...frontmatter, "[dotdot-name](..evil.md)"].join("\n"),
+    );
+    await writeFile(
+      join(projectRoot, skill.directory, "..evil.md"),
+      "# Ordinary file with a dotdot-prefixed name",
+      "utf8",
+    );
+
+    const result = await validateScannedSkill({
+      projectRoot,
+      skill,
+      mode: "compat",
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: "SKILL_REFERENCE_OUTSIDE_ROOT",
+        severity: "warning",
+      }),
+    ]);
+  });
+
   it("warns once when a direct reference links to another reference", async () => {
     const projectRoot = await createProject();
     const skill = await writeScannedSkill(

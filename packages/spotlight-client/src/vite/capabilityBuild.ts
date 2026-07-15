@@ -1,4 +1,4 @@
-import { sep } from "node:path";
+import { resolve, sep } from "node:path";
 import { isProxy } from "node:util/types";
 
 import {
@@ -7,12 +7,10 @@ import {
   CapabilityArtifactError,
   loadCanonicalSkillsV1,
   scanProjectSkills,
-  validateAgentSkillMarkdown,
   type AgentSkillDiagnostic,
-  type CanonicalSkillInputV1,
-  type ScannedSkill,
   type SkillScanDiagnostic,
 } from "../node/index.js";
+import { validateSkillContent } from "../node/capabilities/skillFileValidator.js";
 import type {
   CapabilityBuildInfoV1,
   CapabilityPluginBuildResultV1,
@@ -28,10 +26,6 @@ export type {
 } from "./capabilityBuildTypes.js";
 
 const PROJECT_FIELDS = new Set(["projectId", "tools"]);
-const MAX_REFERENCE_BYTES = 1024 * 1024;
-const MARKDOWN_LINK_PATTERN =
-  /(?<!!)\[[^\]]*\]\(([^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'))?\)/g;
-const URI_SCHEME_PATTERN = /^[a-z][a-z\d+.-]*:/i;
 
 function invalidInput(message: string): never {
   throw new CapabilityArtifactError("ARTIFACT_INPUT_INVALID", message);
@@ -118,132 +112,6 @@ function freezeDiagnostic(
   });
 }
 
-function compareUtf8(left: string, right: string): number {
-  return Buffer.compare(
-    Buffer.from(left, "utf8"),
-    Buffer.from(right, "utf8"),
-  );
-}
-
-function extractRelativeMarkdownLinks(markdown: string): string[] {
-  const links = new Set<string>();
-  for (const match of markdown.matchAll(MARKDOWN_LINK_PATTERN)) {
-    const destination = match[1];
-    if (
-      !destination ||
-      destination.startsWith("#") ||
-      destination.startsWith("/") ||
-      URI_SCHEME_PATTERN.test(destination)
-    ) {
-      continue;
-    }
-    const path = destination.split(/[?#]/, 1)[0];
-    if (path?.toLowerCase().endsWith(".md")) links.add(path);
-  }
-  return [...links].sort(compareUtf8);
-}
-
-function normalizeSnapshotPath(path: string): string | undefined {
-  const segments: string[] = [];
-  const portablePath = sep === "\\" ? path.replaceAll("\\", "/") : path;
-  for (const segment of portablePath.split("/")) {
-    if (segment === "" || segment === ".") continue;
-    if (segment === "..") {
-      if (segments.length === 0) return undefined;
-      segments.pop();
-      continue;
-    }
-    segments.push(segment);
-  }
-  return segments.join("/");
-}
-
-function skillWarning(
-  skill: ScannedSkill,
-  code: AgentSkillDiagnostic["code"],
-  message: string,
-): AgentSkillDiagnostic {
-  return { code, severity: "warning", message, skillFile: skill.skillFile };
-}
-
-function validateLoadedSkillSnapshot(input: {
-  skill: ScannedSkill;
-  loaded: CanonicalSkillInputV1;
-  mode: "strict" | "compat";
-}): AgentSkillDiagnostic[] {
-  const skillFile = input.loaded.files.find(
-    (file) => file.relativePath === "SKILL.md",
-  );
-  if (!skillFile) {
-    invalidInput(`Loaded Skill ${input.skill.name} is missing SKILL.md`);
-  }
-  const markdown = Buffer.from(skillFile.bytes)
-    .toString("utf8")
-    .replace(/\r\n?/g, "\n");
-  const result = validateAgentSkillMarkdown({
-    directoryName: input.skill.name,
-    skillFile: input.skill.skillFile,
-    markdown,
-    mode: input.mode,
-  });
-  const diagnostics = [...result.diagnostics];
-  const lineCount = markdown.split("\n").length;
-  const estimatedTokens = Math.ceil(markdown.length / 4);
-  if (lineCount > 500) {
-    diagnostics.push(
-      skillWarning(
-        input.skill,
-        "SKILL_RECOMMENDATION_LINES",
-        `SKILL.md contains ${lineCount} lines; the Agent Skills recommendation is at most 500.`,
-      ),
-    );
-  }
-  if (estimatedTokens > 5_000) {
-    diagnostics.push(
-      skillWarning(
-        input.skill,
-        "SKILL_RECOMMENDATION_TOKENS",
-        `SKILL.md has a deterministic estimate of ${estimatedTokens} tokens; the recommendation is at most 5000.`,
-      ),
-    );
-  }
-
-  const files = new Map(
-    input.loaded.files.map((file) => [file.relativePath, file.bytes] as const),
-  );
-  for (const link of extractRelativeMarkdownLinks(markdown)) {
-    const target = normalizeSnapshotPath(link);
-    if (target === undefined) {
-      diagnostics.push(
-        skillWarning(
-          input.skill,
-          "SKILL_REFERENCE_OUTSIDE_ROOT",
-          `Markdown reference "${link}" resolves outside the Skill root.`,
-        ),
-      );
-      continue;
-    }
-    const referencedBytes = files.get(target);
-    if (
-      referencedBytes === undefined ||
-      referencedBytes.byteLength > MAX_REFERENCE_BYTES
-    ) {
-      continue;
-    }
-    const referencedMarkdown = Buffer.from(referencedBytes).toString("utf8");
-    if (extractRelativeMarkdownLinks(referencedMarkdown).length > 0) {
-      diagnostics.push(
-        skillWarning(
-          input.skill,
-          "SKILL_REFERENCE_CHAIN_DEEP",
-          `Markdown reference "${link}" links to another Markdown reference.`,
-        ),
-      );
-    }
-  }
-  return diagnostics;
-}
-
 export async function buildViteCapabilitiesV1(input: {
   root: string;
   command: "serve" | "build";
@@ -280,16 +148,38 @@ export async function buildViteCapabilitiesV1(input: {
   const loadedByName = new Map(
     loaded.skills.map((skill) => [skill.name, skill] as const),
   );
-  const validation = scan.skills.map((skill) => {
-    const loadedSkill = loadedByName.get(skill.name);
-    if (!loadedSkill) {
-      invalidInput(`Loaded Skill snapshot is missing ${skill.name}`);
-    }
-    return validateLoadedSkillSnapshot({ skill, loaded: loadedSkill, mode });
-  });
+  const validation = await Promise.all(
+    scan.skills.map(async (skill) => {
+      const loadedSkill = loadedByName.get(skill.name);
+      if (!loadedSkill) {
+        invalidInput(`Loaded Skill snapshot is missing ${skill.name}`);
+      }
+      const skillFile = loadedSkill.files.find(
+        (file) => file.relativePath === "SKILL.md",
+      );
+      if (!skillFile) {
+        invalidInput(`Loaded Skill ${skill.name} is missing SKILL.md`);
+      }
+      const files = new Map(
+        loadedSkill.files.map(
+          (file) => [file.relativePath, file.bytes] as const,
+        ),
+      );
+      return validateSkillContent({
+        skill,
+        markdown: Buffer.from(skillFile.bytes).toString("utf8"),
+        mode,
+        skillRoot: resolve(input.root, skill.directory),
+        async readReference(relativePath) {
+          const snapshotPath = relativePath.split(sep).join("/");
+          return files.get(snapshotPath);
+        },
+      });
+    }),
+  );
   const diagnostics: Array<SkillScanDiagnostic | AgentSkillDiagnostic> = [
     ...scan.diagnostics,
-    ...validation.flat(),
+    ...validation.flatMap((result) => result.diagnostics),
   ].map(freezeDiagnostic);
   const errorDiagnostic = diagnostics.find(
     (diagnostic) => diagnostic.severity === "error",
