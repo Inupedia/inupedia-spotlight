@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -14,24 +13,72 @@ import { fileURLToPath } from "node:url";
 
 const packagesRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const tempDir = mkdtempSync(join(tmpdir(), "inupedia-spotlight-smoke-"));
+const pnpmCli = process.env.npm_execpath;
 
 try {
-  const scopeDir = join(tempDir, "node_modules", "@inupedia");
-  mkdirSync(scopeDir, { recursive: true });
+  const packDir = join(tempDir, "packs");
+  const consumerDir = join(tempDir, "consumer");
+  mkdirSync(packDir, { recursive: true });
+  mkdirSync(consumerDir, { recursive: true });
 
   for (const packageName of [
     "spotlight-protocol",
     "spotlight-client",
     "spotlight-vue",
   ]) {
-    symlinkSync(
-      join(packagesRoot, packageName),
-      join(scopeDir, packageName),
-      "dir",
+    runPnpm(
+      [
+        "--dir",
+        join(packagesRoot, packageName),
+        "pack",
+        "--pack-destination",
+        packDir,
+      ],
+      packagesRoot,
     );
   }
 
-  const runnerPath = join(tempDir, "smoke.mjs");
+  const protocolTarball = findTarball(packDir, "spotlight-protocol");
+  const clientTarball = findTarball(packDir, "spotlight-client");
+  const vueTarball = findTarball(packDir, "spotlight-vue");
+  writeFileSync(
+    join(consumerDir, "package.json"),
+    `${JSON.stringify(
+      {
+        private: true,
+        type: "module",
+        dependencies: {
+          "@inspira-ui/plugins": "^0.0.2",
+          "@inupedia/spotlight-client": `file:${clientTarball}`,
+          "@inupedia/spotlight-protocol": `file:${protocolTarball}`,
+          "@inupedia/spotlight-vue": `file:${vueTarball}`,
+          "md-editor-v3": "^6.0.0",
+          pinia: "^3.0.0",
+          vue: "^3.5.0",
+        },
+        pnpm: {
+          overrides: {
+            "@inupedia/spotlight-client": `file:${clientTarball}`,
+            "@inupedia/spotlight-protocol": `file:${protocolTarball}`,
+          },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  runPnpm(
+    [
+      "install",
+      "--prefer-offline",
+      "--ignore-scripts",
+      "--no-frozen-lockfile",
+    ],
+    consumerDir,
+  );
+
+  const runnerPath = join(consumerDir, "smoke.mjs");
   writeFileSync(
     runnerPath,
     `
@@ -279,6 +326,98 @@ const imports = [
   },
 ];
 
+const { existsSync, readFileSync, realpathSync } = await import("node:fs");
+const { dirname, isAbsolute, join, relative, sep } = await import("node:path");
+const { fileURLToPath } = await import("node:url");
+const consumerRoot = realpathSync(process.cwd());
+const viteEntry = realpathSync(
+  fileURLToPath(import.meta.resolve("@inupedia/spotlight-client/vite")),
+);
+for (const id of [
+  "@inupedia/spotlight-protocol",
+  "@inupedia/spotlight-client",
+  "@inupedia/spotlight-client/node",
+  "@inupedia/spotlight-client/vite",
+  "@inupedia/spotlight-vue",
+  "@inupedia/spotlight-vue/remote",
+  "@inupedia/spotlight-vue/markdown",
+  "@inupedia/spotlight-vue/store",
+  "@inupedia/spotlight-vue/workflow",
+  "@inupedia/spotlight-vue/testing",
+  "@inupedia/spotlight-vue/components",
+  "@inupedia/spotlight-vue/components/InspiraCardSpotlight",
+  "@inupedia/spotlight-vue/components/InspiraCardSpotlight.vue",
+  "@inupedia/spotlight-vue/styles/spotlight-vue.css",
+]) {
+  const entry = realpathSync(fileURLToPath(import.meta.resolve(id)));
+  const fromConsumer = relative(consumerRoot, entry);
+  if (
+    fromConsumer === "" ||
+    fromConsumer === ".." ||
+    fromConsumer.startsWith(".." + sep) ||
+    isAbsolute(fromConsumer) ||
+    !fromConsumer.split(sep).includes("node_modules")
+  ) {
+    throw new Error(id + " resolved outside temporary consumer: " + entry);
+  }
+}
+
+const packedClientManifestPath = join(dirname(viteEntry), "..", "..", "package.json");
+if (!existsSync(packedClientManifestPath)) {
+  throw new Error("packed client manifest is missing beside resolved Vite entry");
+}
+const packedClientManifest = JSON.parse(
+  readFileSync(packedClientManifestPath, "utf8"),
+);
+const packedClientNodeModules = join(
+  dirname(packedClientManifestPath),
+  "..",
+  "..",
+);
+if (
+  packedClientManifest.exports?.["./vite"]?.types !==
+    "./dist/vite/index.d.ts" ||
+  packedClientManifest.exports?.["./vite"]?.import !==
+    "./dist/vite/index.js"
+) {
+  throw new Error("packed client manifest has an invalid Vite export");
+}
+if (JSON.stringify(packedClientManifest).includes("workspace:")) {
+  throw new Error("packed client manifest retained a workspace dependency");
+}
+for (const dependency of [
+  "@inupedia/spotlight-protocol",
+  "@babel/parser",
+  "@babel/traverse",
+  "@babel/types",
+  "canonicalize",
+  "fflate",
+  "magic-string",
+  "yaml",
+]) {
+  if (!(dependency in packedClientManifest.dependencies)) {
+    throw new Error(
+      "packed client manifest is missing runtime dependency " + dependency,
+    );
+  }
+  const dependencyPackage = realpathSync(
+    join(packedClientNodeModules, ...dependency.split("/")),
+  );
+  const fromConsumer = relative(consumerRoot, dependencyPackage);
+  if (
+    fromConsumer === ".." ||
+    fromConsumer.startsWith(".." + sep) ||
+    isAbsolute(fromConsumer)
+  ) {
+    throw new Error(
+      "packed client dependency resolved outside temporary consumer: " +
+        dependency +
+        " -> " +
+        dependencyPackage,
+    );
+  }
+}
+
 function assertExport(mod, name, id) {
   if (!(name in mod)) {
     throw new Error(\`\${id} is missing export \${name}\`);
@@ -306,26 +445,50 @@ for (const item of imports) {
   );
 
   const result = spawnSync(process.execPath, [runnerPath], {
-    cwd: tempDir,
+    cwd: consumerDir,
     stdio: "inherit",
     env: process.env,
   });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 
-  const cssPath = join(
-    packagesRoot,
-    "spotlight-vue",
-    "dist",
-    "assets",
-    "spotlight-vue.css",
-  );
-  if (!existsSync(cssPath)) {
-    throw new Error(`missing style export target: ${cssPath}`);
-  }
   console.log(
     "[smoke-imports] @inupedia/spotlight-vue/styles/spotlight-vue.css ok",
   );
 } finally {
   rmSync(tempDir, { recursive: true, force: true });
+}
+
+function findTarball(directory, packageName) {
+  const matches = readdirSync(directory)
+    .filter((entry) => entry.includes(packageName) && entry.endsWith(".tgz"))
+    .sort();
+  if (matches.length !== 1) {
+    throw new Error(
+      `expected one packed ${packageName} tarball, found ${matches.length}`,
+    );
+  }
+  return join(directory, matches[0]);
+}
+
+function run(command, args, cwd) {
+  const result = spawnSync(command, args, {
+    cwd,
+    stdio: "inherit",
+    env: process.env,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(
+      `${command} ${args.join(" ")} failed with status ${result.status ?? "unknown"}`,
+    );
+  }
+}
+
+function runPnpm(args, cwd) {
+  if (pnpmCli) {
+    run(process.execPath, [pnpmCli, ...args], cwd);
+    return;
+  }
+  run("pnpm", args, cwd);
 }
