@@ -87,6 +87,30 @@ function throwDiagnostic(
   throw Object.assign(new Error(message), diagnostic);
 }
 
+function freezeDiagnostic(
+  diagnostic: SkillScanDiagnostic | AgentSkillDiagnostic,
+): SkillScanDiagnostic | AgentSkillDiagnostic {
+  if ("candidates" in diagnostic) {
+    const candidates = [...diagnostic.candidates];
+    Object.freeze(candidates);
+    return Object.freeze({
+      code: diagnostic.code,
+      severity: diagnostic.severity,
+      name: diagnostic.name,
+      ...(diagnostic.selected === undefined
+        ? {}
+        : { selected: diagnostic.selected }),
+      candidates,
+    });
+  }
+  return Object.freeze({
+    code: diagnostic.code,
+    severity: diagnostic.severity,
+    message: diagnostic.message,
+    skillFile: diagnostic.skillFile,
+  });
+}
+
 export async function buildViteCapabilitiesV1(input: {
   root: string;
   command: "serve" | "build";
@@ -111,6 +135,11 @@ export async function buildViteCapabilitiesV1(input: {
     mode,
     skillRoots: input.options?.skillRoots,
   });
+  const scanErrorDiagnostic = scan.diagnostics.find(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  if (scanErrorDiagnostic) throwDiagnostic(scanErrorDiagnostic);
+
   const validation = await Promise.all(
     scan.skills.map((skill) =>
       validateScannedSkill({ projectRoot: input.root, skill, mode }),
@@ -119,7 +148,7 @@ export async function buildViteCapabilitiesV1(input: {
   const diagnostics: Array<SkillScanDiagnostic | AgentSkillDiagnostic> = [
     ...scan.diagnostics,
     ...validation.flatMap((result) => result.diagnostics),
-  ];
+  ].map(freezeDiagnostic);
   const errorDiagnostic = diagnostics.find(
     (diagnostic) => diagnostic.severity === "error",
   );
@@ -137,7 +166,9 @@ export async function buildViteCapabilitiesV1(input: {
     schemaVersion: "spotlight.capability-build-info/1",
     projectId: project.projectId,
     frontendBuildId:
-      frontendBuildId ?? `dev:${artifact.artifactDigest}`,
+      input.command === "build"
+        ? frontendBuildId!
+        : `dev:${artifact.artifactDigest}`,
     artifactVersion: artifact.artifactVersion,
     artifactDigest: artifact.artifactDigest,
     manifestDigest: artifact.manifestDigest,

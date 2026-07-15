@@ -1,10 +1,11 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { FrontendToolDescriptorV1 } from "@inupedia/spotlight-protocol";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import * as nodeCapabilities from "../src/node/index.js";
 import { buildViteCapabilitiesV1 } from "../src/vite/capabilityBuild.js";
 
 const temporaryProjects: string[] = [];
@@ -40,6 +41,22 @@ async function writeSkill(
   for (const [path, contents] of files) await writeFile(path, contents, "utf8");
 }
 
+async function writeBareSkill(
+  root: string,
+  relativeDirectory: string,
+): Promise<string> {
+  const directory = join(root, relativeDirectory);
+  const skillFile = join(directory, "SKILL.md");
+  const name = relativeDirectory.split("/").at(-1);
+  await mkdir(directory, { recursive: true });
+  await writeFile(
+    skillFile,
+    `---\nname: ${name}\ndescription: Fixture\n---\n`,
+    "utf8",
+  );
+  return skillFile;
+}
+
 function videoOpen(
   overrides: Partial<FrontendToolDescriptorV1> = {},
 ): FrontendToolDescriptorV1 {
@@ -59,6 +76,7 @@ function videoOpen(
 }
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(
     temporaryProjects
       .splice(0)
@@ -100,6 +118,114 @@ describe("buildViteCapabilitiesV1", () => {
     expect(Object.isFrozen(result.buildInfo)).toBe(true);
     expect(Object.isFrozen(result.watchedFiles)).toBe(true);
     expect(Object.isFrozen(result.diagnostics)).toBe(true);
+  });
+
+  it("ignores an explicit frontend build ID in serve mode", async () => {
+    const root = await createProject();
+
+    const result = await buildViteCapabilitiesV1({
+      root,
+      command: "serve",
+      project: { projectId: "camera-console", tools: [] },
+      options: { frontendBuildId: "release-override" },
+    });
+
+    expect(result.buildInfo.frontendBuildId).toBe(
+      `dev:${result.buildInfo.artifactDigest}`,
+    );
+  });
+
+  it("returns deeply immutable diagnostic snapshots", async () => {
+    const root = await createProject();
+    await writeSkill(root);
+    const compatDirectory = join(root, ".inupedia/skills/monitoring");
+    await mkdir(compatDirectory, { recursive: true });
+    await writeFile(
+      join(compatDirectory, "SKILL.md"),
+      "---\nname: monitoring\ndescription: Compat monitoring\n---\n",
+      "utf8",
+    );
+
+    const result = await buildViteCapabilitiesV1({
+      root,
+      command: "serve",
+      project: { projectId: "camera-console", tools: [] },
+    });
+    const diagnostic = result.diagnostics[0];
+    expect(diagnostic).toMatchObject({
+      code: "SKILL_NAME_SHADOWED",
+      candidates: [
+        ".agents/skills/monitoring/SKILL.md",
+        ".inupedia/skills/monitoring/SKILL.md",
+      ],
+    });
+    expect(Object.isFrozen(diagnostic)).toBe(true);
+    expect(
+      Object.isFrozen(
+        diagnostic && "candidates" in diagnostic
+          ? diagnostic.candidates
+          : undefined,
+      ),
+    ).toBe(true);
+
+    expect(() => {
+      if (diagnostic) diagnostic.severity = "error";
+    }).toThrow(TypeError);
+    expect(() => {
+      if (diagnostic && "candidates" in diagnostic) {
+        diagnostic.candidates.push("tampered/SKILL.md");
+      }
+    }).toThrow(TypeError);
+    expect(result.diagnostics[0]).toMatchObject({
+      severity: "warning",
+      candidates: [
+        ".agents/skills/monitoring/SKILL.md",
+        ".inupedia/skills/monitoring/SKILL.md",
+      ],
+    });
+  });
+
+  it("does not share SDK diagnostic objects or execute unrelated accessors", async () => {
+    const root = await createProject();
+    let getterCalls = 0;
+    const candidates = [
+      ".agents/skills/monitoring/SKILL.md",
+      ".inupedia/skills/monitoring/SKILL.md",
+    ];
+    const sourceDiagnostic: nodeCapabilities.SkillScanDiagnostic = {
+      code: "SKILL_NAME_SHADOWED",
+      severity: "warning",
+      name: "monitoring",
+      selected: candidates[0],
+      candidates,
+    };
+    Object.defineProperty(sourceDiagnostic, "unrelated", {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return "do not read";
+      },
+    });
+    vi.spyOn(nodeCapabilities, "scanProjectSkills").mockResolvedValueOnce({
+      skills: [],
+      diagnostics: [sourceDiagnostic],
+    });
+
+    const result = await buildViteCapabilitiesV1({
+      root,
+      command: "serve",
+      project: { projectId: "camera-console", tools: [] },
+    });
+    const resultDiagnostic = result.diagnostics[0];
+    const getterCallsAfterBuild = getterCalls;
+
+    expect(resultDiagnostic).not.toBe(sourceDiagnostic);
+    expect(
+      resultDiagnostic && "candidates" in resultDiagnostic
+        ? resultDiagnostic.candidates
+        : undefined,
+    ).not.toBe(candidates);
+    expect(getterCallsAfterBuild).toBe(0);
   });
 
   it("requires an explicit non-empty frontend build ID for production builds", async () => {
@@ -193,6 +319,23 @@ describe("buildViteCapabilitiesV1", () => {
       code: "SKILL_UNKNOWN_TOP_LEVEL_FIELD",
       severity: "error",
     });
+  });
+
+  it("throws a stable strict scan collision before validating selected Skills", async () => {
+    const root = await createProject();
+    await writeBareSkill(root, ".agents/skills/camera");
+    await writeBareSkill(root, ".inupedia/skills/camera");
+    const unreadableSkill = await writeBareSkill(root, ".agents/skills/zeta");
+    await chmod(unreadableSkill, 0);
+
+    await expect(
+      buildViteCapabilitiesV1({
+        root,
+        command: "build",
+        project: { projectId: "camera-console", tools: [] },
+        options: { frontendBuildId: "release-42" },
+      }),
+    ).rejects.toMatchObject({ code: "SKILL_NAME_COLLISION" });
   });
 
   it.each([
