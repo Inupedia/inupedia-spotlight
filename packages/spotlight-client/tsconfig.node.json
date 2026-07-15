@@ -3,6 +3,10 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["src/node/**/*.ts", "src/skillScriptPath.ts"],
+  "include": [
+    "src/node/**/*.ts",
+    "src/vite/**/*.ts",
+    "src/skillScriptPath.ts"
+  ],
   "exclude": []
 }

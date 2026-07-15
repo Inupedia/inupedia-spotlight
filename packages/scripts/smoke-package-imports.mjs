@@ -50,6 +50,9 @@ const imports = [
         throw new Error(\`\${this.id} leaked Node-only createNodeSkillScriptRunner\`);
       }
       for (const nodeOnlyExport of [
+        "spotlightCapabilities",
+        "SPOTLIGHT_CAPABILITIES_MODULE_ID",
+        "RESOLVED_SPOTLIGHT_CAPABILITIES_MODULE_ID",
         "validateAgentSkillMarkdown",
         "validateScannedSkill",
         "buildCapabilityArtifactV1",
@@ -96,9 +99,124 @@ const imports = [
   },
   {
     id: "@inupedia/spotlight-client/vite",
-    assert(mod) {
+    async assert(mod) {
       if (typeof mod.default !== "function") {
         throw new Error(\`\${this.id} default export must be a function\`);
+      }
+      for (const name of [
+        "spotlightCapabilities",
+        "SPOTLIGHT_CAPABILITIES_MODULE_ID",
+        "RESOLVED_SPOTLIGHT_CAPABILITIES_MODULE_ID",
+      ]) {
+        assertExport(mod, name, this.id);
+      }
+
+      const { mkdirSync, writeFileSync } = await import("node:fs");
+      const { join } = await import("node:path");
+      const fixtureRoot = process.cwd();
+      const skillDirectory = join(
+        fixtureRoot,
+        ".agents",
+        "skills",
+        "package-smoke",
+      );
+      mkdirSync(skillDirectory, { recursive: true });
+      writeFileSync(
+        join(skillDirectory, "SKILL.md"),
+        "---\\nname: package-smoke\\ndescription: Package boundary smoke\\n---\\nExercise the published Vite capability entrypoint.\\n",
+        "utf8",
+      );
+
+      const plugin = mod.spotlightCapabilities(
+        { projectId: "package-smoke-project", tools: [] },
+        { frontendBuildId: "package-smoke-build", devRuntimeUpload: true },
+      );
+      await hook(plugin.configResolved).call(undefined, {
+        root: fixtureRoot,
+        command: "build",
+      });
+      const watchedFiles = [];
+      await hook(plugin.buildStart).call({
+        addWatchFile(file) {
+          watchedFiles.push(file);
+        },
+      });
+      if (watchedFiles.length !== 1 || !watchedFiles[0].endsWith("SKILL.md")) {
+        throw new Error(\`\${this.id} did not watch the fixture SKILL.md\`);
+      }
+
+      const resolvedId = await hook(plugin.resolveId).call(
+        undefined,
+        mod.SPOTLIGHT_CAPABILITIES_MODULE_ID,
+      );
+      if (resolvedId !== mod.RESOLVED_SPOTLIGHT_CAPABILITIES_MODULE_ID) {
+        throw new Error(\`\${this.id} virtual module resolution mismatch\`);
+      }
+      const source = await hook(plugin.load).call(undefined, resolvedId);
+      if (typeof source !== "string") {
+        throw new Error(\`\${this.id} did not load the virtual module\`);
+      }
+      const generated = await import(
+        \`data:text/javascript;base64,\${Buffer.from(source, "utf8").toString("base64")}\`
+      );
+      const buildInfo = generated.capabilityBuildInfo;
+      if (
+        buildInfo.schemaVersion !== "spotlight.capability-build-info/1" ||
+        buildInfo.projectId !== "package-smoke-project" ||
+        buildInfo.frontendBuildId !== "package-smoke-build"
+      ) {
+        throw new Error(\`\${this.id} generated invalid capability build info\`);
+      }
+
+      const nodeMod = await import("@inupedia/spotlight-client/node");
+      const scan = await nodeMod.scanProjectSkills({
+        projectRoot: fixtureRoot,
+        mode: "strict",
+      });
+      const loaded = await nodeMod.loadCanonicalSkillsV1({
+        projectRoot: fixtureRoot,
+        skills: scan.skills,
+      });
+      const independentArtifact = nodeMod.buildCapabilityArtifactV1({
+        skills: loaded.skills,
+        tools: [],
+      });
+      if (buildInfo.artifactDigest !== independentArtifact.artifactDigest) {
+        throw new Error(\`\${this.id} generated a non-exact artifact digest\`);
+      }
+      if (!/^sha256:[a-f0-9]{64}$/.test(buildInfo.artifactDigest)) {
+        throw new Error(\`\${this.id} generated an invalid sha256 digest\`);
+      }
+
+      let disabledError;
+      try {
+        await generated.openUploadStream();
+      } catch (error) {
+        disabledError = error;
+      }
+      if (
+        !(disabledError instanceof Error) ||
+        disabledError.code !== "ARTIFACT_RUNTIME_UPLOAD_DISABLED"
+      ) {
+        throw new Error(\`\${this.id} production upload provider was not disabled\`);
+      }
+
+      const emitted = [];
+      await hook(plugin.generateBundle).call({
+        emitFile(asset) {
+          emitted.push(asset);
+        },
+      });
+      const canonicalBuildInfo = new TextDecoder().decode(
+        nodeMod.canonicalizeJson(buildInfo),
+      );
+      if (
+        emitted.length !== 1 ||
+        emitted[0].type !== "asset" ||
+        emitted[0].fileName !== "capability-build-info.json" ||
+        emitted[0].source !== canonicalBuildInfo + "\\n"
+      ) {
+        throw new Error(\`\${this.id} emitted non-canonical build-info assets\`);
       }
     },
   },
@@ -173,9 +291,14 @@ function assertDefault(mod, id) {
   }
 }
 
+function hook(value) {
+  if (!value) throw new Error("expected Vite hook");
+  return typeof value === "function" ? value : value.handler;
+}
+
 for (const item of imports) {
   const mod = await import(item.id);
-  item.assert(mod);
+  await item.assert(mod);
   console.log(\`[smoke-imports] \${item.id} ok\`);
 }
 `,
