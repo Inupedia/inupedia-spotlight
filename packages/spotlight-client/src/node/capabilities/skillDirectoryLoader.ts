@@ -105,8 +105,15 @@ function validateSkillDefinitions(
   }
 
   const sortedDirectories = skills
-    .map((skill) => resolve(projectRoot, skill.directory))
-    .sort(compareUtf8);
+    .map((skill) => ({
+      name: skill.name,
+      directory: resolve(projectRoot, skill.directory),
+    }))
+    .sort(
+      (left, right) =>
+        compareUtf8(left.directory, right.directory) ||
+        compareUtf8(left.name, right.name),
+    );
   for (
     let parentIndex = 0;
     parentIndex < sortedDirectories.length;
@@ -119,9 +126,12 @@ function validateSkillDefinitions(
       candidateIndex += 1
     ) {
       const candidate = sortedDirectories[candidateIndex]!;
-      if (parent === candidate || isContained(parent, candidate)) {
+      if (
+        parent.directory === candidate.directory ||
+        isContained(parent.directory, candidate.directory)
+      ) {
         throw unsafe(
-          `Duplicate or overlapping Skill directories are not allowed: ${parent} and ${candidate}`,
+          `Duplicate or overlapping Skill directories are not allowed for Skills "${parent.name}" and "${candidate.name}"`,
         );
       }
     }
@@ -177,11 +187,11 @@ async function validateDirectory(pin: DirectoryPin): Promise<void> {
       !hasSameSnapshot(pin, stat) ||
       canonicalPath !== pin.canonicalPath
     ) {
-      throw unsafe(`Skill directory changed during traversal: ${pin.path}`);
+      throw unsafe("Skill directory changed during traversal");
     }
   } catch (error) {
     if (error instanceof CapabilitySkillLoadErrorV1) throw error;
-    throw unsafe(`Cannot revalidate Skill directory: ${pin.path}`);
+    throw unsafe("Cannot revalidate Skill directory");
   }
 }
 
@@ -295,7 +305,7 @@ export async function loadCanonicalSkillsV1(
   try {
     canonicalProjectRoot = await realpath(projectRoot);
   } catch {
-    throw unsafe(`Cannot resolve project root: ${projectRoot}`);
+    throw unsafe("Cannot securely resolve project root");
   }
 
   const sortedSkills = [...input.skills].sort((left, right) =>
@@ -305,13 +315,11 @@ export async function loadCanonicalSkillsV1(
   for (const skill of sortedSkills) {
     const directory = resolve(projectRoot, skill.directory);
     if (!isContained(projectRoot, directory)) {
-      throw unsafe(`Skill directory escapes project root: ${skill.directory}`);
+      throw unsafe(`Skill "${skill.name}" directory escapes project root`);
     }
     const root = await pinDirectory(directory);
     if (!isContained(canonicalProjectRoot, root.canonicalPath)) {
-      throw unsafe(
-        `Skill directory resolves outside project root: ${skill.directory}`,
-      );
+      throw unsafe(`Skill "${skill.name}" directory resolves outside project root`);
     }
     pinnedSkills.push({ skill, directory, root });
   }
@@ -357,7 +365,7 @@ export async function loadCanonicalSkillsV1(
           entries.push(entry);
         }
       } catch {
-        throw unsafe(`Cannot read Skill directory: ${directory.path}`);
+        throw unsafe(`Cannot read directory for Skill "${skill.name}"`);
       } finally {
         await directoryHandle?.close().catch(() => undefined);
       }

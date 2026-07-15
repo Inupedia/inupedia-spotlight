@@ -16,10 +16,15 @@ import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const fsRace = vi.hoisted(() => ({
+  lstatErrorPath: "",
   afterLstatPath: "",
   afterLstat: undefined as undefined | (() => Promise<void>),
+  opendirErrorPath: "",
+  afterOpendirPath: "",
+  afterOpendir: undefined as undefined | (() => Promise<void>),
   beforeDirReadPath: "",
   beforeDirRead: undefined as undefined | (() => Promise<void>),
+  directoryReadErrorPath: "",
   observedDirectoryNames: [] as string[],
   opendirCalls: 0,
   afterReadPath: "",
@@ -27,6 +32,8 @@ const fsRace = vi.hoisted(() => ({
   blockedOutsideReadPath: "",
   outsideReadAttempts: 0,
   unboundedReadFileCalls: 0,
+  openErrorPath: "",
+  readErrorPath: "",
   openedReadBytes: 0,
 }));
 
@@ -35,6 +42,9 @@ vi.mock("node:fs/promises", async (importOriginal) => {
   return {
     ...actual,
     lstat: vi.fn(async (...args: Parameters<typeof actual.lstat>) => {
+      if (String(args[0]) === fsRace.lstatErrorPath) {
+        throw new Error(`injected lstat failure: ${String(args[0])}`);
+      }
       const stat = await actual.lstat(...args);
       if (String(args[0]) === fsRace.afterLstatPath && fsRace.afterLstat) {
         const action = fsRace.afterLstat;
@@ -45,10 +55,24 @@ vi.mock("node:fs/promises", async (importOriginal) => {
     }),
     opendir: vi.fn(async (...args: Parameters<typeof actual.opendir>) => {
       const directoryPath = String(args[0]);
+      if (directoryPath === fsRace.opendirErrorPath) {
+        throw new Error(`injected opendir failure: ${directoryPath}`);
+      }
       const directory = await actual.opendir(...args);
+      if (
+        directoryPath === fsRace.afterOpendirPath &&
+        fsRace.afterOpendir
+      ) {
+        const action = fsRace.afterOpendir;
+        fsRace.afterOpendir = undefined;
+        await action();
+      }
       fsRace.opendirCalls += 1;
       const originalRead = directory.read.bind(directory);
       directory.read = vi.fn(async () => {
+        if (directoryPath === fsRace.directoryReadErrorPath) {
+          throw new Error(`injected directory read failure: ${directoryPath}`);
+        }
         if (
           directoryPath === fsRace.beforeDirReadPath &&
           fsRace.beforeDirRead
@@ -72,10 +96,16 @@ vi.mock("node:fs/promises", async (importOriginal) => {
       return actual.readFile(...args);
     }),
     open: vi.fn(async (...args: Parameters<typeof actual.open>) => {
+      if (String(args[0]) === fsRace.openErrorPath) {
+        throw new Error(`injected open failure: ${String(args[0])}`);
+      }
       const handle = await actual.open(...args);
       const openedPath = String(args[0]);
       const originalRead = handle.read.bind(handle);
       handle.read = vi.fn(async (...readArgs: Parameters<typeof handle.read>) => {
+        if (openedPath === fsRace.readErrorPath) {
+          throw new Error(`injected read failure: ${openedPath}`);
+        }
         const result = await originalRead(...readArgs);
         fsRace.openedReadBytes += result.bytesRead;
         if (openedPath === fsRace.afterReadPath && fsRace.afterRead) {
@@ -137,10 +167,15 @@ async function writeSkill(
 }
 
 afterEach(async () => {
+  fsRace.lstatErrorPath = "";
   fsRace.afterLstatPath = "";
   fsRace.afterLstat = undefined;
+  fsRace.opendirErrorPath = "";
+  fsRace.afterOpendirPath = "";
+  fsRace.afterOpendir = undefined;
   fsRace.beforeDirReadPath = "";
   fsRace.beforeDirRead = undefined;
+  fsRace.directoryReadErrorPath = "";
   fsRace.observedDirectoryNames = [];
   fsRace.opendirCalls = 0;
   fsRace.afterReadPath = "";
@@ -148,6 +183,8 @@ afterEach(async () => {
   fsRace.blockedOutsideReadPath = "";
   fsRace.outsideReadAttempts = 0;
   fsRace.unboundedReadFileCalls = 0;
+  fsRace.openErrorPath = "";
+  fsRace.readErrorPath = "";
   fsRace.openedReadBytes = 0;
   await Promise.all(
     temporaryDirectories
@@ -156,7 +193,163 @@ afterEach(async () => {
   );
 });
 
+async function captureUnsafeError(
+  projectRoot: string,
+  skills: readonly ScannedSkill[],
+): Promise<Error & { code: string }> {
+  let thrown: unknown;
+  try {
+    await loadCanonicalSkillsV1({ projectRoot, skills });
+  } catch (error) {
+    thrown = error;
+  }
+  expect(thrown).toMatchObject({ code: "CAPABILITY_SKILL_ENTRY_UNSAFE" });
+  return thrown as Error & { code: string };
+}
+
+function expectNoDisclosure(error: Error, forbidden: readonly string[]): void {
+  for (const value of forbidden) {
+    expect(error.message).not.toContain(value);
+  }
+}
+
 describe("loadCanonicalSkillsV1", () => {
+  it("redacts the unresolved project root from resolution errors", async () => {
+    const projectRoot = await createProject();
+    await rm(projectRoot, { recursive: true });
+
+    const error = await captureUnsafeError(projectRoot, []);
+
+    expectNoDisclosure(error, [projectRoot, dirname(projectRoot)]);
+    expect(error.message).toContain("project root");
+  });
+
+  it("redacts unrestricted absolute paths from lexical and canonical escapes", async () => {
+    const projectRoot = await createProject();
+    const outsideRoot = join(dirname(projectRoot), "outside-redaction-root");
+    const outsideSkillRoot = join(outsideRoot, "nested");
+    await mkdir(outsideSkillRoot, { recursive: true });
+    await writeFile(
+      join(outsideSkillRoot, "SKILL.md"),
+      "SECRET-SKILL-BYTES",
+      "utf8",
+    );
+
+    const lexicalError = await captureUnsafeError(projectRoot, [
+      scannedSkill("lexical-escape", outsideRoot),
+    ]);
+    expectNoDisclosure(lexicalError, [
+      projectRoot,
+      outsideRoot,
+      dirname(projectRoot),
+      "SECRET-SKILL-BYTES",
+    ]);
+    expect(lexicalError.message).toContain("lexical-escape");
+
+    const aliasRoot = join(projectRoot, ".agents/alias");
+    await mkdir(dirname(aliasRoot), { recursive: true });
+    await symlink(outsideRoot, aliasRoot, "dir");
+    const aliasedDirectory = join(aliasRoot, "nested");
+    const canonicalError = await captureUnsafeError(projectRoot, [
+      scannedSkill("canonical-escape", aliasedDirectory),
+    ]);
+    expectNoDisclosure(canonicalError, [
+      projectRoot,
+      outsideRoot,
+      outsideSkillRoot,
+      aliasedDirectory,
+      dirname(projectRoot),
+      "SECRET-SKILL-BYTES",
+    ]);
+    expect(canonicalError.message).toContain("canonical-escape");
+    expect(fsRace.openedReadBytes).toBe(0);
+  });
+
+  it("redacts resolved directories from duplicate and overlap errors", async () => {
+    const projectRoot = await createProject();
+    const duplicateDirectory = join(projectRoot, ".agents/skills/shared");
+    const nestedDirectory = join(duplicateDirectory, "nested");
+
+    const duplicateError = await captureUnsafeError(projectRoot, [
+      scannedSkill("first", duplicateDirectory),
+      scannedSkill("second", duplicateDirectory),
+    ]);
+    expectNoDisclosure(duplicateError, [projectRoot, duplicateDirectory]);
+    expect(duplicateError.message).toContain("first");
+    expect(duplicateError.message).toContain("second");
+
+    const overlapError = await captureUnsafeError(projectRoot, [
+      scannedSkill("parent", duplicateDirectory),
+      scannedSkill("child", nestedDirectory),
+    ]);
+    expectNoDisclosure(overlapError, [
+      projectRoot,
+      duplicateDirectory,
+      nestedDirectory,
+    ]);
+    expect(overlapError.message).toContain("parent");
+    expect(overlapError.message).toContain("child");
+  });
+
+  it.each([
+    ["directory pin", "lstatErrorPath"],
+    ["directory open", "opendirErrorPath"],
+    ["directory enumeration", "directoryReadErrorPath"],
+    ["file open", "openErrorPath"],
+    ["file read", "readErrorPath"],
+  ] as const)("redacts filesystem details from %s failures", async (_label, hook) => {
+    const projectRoot = await createProject();
+    const skillRoot = join(projectRoot, ".agents/skills/redacted");
+    const skillFile = join(skillRoot, "SKILL.md");
+    await writeSkill(projectRoot, "redacted", {
+      "SKILL.md": "SECRET-SKILL-BYTES",
+    });
+    fsRace[hook] =
+      hook === "lstatErrorPath" ||
+      hook === "opendirErrorPath" ||
+      hook === "directoryReadErrorPath"
+        ? skillRoot
+        : skillFile;
+
+    const error = await captureUnsafeError(projectRoot, [
+      scannedSkill("redacted"),
+    ]);
+
+    expectNoDisclosure(error, [
+      projectRoot,
+      skillRoot,
+      skillFile,
+      dirname(projectRoot),
+      "SECRET-SKILL-BYTES",
+    ]);
+    expect(error.message).toContain("Skill");
+    expect(fsRace.unboundedReadFileCalls).toBe(0);
+    expect(fsRace.openedReadBytes).toBe(0);
+  });
+
+  it("redacts a directory path when revalidation and enumeration fail", async () => {
+    const projectRoot = await createProject();
+    const skillRoot = join(projectRoot, ".agents/skills/race");
+    const movedRoot = `${skillRoot}-moved`;
+    await writeSkill(projectRoot, "race", { "SKILL.md": "SECRET-SKILL-BYTES" });
+    fsRace.afterOpendirPath = skillRoot;
+    fsRace.afterOpendir = async () => {
+      await rename(skillRoot, movedRoot);
+    };
+
+    const error = await captureUnsafeError(projectRoot, [scannedSkill("race")]);
+
+    expectNoDisclosure(error, [
+      projectRoot,
+      skillRoot,
+      movedRoot,
+      dirname(projectRoot),
+      "SECRET-SKILL-BYTES",
+    ]);
+    expect(error.message).toContain("Skill");
+    expect(fsRace.openedReadBytes).toBe(0);
+  });
+
   it("loads complete Skills as exact bytes in stable UTF-8 order", async () => {
     const projectRoot = await createProject();
     const icon = Uint8Array.of(0, 255, 1, 128);
@@ -550,15 +743,11 @@ describe("loadCanonicalSkillsV1", () => {
     await writeSkill(projectRoot, "real", { "SKILL.md": "safe" });
     await symlink(skillsRoot, join(projectRoot, ".agents/alias"), "dir");
 
-    await expect(
-      loadCanonicalSkillsV1({
-        projectRoot,
-        skills: [
-          scannedSkill("real", ".agents/skills/real"),
-          scannedSkill("alias", ".agents/alias/real"),
-        ],
-      }),
-    ).rejects.toMatchObject({ code: "CAPABILITY_SKILL_ENTRY_UNSAFE" });
+    const error = await captureUnsafeError(projectRoot, [
+      scannedSkill("real", ".agents/skills/real"),
+      scannedSkill("alias", ".agents/alias/real"),
+    ]);
+    expectNoDisclosure(error, [projectRoot, skillsRoot]);
     expect(fsRace.opendirCalls).toBe(0);
   });
 
@@ -571,15 +760,11 @@ describe("loadCanonicalSkillsV1", () => {
     });
     await symlink(skillsRoot, join(projectRoot, ".agents/alias"), "dir");
 
-    await expect(
-      loadCanonicalSkillsV1({
-        projectRoot,
-        skills: [
-          scannedSkill("parent", ".agents/alias/root"),
-          scannedSkill("child", ".agents/skills/root/child"),
-        ],
-      }),
-    ).rejects.toMatchObject({ code: "CAPABILITY_SKILL_ENTRY_UNSAFE" });
+    const error = await captureUnsafeError(projectRoot, [
+      scannedSkill("parent", ".agents/alias/root"),
+      scannedSkill("child", ".agents/skills/root/child"),
+    ]);
+    expectNoDisclosure(error, [projectRoot, skillsRoot]);
     expect(fsRace.opendirCalls).toBe(0);
   });
 });
