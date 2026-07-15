@@ -6,6 +6,7 @@ import type { AgentSkillDiagnostic } from "../node/capabilities/skillValidator.j
 
 export interface SpotlightCapabilityProjectBuildV1 {
   projectId: string;
+  skillRoots?: readonly SkillRootInput[];
   tools: readonly (FrontendToolDescriptorV1 | FrontendToolDefinitionV1)[];
 }
 

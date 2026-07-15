@@ -151,3 +151,10 @@ export {
   type CapabilityExecutionFenceV1,
 } from "./capabilities/hostActionExecutor.js";
 export { SpotlightCapabilityError } from "./capabilities/errors.js";
+export {
+  getCapabilityRuntimeV1,
+  registerCapabilityRuntimeV1,
+  subscribeCapabilityRuntimeV1,
+  waitForCapabilityRuntimeV1,
+  type RegisteredCapabilityRuntimeV1,
+} from "./capabilities/runtimeCapabilities.js";

@@ -17,6 +17,7 @@ import type {
   SpotlightCapabilitiesOptionsV1,
   SpotlightCapabilityProjectBuildV1,
 } from "./capabilityBuildTypes.js";
+import type { SkillRootInput } from "../node/capabilities/skillScanner.js";
 
 export type {
   CapabilityBuildInfoV1,
@@ -25,7 +26,7 @@ export type {
   SpotlightCapabilityProjectBuildV1,
 } from "./capabilityBuildTypes.js";
 
-const PROJECT_FIELDS = new Set(["projectId", "tools"]);
+const PROJECT_FIELDS = new Set(["projectId", "skillRoots", "tools"]);
 
 function invalidInput(message: string): never {
   throw new CapabilityArtifactError("ARTIFACT_INPUT_INVALID", message);
@@ -49,12 +50,12 @@ function validateProject(
 
   const keys = Reflect.ownKeys(value);
   if (
-    keys.length !== PROJECT_FIELDS.size ||
+    (keys.length !== 2 && keys.length !== 3) ||
     keys.some(
       (key) => typeof key !== "string" || !PROJECT_FIELDS.has(key),
     )
   ) {
-    invalidInput("Capability project own fields must be exactly projectId and tools");
+    invalidInput("Capability project own fields must be projectId, tools, and optional skillRoots");
   }
 
   const readDataField = (field: "projectId" | "tools"): unknown => {
@@ -68,12 +69,17 @@ function validateProject(
   };
   const projectId = readDataField("projectId");
   const tools = readDataField("tools");
+  const skillRootsDescriptor = Object.getOwnPropertyDescriptor(value, "skillRoots");
+  if (skillRootsDescriptor && (!skillRootsDescriptor.enumerable || !("value" in skillRootsDescriptor))) {
+    invalidInput("Capability project field skillRoots must be an enumerable data property");
+  }
   if (typeof projectId !== "string" || projectId.trim().length === 0) {
     invalidInput("Capability projectId must be a non-empty string");
   }
 
   return {
     projectId,
+    ...(skillRootsDescriptor ? { skillRoots: skillRootsDescriptor.value as readonly SkillRootInput[] } : {}),
     tools: tools as SpotlightCapabilityProjectBuildV1["tools"],
   };
 }
@@ -163,7 +169,7 @@ export async function buildViteCapabilitiesV1(input: {
   const scan = await scanProjectSkills({
     projectRoot: input.root,
     mode,
-    skillRoots: input.options?.skillRoots,
+    skillRoots: input.options?.skillRoots ?? project.skillRoots,
   });
   const scanErrorDiagnostic = scan.diagnostics.find(
     (diagnostic) => diagnostic.severity === "error",

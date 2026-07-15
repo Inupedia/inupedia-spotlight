@@ -71,3 +71,5 @@ export {
   type CapabilitySkillManifestEntryV1,
   type CapabilitySkillManifestV1,
 } from "./capabilities/skillManifest.js";
+export { publishCapabilityArtifactV1 } from "./publishCapabilityArtifact.js";
+export { runCapabilityPublishCliV1 } from "./capabilityPublishCli.js";

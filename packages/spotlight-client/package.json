@@ -29,6 +29,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
+    "spotlight-capabilities-publish": "./dist/node/cli/spotlightCapabilitiesPublish.js",
     "spotlight-capabilities": "./dist/node/publishCapabilitiesCli.js"
   },
   "publishConfig": {

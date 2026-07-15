@@ -231,6 +231,12 @@ afterEach(async () => {
 });
 
 describe("spotlightCapabilities", () => {
+  it("auto-registers the virtual runtime and forwards HMR build notifications", async () => {
+    const { source } = await buildPlugin({ devRuntimeUpload: true });
+    expect(source).toContain("registerCapabilityRuntimeV1");
+    expect(source).toContain("import.meta.hot");
+    expect(source).toContain("spotlight:capability-build");
+  });
   it("streams only the exact digest with byte-identical GET and bodyless HEAD", async () => {
     const fixture = await createProject();
     const result = await buildViteCapabilitiesV1({

@@ -1,4 +1,5 @@
-import { compareUtf16, containsLoneSurrogate } from "./canonicalJson.js";
+import { compareUtf16 } from "./canonicalJson.js";
+import { canonicalArchivePathProblem } from "./archivePath.js";
 import { CapabilityArtifactError } from "./capabilityArtifactError.js";
 
 const TAR_BLOCK_SIZE = 512;
@@ -21,20 +22,7 @@ function failInvalidPath(path: string): never {
 }
 
 function validateFilePath(path: string): void {
-  if (
-    path.length === 0 ||
-    path.startsWith("/") ||
-    /^[A-Za-z]:/.test(path) ||
-    path.includes("\\") ||
-    path.includes("\0") ||
-    containsLoneSurrogate(path) ||
-    path.endsWith("/")
-  ) {
-    failInvalidPath(path);
-  }
-  if (path.split("/").some((segment) => segment === "" || segment === "." || segment === "..")) {
-    failInvalidPath(path);
-  }
+  if (canonicalArchivePathProblem(path)) failInvalidPath(path);
 }
 
 function byteLength(value: string): number {

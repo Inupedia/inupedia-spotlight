@@ -57,8 +57,23 @@ export function buildCapabilityVirtualModuleV1(
   const canonicalBuildInfoJson = new TextDecoder().decode(
     canonicalizeJson(buildInfo),
   );
+  const registrationSource = `const __spotlightRuntimeKey = Symbol.for("inupedia.spotlight.capability-runtime/1");
+function registerCapabilityRuntimeV1(runtime) {
+  const store = globalThis[__spotlightRuntimeKey] ??= { providers: new Map(), listeners: new Map() };
+  store.providers.set(runtime.capabilityBuildInfo.projectId, runtime);
+  for (const listener of store.listeners.get(runtime.capabilityBuildInfo.projectId) ?? []) listener(runtime.capabilityBuildInfo);
+}
+registerCapabilityRuntimeV1({ capabilityBuildInfo, openUploadStream });
+if (import.meta.hot) {
+  import.meta.hot.on("spotlight:capability-build", (event) => {
+    if (event?.buildInfo?.projectId === capabilityBuildInfo.projectId) {
+      const store = globalThis[__spotlightRuntimeKey];
+      for (const listener of store?.listeners.get(capabilityBuildInfo.projectId) ?? []) listener(Object.freeze(event.buildInfo));
+    }
+  });
+}`;
   return Object.freeze({
     canonicalBuildInfoJson,
-    source: `export const capabilityBuildInfo = Object.freeze(${canonicalBuildInfoJson});\n\n${options.runtimeUpload === true ? developmentProviderSource(buildInfo) : disabledProviderSource()}\n`,
+    source: `export const capabilityBuildInfo = Object.freeze(${canonicalBuildInfoJson});\n\n${options.runtimeUpload === true ? developmentProviderSource(buildInfo) : disabledProviderSource()}\n\n${registrationSource}\n`,
   });
 }

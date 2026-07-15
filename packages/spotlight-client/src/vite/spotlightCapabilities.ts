@@ -104,6 +104,9 @@ export function spotlightCapabilities(
           if (moduleNode !== undefined) {
             server?.moduleGraph.invalidateModule(moduleNode);
           }
+          server?.ws?.send("spotlight:capability-build", {
+            buildInfo: nextState.result.buildInfo,
+          });
         } catch (error) {
           state = previousState;
           throw error;
@@ -127,7 +130,7 @@ export function spotlightCapabilities(
     configResolved(config) {
       root = config.root;
       command = config.command;
-      const roots = options?.skillRoots ?? DEFAULT_SKILL_ROOTS;
+      const roots = options?.skillRoots ?? project.skillRoots ?? DEFAULT_SKILL_ROOTS;
       relevantRoots = Object.freeze(
         roots.map((entry) => {
           const path = typeof entry === "string" ? entry : entry.path;
@@ -182,6 +185,14 @@ export function spotlightCapabilities(
       return id === SPOTLIGHT_CAPABILITIES_MODULE_ID
         ? RESOLVED_SPOTLIGHT_CAPABILITIES_MODULE_ID
         : null;
+    },
+    transformIndexHtml() {
+      return [{
+        tag: "script",
+        attrs: { type: "module" },
+        children: `import ${JSON.stringify(SPOTLIGHT_CAPABILITIES_MODULE_ID)};`,
+        injectTo: "head-prepend",
+      }];
     },
     load(id) {
       if (id !== RESOLVED_SPOTLIGHT_CAPABILITIES_MODULE_ID) return null;

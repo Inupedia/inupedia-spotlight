@@ -4,9 +4,9 @@ import { isProxy } from "node:util/types";
 import {
   canonicalizeJson,
   compareUtf16,
-  containsLoneSurrogate,
 } from "./canonicalJson.js";
 import { CapabilityArtifactError } from "./capabilityArtifactError.js";
+import { canonicalArchivePathProblem } from "./archivePath.js";
 import type {
   CanonicalSkillInputV1,
   CapabilityFileManifestV1,
@@ -151,28 +151,13 @@ function validateRelativePath(
   if (typeof relativePath !== "string") {
     invalidInput("Skill relativePath must be a string");
   }
-  if (
-    relativePath.length === 0 ||
-    relativePath.startsWith("/") ||
-    /^[A-Za-z]:/.test(relativePath) ||
-    relativePath.includes("\\") ||
-    relativePath.includes("\0") ||
-    containsLoneSurrogate(relativePath) ||
-    relativePath.endsWith("/")
-  ) {
+  if (canonicalArchivePathProblem(relativePath)) {
     throw new CapabilityArtifactError(
       "ARTIFACT_PATH_INVALID",
       `Invalid Skill relative path: ${relativePath}`,
     );
   }
 
-  const segments = relativePath.split("/");
-  if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
-    throw new CapabilityArtifactError(
-      "ARTIFACT_PATH_INVALID",
-      `Invalid Skill relative path segment: ${relativePath}`,
-    );
-  }
 }
 
 function ensureUstarPath(path: string): void {

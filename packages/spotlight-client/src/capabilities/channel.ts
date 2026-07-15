@@ -34,8 +34,22 @@ export function createCapabilityChannel(options: {
   let socket: WebSocket | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let renewal: ReturnType<typeof setInterval> | undefined;
-  let renewalPending = false;
+  let renewalPendingGeneration: number | undefined;
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let reconnectAttempt = 0;
+  let generation = 0;
+  let reservationSerial = 0;
   let closed = false;
+  let reserveAndOpen!: () => Promise<void>;
+  const scheduleReconnect = () => {
+    if (closed || reconnectTimer) return;
+    const delay = Math.min(250 * 2 ** reconnectAttempt, 5_000);
+    reconnectAttempt += 1;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = undefined;
+      void reserveAndOpen().catch(scheduleReconnect);
+    }, delay);
+  };
 
   const fence = (): CapabilityExecutionFenceV1 => Object.freeze({
     sessionId: options.identity.sessionId,
@@ -48,22 +62,22 @@ export function createCapabilityChannel(options: {
     tabInstanceId: options.identity.tabInstanceId,
   });
   const executor = createHostActionExecutor({ registry: options.registry, fence });
-  const send = (message: unknown) => {
-    if (socket?.readyState === 1) socket.send(JSON.stringify(message));
-  };
 
   const close = () => {
     closed = true;
     if (heartbeat) clearInterval(heartbeat);
     if (renewal) clearInterval(renewal);
+    if (reconnectTimer) clearTimeout(reconnectTimer);
     heartbeat = undefined;
     renewal = undefined;
+    if (socket) socket.onclose = null;
     socket?.close();
     socket = undefined;
   };
 
   const open = () => {
     if (closed) throw new SpotlightCapabilityError("CAPABILITY_LEASE_FENCED", "Capability channel is closed.");
+    if (socket) socket.onclose = null;
     socket?.close();
     const create = options.createWebSocket ?? ((url: string) => new WebSocket(url));
     const origin = typeof location === "undefined" ? "http://localhost" : location.origin;
@@ -71,9 +85,14 @@ export function createCapabilityChannel(options: {
     const channelPath = options.handshake.capabilityChannelUrl.replace(/^\//, "");
     const url = new URL(channelPath, base);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    socket = create(url.toString());
-    socket.onopen = () => {
-      send({
+    const localSocket = create(url.toString());
+    const localGeneration = ++generation;
+    socket = localSocket;
+    const sendLocal = (message: unknown) => { if (!closed && socket === localSocket && generation === localGeneration && localSocket.readyState === 1) localSocket.send(JSON.stringify(message)); };
+    localSocket.onopen = () => {
+      if (socket !== localSocket || generation !== localGeneration || closed) return;
+      reconnectAttempt = 0;
+      sendLocal({
         type: "client_hello",
         protocolVersion: SPOTLIGHT_CAPABILITY_PROTOCOL_V1,
         capabilityChannelToken: channelToken,
@@ -81,29 +100,32 @@ export function createCapabilityChannel(options: {
         tabInstanceId: options.identity.tabInstanceId,
       });
       if (heartbeat) clearInterval(heartbeat);
-      heartbeat = setInterval(() => send({ type: "heartbeat", ...fence(), sentAt: new Date().toISOString() }), 5_000);
+      heartbeat = setInterval(() => sendLocal({ type: "heartbeat", ...fence(), sentAt: new Date().toISOString() }), 5_000);
       if (renewal) clearInterval(renewal);
       renewal = setInterval(() => {
-        if (renewalPending) return;
-        renewalPending = true;
-        void renew().catch(() => close()).finally(() => { renewalPending = false; });
+        if (renewalPendingGeneration === localGeneration) return;
+        renewalPendingGeneration = localGeneration;
+        void renew().catch(scheduleReconnect).finally(() => { if (renewalPendingGeneration === localGeneration) renewalPendingGeneration = undefined; });
       }, 5_000);
     };
-    socket.onmessage = (event) => {
+    localSocket.onmessage = (event) => {
+      if (socket !== localSocket || generation !== localGeneration || closed) return;
       void (async () => {
         const message = JSON.parse(String(event.data)) as CapabilityChannelServerMessageV1;
         if (message.type === "host_action_request") {
-          for (const response of await executor.execute(message)) send(response);
+          await executor.executeStreaming(message, sendLocal);
         } else if (message.type === "channel_fenced") {
           close();
         }
       })();
     };
-    socket.onclose = () => {
+    localSocket.onclose = () => {
+      if (socket !== localSocket || generation !== localGeneration || closed) return;
       if (heartbeat) clearInterval(heartbeat);
       if (renewal) clearInterval(renewal);
       heartbeat = undefined;
       renewal = undefined;
+      scheduleReconnect();
     };
   };
 
@@ -117,10 +139,12 @@ export function createCapabilityChannel(options: {
 
   const renew = async (): Promise<RenewCapabilityLeaseResultV1> => {
     const current = fence();
+    const startedGeneration = generation;
     const result = await post<RenewCapabilityLeaseResultV1>(
       `/v1/capabilities/leases/${encodeURIComponent(current.leaseId)}/renew`,
       { ...current, expectedLeaseVersion: current.leaseVersion, liveTools: options.registry.liveTools() },
     );
+    if (startedGeneration !== generation || closed) return result;
     if (result.status === "revoked") {
       close();
       throw new SpotlightCapabilityError("CAPABILITY_LEASE_REVOKED", result.reason);
@@ -129,28 +153,33 @@ export function createCapabilityChannel(options: {
     return result;
   };
 
+  reserveAndOpen = async () => {
+    const current = fence();
+    const startedGeneration = generation;
+    const serial = ++reservationSerial;
+    const reserved = await post<ReservedCapabilityConnectionV1>(
+      `/v1/capabilities/leases/${encodeURIComponent(current.leaseId)}/connections`,
+      {
+        expectedConnectionId: current.connectionId,
+        expectedConnectionEpoch: current.connectionEpoch,
+        expectedLeaseVersion: current.leaseVersion,
+        browserInstanceId: current.browserInstanceId,
+        tabInstanceId: current.tabInstanceId,
+      },
+    );
+    if (closed || startedGeneration !== generation || serial !== reservationSerial) return;
+    leaseVersion = reserved.leaseVersion;
+    connectionId = reserved.connectionId;
+    connectionEpoch = reserved.connectionEpoch;
+    channelToken = reserved.capabilityChannelToken;
+    open();
+  };
+
   return Object.freeze({
     open,
     close,
     fence,
     renew,
-    async reconnect() {
-      const current = fence();
-      const reserved = await post<ReservedCapabilityConnectionV1>(
-        `/v1/capabilities/leases/${encodeURIComponent(current.leaseId)}/connections`,
-        {
-          expectedConnectionId: current.connectionId,
-          expectedConnectionEpoch: current.connectionEpoch,
-          expectedLeaseVersion: current.leaseVersion,
-          browserInstanceId: current.browserInstanceId,
-          tabInstanceId: current.tabInstanceId,
-        },
-      );
-      leaseVersion = reserved.leaseVersion;
-      connectionId = reserved.connectionId;
-      connectionEpoch = reserved.connectionEpoch;
-      channelToken = reserved.capabilityChannelToken;
-      open();
-    },
+    reconnect: reserveAndOpen,
   });
 }

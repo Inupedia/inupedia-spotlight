@@ -470,6 +470,15 @@ export async function warmupSpotlightRemoteContext(
   ]);
 }
 
+export function composeRunCapabilityPayload<T extends Record<string, unknown>>(
+  legacyPayload: T,
+  capability?: { capabilitySnapshotId: string; sessionBindingVersion: number },
+): Omit<T, "skills"> & { capabilitySnapshotId?: string; sessionBindingVersion?: number } {
+  if (!capability) return legacyPayload;
+  const { skills: _skills, ...payload } = legacyPayload;
+  return { ...payload, ...capability };
+}
+
 async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
   const session = useAgentSessionStore();
   const runtime = useSpotlightRuntimeStore();
@@ -486,13 +495,9 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
     : undefined;
   return {
     hostManifest,
-    payload: {
+    payload: composeRunCapabilityPayload({
       projectId: getSpotlightProjectId(),
       sessionId: session.sessionId,
-      ...(capability ? {
-        capabilitySnapshotId: capability.handshake.capabilitySnapshotId,
-        sessionBindingVersion: capability.handshake.sessionBindingVersion,
-      } : {}),
       userQuestion,
       uiContext: getSpotlightConfig().getUiContext?.() ?? {},
       sessionState: {
@@ -518,7 +523,10 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
       },
       clientToolsManifestVersion: hostManifest.version,
       skills: serializeSkillsForRemote(getSkillsPoolForRun()),
-    },
+    }, capability ? {
+      capabilitySnapshotId: capability.handshake.capabilitySnapshotId,
+      sessionBindingVersion: capability.handshake.sessionBindingVersion,
+    } : undefined),
   };
 }
 

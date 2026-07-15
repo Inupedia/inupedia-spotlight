@@ -6,6 +6,7 @@ import type { FrontendToolDescriptorV1 } from "@inupedia/spotlight-protocol";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as nodeCapabilities from "../src/node/index.js";
+import { defineSpotlightProject } from "../src/tools/frontendTool.js";
 import { buildViteCapabilitiesV1 } from "../src/vite/capabilityBuild.js";
 
 const temporaryProjects: string[] = [];
@@ -85,6 +86,15 @@ afterEach(async () => {
 });
 
 describe("buildViteCapabilitiesV1", () => {
+  it("uses skillRoots from the single project declaration", async () => {
+    const root = await createProject();
+    const directory = join(root, "custom-skills/monitoring");
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "SKILL.md"), "---\nname: monitoring\ndescription: Monitor\n---\nBody\n", "utf8");
+    const project = defineSpotlightProject({ projectId: "camera-console", skillRoots: ["custom-skills"], tools: [] });
+    const result = await buildViteCapabilitiesV1({ root, command: "serve", project });
+    expect(result.watchedFiles).toEqual([join(directory, "SKILL.md")]);
+  });
   it("composes serve state in compat mode and derives its development build ID", async () => {
     const root = await createProject();
     await writeSkill(root, { compatWarning: true });
