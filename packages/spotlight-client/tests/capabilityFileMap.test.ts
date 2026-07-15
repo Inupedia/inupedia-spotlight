@@ -30,6 +30,68 @@ function expectArtifactError(run: () => unknown, code: string): void {
 }
 
 describe("buildCapabilityFileMapV1", () => {
+  it.each([
+    ["non-array skills", { skills: null, toolManifestBytes: encode("{}") }],
+    ["non-byte Tool manifest", { skills: [], toolManifestBytes: "{}" }],
+    [
+      "non-string Skill name",
+      {
+        skills: [{ name: 123, files: [] }],
+        toolManifestBytes: encode("{}"),
+      },
+    ],
+    [
+      "non-array Skill files",
+      {
+        skills: [{ name: "camera", files: null }],
+        toolManifestBytes: encode("{}"),
+      },
+    ],
+    [
+      "non-string relative path",
+      {
+        skills: [{ name: "camera", files: [{ relativePath: 123, bytes: encode("x") }] }],
+        toolManifestBytes: encode("{}"),
+      },
+    ],
+    [
+      "non-byte payload",
+      {
+        skills: [{ name: "camera", files: [{ relativePath: "SKILL.md", bytes: "12" }] }],
+        toolManifestBytes: encode("{}"),
+      },
+    ],
+    [
+      "non-string media type",
+      {
+        skills: [
+          {
+            name: "camera",
+            files: [{ relativePath: "SKILL.md", bytes: encode("x"), mediaType: 42 }],
+          },
+        ],
+        toolManifestBytes: encode("{}"),
+      },
+    ],
+    [
+      "empty media type",
+      {
+        skills: [
+          {
+            name: "camera",
+            files: [{ relativePath: "SKILL.md", bytes: encode("x"), mediaType: " " }],
+          },
+        ],
+        toolManifestBytes: encode("{}"),
+      },
+    ],
+  ])("rejects malformed runtime file-map input: %s", (_label, input) => {
+    expectArtifactError(
+      () => buildCapabilityFileMapV1(input as never),
+      "ARTIFACT_INPUT_INVALID",
+    );
+  });
+
   it("maps and sorts Tool and Skill payloads independently of input order", () => {
     const toolManifestBytes = encode('{"schemaVersion":"spotlight.tool-manifest/1","tools":[]}');
     const result = buildCapabilityFileMapV1({
@@ -198,6 +260,20 @@ describe("buildCapabilityFileMapV1", () => {
       "ARTIFACT_PATH_USTAR_UNREPRESENTABLE",
     );
   });
+
+  it.each(["assets/\ud800.txt", "assets/\udc00.txt"])(
+    "rejects Skill paths that cannot be losslessly encoded as UTF-8: %s",
+    (relativePath) => {
+      expectArtifactError(
+        () =>
+          buildCapabilityFileMapV1({
+            toolManifestBytes: encode("{}"),
+            skills: [skill("camera", [{ relativePath, bytes: encode("x") }])],
+          }),
+        "ARTIFACT_PATH_INVALID",
+      );
+    },
+  );
 
   it("accepts a long path when USTAR prefix and name can represent it", () => {
     const nested = `${"segment/".repeat(12)}document.md`;

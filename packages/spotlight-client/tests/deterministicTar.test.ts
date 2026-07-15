@@ -220,4 +220,16 @@ describe("encodeDeterministicUstarV1", () => {
       "ARTIFACT_PATH_DUPLICATE",
     );
   });
+
+  it("rejects lone-surrogate paths before they collide as replacement characters", () => {
+    expectArtifactError(
+      () =>
+        encodeDeterministicUstarV1([
+          { path: "assets/\ud800.txt", bytes: encode("high") },
+          { path: "assets/\udc00.txt", bytes: encode("low") },
+          { path: "assets/�.txt", bytes: encode("replacement") },
+        ]),
+      "ARTIFACT_PATH_INVALID",
+    );
+  });
 });

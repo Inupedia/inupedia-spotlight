@@ -143,4 +143,30 @@ describe("canonicalizeJson", () => {
     );
     expect(executed).toBe(false);
   });
+
+  it("rejects numeric-looking array properties that JSON arrays omit", () => {
+    const value: unknown[] = [];
+    Object.defineProperty(value, "4294967295", {
+      enumerable: true,
+      value: "silently omitted by Array.map",
+    });
+    expectArtifactError(
+      () => canonicalizeJson(value),
+      "ARTIFACT_JSON_UNSUPPORTED_VALUE",
+    );
+  });
+
+  it("rejects huge sparse array lengths without iterating every hole", () => {
+    const value: unknown[] = [];
+    Object.defineProperty(value, "4294967294", {
+      enumerable: true,
+      value: "last valid array index",
+    });
+    const startedAt = performance.now();
+    expectArtifactError(
+      () => canonicalizeJson(value),
+      "ARTIFACT_JSON_UNSUPPORTED_VALUE",
+    );
+    expect(performance.now() - startedAt).toBeLessThan(100);
+  });
 });

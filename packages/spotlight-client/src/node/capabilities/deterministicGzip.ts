@@ -1,4 +1,4 @@
-import { constants, deflateRawSync } from "node:zlib";
+import { deflateSync } from "fflate";
 
 import { CapabilityArtifactError } from "./capabilityArtifactError.js";
 
@@ -39,9 +39,9 @@ function crc32(bytes: Uint8Array): number {
 
 export function encodeDeterministicGzipV1(input: Uint8Array): Uint8Array {
   const compressed = Uint8Array.from(
-    deflateRawSync(input, {
+    deflateSync(input, {
       level: 9,
-      strategy: constants.Z_DEFAULT_STRATEGY,
+      mem: 8,
     }),
   );
   const totalLength = GZIP_HEADER.byteLength + compressed.byteLength + GZIP_FOOTER_SIZE;

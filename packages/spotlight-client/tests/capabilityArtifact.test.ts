@@ -123,6 +123,10 @@ describe("buildCapabilityArtifactV1", () => {
         payloads: manifest.files,
       }),
     );
+    expect(result.archive.byteLength).toBe(716);
+    expect(createHash("sha256").update(result.archive).digest("hex")).toBe(
+      "a8721a7a84f8385050ad70da5e91aa5a7901d3e7d3b6858f323a2af8bfe8e839",
+    );
   });
 
   it("is invariant to all approved input-order perturbations", () => {

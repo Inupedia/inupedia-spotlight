@@ -52,6 +52,12 @@ const imports = [
       for (const nodeOnlyExport of [
         "validateAgentSkillMarkdown",
         "validateScannedSkill",
+        "buildCapabilityArtifactV1",
+        "buildCapabilityFileMapV1",
+        "buildToolManifestV1",
+        "canonicalizeJson",
+        "computeArtifactDigestV1",
+        "CapabilityArtifactError",
       ]) {
         if (nodeOnlyExport in mod) {
           throw new Error(\`\${this.id} leaked Node-only \${nodeOnlyExport}\`);
@@ -67,6 +73,25 @@ const imports = [
       assertExport(mod, "scanProjectSkills", this.id);
       assertExport(mod, "validateAgentSkillMarkdown", this.id);
       assertExport(mod, "validateScannedSkill", this.id);
+      assertExport(mod, "buildCapabilityArtifactV1", this.id);
+      assertExport(mod, "buildCapabilityFileMapV1", this.id);
+      assertExport(mod, "buildToolManifestV1", this.id);
+      assertExport(mod, "canonicalizeJson", this.id);
+      assertExport(mod, "computeArtifactDigestV1", this.id);
+      assertExport(mod, "CapabilityArtifactError", this.id);
+      const artifact = mod.buildCapabilityArtifactV1({ skills: [], tools: [] });
+      if (!(artifact.archive instanceof Uint8Array) || artifact.byteLength === 0) {
+        throw new Error(this.id + " failed to build a smoke Artifact");
+      }
+      if (!/^sha256:[a-f0-9]{64}$/.test(artifact.artifactDigest)) {
+        throw new Error(this.id + " returned an invalid artifactDigest");
+      }
+      const canonical = new TextDecoder().decode(
+        mod.canonicalizeJson({ z: 1, a: 2 }),
+      );
+      if (canonical !== '{"a":2,"z":1}') {
+        throw new Error(this.id + " canonical JSON smoke mismatch");
+      }
     },
   },
   {

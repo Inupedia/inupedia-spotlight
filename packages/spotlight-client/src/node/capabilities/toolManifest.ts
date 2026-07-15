@@ -121,6 +121,10 @@ function validateToolDescriptor(
 export function buildToolManifestV1(
   tools: FrontendToolDescriptorV1[],
 ): BuiltToolManifestV1 {
+  if (!Array.isArray(tools)) {
+    invalidTool("Tool collection must be an array");
+  }
+  canonicalizeJson(tools);
   for (const tool of tools) validateToolDescriptor(tool);
 
   const sortedTools = [...tools].sort(compareTools);

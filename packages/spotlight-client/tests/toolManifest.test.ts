@@ -38,6 +38,13 @@ function expectArtifactError(run: () => unknown, code: string): void {
 }
 
 describe("buildToolManifestV1", () => {
+  it("rejects a non-array Tool collection with a stable error", () => {
+    expectArtifactError(
+      () => buildToolManifestV1(null as never),
+      "ARTIFACT_TOOL_INVALID",
+    );
+  });
+
   it("sorts tools by name and version without mutating the caller", () => {
     const tools = [tool("video.open", "2.0.0"), tool("camera.get", "1.0.0"), tool("video.open", "1.0.0")];
 

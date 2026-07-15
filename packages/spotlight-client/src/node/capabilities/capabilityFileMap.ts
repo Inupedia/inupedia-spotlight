@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 
-import { canonicalizeJson, compareUtf16 } from "./canonicalJson.js";
+import {
+  canonicalizeJson,
+  compareUtf16,
+  containsLoneSurrogate,
+} from "./canonicalJson.js";
 import { CapabilityArtifactError } from "./capabilityArtifactError.js";
 import type {
   CanonicalSkillInputV1,
@@ -44,6 +48,68 @@ export interface BuiltCapabilityFileMapV1 {
   manifestDigest: string;
 }
 
+function invalidInput(message: string): never {
+  throw new CapabilityArtifactError("ARTIFACT_INPUT_INVALID", message);
+}
+
+function isCanonicalArrayIndex(key: string): boolean {
+  if (!/^(?:0|[1-9]\d*)$/.test(key)) return false;
+  const index = Number(key);
+  return (
+    Number.isInteger(index) &&
+    index >= 0 &&
+    index <= 0xfffffffe &&
+    String(index) === key
+  );
+}
+
+function readDenseDataArray(value: unknown, label: string): unknown[] {
+  if (!Array.isArray(value)) invalidInput(`${label} must be an array`);
+  const keys: string[] = [];
+  for (const key of Reflect.ownKeys(value)) {
+    if (key === "length") continue;
+    if (typeof key !== "string" || !isCanonicalArrayIndex(key)) {
+      invalidInput(`${label} contains a non-index property`);
+    }
+    keys.push(key);
+  }
+  if (keys.length !== value.length) invalidInput(`${label} must be dense`);
+  keys.sort((left, right) => Number(left) - Number(right));
+  return keys.map((key) => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor?.enumerable || !("value" in descriptor)) {
+      invalidInput(`${label}[${key}] must be an enumerable data property`);
+    }
+    return descriptor.value;
+  });
+}
+
+function readDataRecord(
+  value: unknown,
+  label: string,
+  allowedFields: ReadonlySet<string>,
+): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    invalidInput(`${label} must be a plain object`);
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    invalidInput(`${label} must be a plain object`);
+  }
+  const record: Record<string, unknown> = {};
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string" || !allowedFields.has(key)) {
+      invalidInput(`${label} contains an unknown field`);
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor?.enumerable || !("value" in descriptor)) {
+      invalidInput(`${label}.${key} must be an enumerable data property`);
+    }
+    record[key] = descriptor.value;
+  }
+  return record;
+}
+
 function sha256(bytes: Uint8Array): string {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
@@ -64,7 +130,10 @@ function canRepresentUstarPath(path: string): boolean {
   return false;
 }
 
-function validateSkillName(name: string): void {
+function validateSkillName(name: unknown): asserts name is string {
+  if (typeof name !== "string") {
+    invalidInput("Skill name must be a string");
+  }
   if (!CANONICAL_SKILL_NAME.test(name) || name.length > 64) {
     throw new CapabilityArtifactError(
       "ARTIFACT_PATH_INVALID",
@@ -73,13 +142,19 @@ function validateSkillName(name: string): void {
   }
 }
 
-function validateRelativePath(relativePath: string): void {
+function validateRelativePath(
+  relativePath: unknown,
+): asserts relativePath is string {
+  if (typeof relativePath !== "string") {
+    invalidInput("Skill relativePath must be a string");
+  }
   if (
     relativePath.length === 0 ||
     relativePath.startsWith("/") ||
     /^[A-Za-z]:/.test(relativePath) ||
     relativePath.includes("\\") ||
     relativePath.includes("\0") ||
+    containsLoneSurrogate(relativePath) ||
     relativePath.endsWith("/")
   ) {
     throw new CapabilityArtifactError(
@@ -153,25 +228,64 @@ export function buildCapabilityFileMapV1(input: {
   skills: CanonicalSkillInputV1[];
   toolManifestBytes: Uint8Array;
 }): BuiltCapabilityFileMapV1 {
+  const root = readDataRecord(
+    input,
+    "Capability file-map input",
+    new Set(["skills", "toolManifestBytes"]),
+  );
+  if (!(root.toolManifestBytes instanceof Uint8Array)) {
+    invalidInput("toolManifestBytes must be a Uint8Array");
+  }
+  const skills = readDenseDataArray(root.skills, "skills");
   const payloads: CapabilityPayloadFileV1[] = [];
   const seenPaths = new Set<string>();
 
   addPayload(
     payloads,
     seenPaths,
-    createPayload("tool-manifest.json", input.toolManifestBytes, "application/json"),
+    createPayload("tool-manifest.json", root.toolManifestBytes, "application/json"),
   );
 
-  for (const skill of input.skills) {
+  for (const [skillIndex, skillValue] of skills.entries()) {
+    const skill = readDataRecord(
+      skillValue,
+      `skills[${skillIndex}]`,
+      new Set(["name", "files"]),
+    );
     validateSkillName(skill.name);
-    for (const file of skill.files) {
+    const files = readDenseDataArray(skill.files, `skills[${skillIndex}].files`);
+    for (const [fileIndex, fileValue] of files.entries()) {
+      const file = readDataRecord(
+        fileValue,
+        `skills[${skillIndex}].files[${fileIndex}]`,
+        new Set(["relativePath", "bytes", "mediaType"]),
+      );
       validateRelativePath(file.relativePath);
+      if (!(file.bytes instanceof Uint8Array)) {
+        invalidInput(
+          `skills[${skillIndex}].files[${fileIndex}].bytes must be a Uint8Array`,
+        );
+      }
+      if (
+        file.mediaType !== undefined &&
+        (typeof file.mediaType !== "string" || file.mediaType.trim().length === 0)
+      ) {
+        invalidInput(
+          `skills[${skillIndex}].files[${fileIndex}].mediaType must be a non-empty string`,
+        );
+      }
       const path = `skills/${skill.name}/${file.relativePath}`;
       ensureUstarPath(path);
       addPayload(
         payloads,
         seenPaths,
-        createPayload(path, file.bytes, file.mediaType ?? inferMediaType(path)),
+        createPayload(
+          path,
+          file.bytes,
+          typeof file.mediaType === "string"
+            ? file.mediaType
+            : inferMediaType(path),
+        ),
       );
     }
   }

@@ -1,4 +1,4 @@
-import { compareUtf16 } from "./canonicalJson.js";
+import { compareUtf16, containsLoneSurrogate } from "./canonicalJson.js";
 import { CapabilityArtifactError } from "./capabilityArtifactError.js";
 
 const TAR_BLOCK_SIZE = 512;
@@ -27,6 +27,7 @@ function validateFilePath(path: string): void {
     /^[A-Za-z]:/.test(path) ||
     path.includes("\\") ||
     path.includes("\0") ||
+    containsLoneSurrogate(path) ||
     path.endsWith("/")
   ) {
     failInvalidPath(path);

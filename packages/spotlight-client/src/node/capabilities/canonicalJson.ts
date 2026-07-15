@@ -17,7 +17,7 @@ export function compareUtf16(left: string, right: string): number {
   return left < right ? -1 : 1;
 }
 
-function hasLoneSurrogate(value: string): boolean {
+export function containsLoneSurrogate(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index);
     if (code >= 0xd800 && code <= 0xdbff) {
@@ -41,7 +41,7 @@ function fail(
 }
 
 function validateString(value: string, path: string): void {
-  if (hasLoneSurrogate(value)) {
+  if (containsLoneSurrogate(value)) {
     fail("ARTIFACT_JSON_NOT_IJSON", path, "contains a lone surrogate");
   }
 }
@@ -52,34 +52,45 @@ function validateArray(
   stack: WeakSet<object>,
 ): void {
   const ownKeys = Reflect.ownKeys(value);
+  const indexedKeys: string[] = [];
   for (const key of ownKeys) {
     if (key === "length") continue;
-    if (typeof key !== "string" || !/^(?:0|[1-9]\d*)$/.test(key)) {
+    const index = typeof key === "string" ? Number(key) : Number.NaN;
+    if (
+      typeof key !== "string" ||
+      !/^(?:0|[1-9]\d*)$/.test(key) ||
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index > 0xfffffffe ||
+      String(index) !== key
+    ) {
       fail(
         "ARTIFACT_JSON_UNSUPPORTED_VALUE",
         path,
         "array contains a non-index property",
       );
     }
+    indexedKeys.push(key);
   }
 
-  for (let index = 0; index < value.length; index += 1) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, index);
-    if (!descriptor) {
+  if (indexedKeys.length !== value.length) {
+    fail(
+      "ARTIFACT_JSON_UNSUPPORTED_VALUE",
+      path,
+      "sparse array entries are not supported",
+    );
+  }
+
+  for (const key of indexedKeys) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor?.enumerable || !("value" in descriptor)) {
       fail(
         "ARTIFACT_JSON_UNSUPPORTED_VALUE",
-        `${path}[${index}]`,
-        "sparse array entries are not supported",
-      );
-    }
-    if (!descriptor.enumerable || !("value" in descriptor)) {
-      fail(
-        "ARTIFACT_JSON_UNSUPPORTED_VALUE",
-        `${path}[${index}]`,
+        `${path}[${key}]`,
         "accessor and non-enumerable array entries are not supported",
       );
     }
-    validateJsonValue(descriptor.value, `${path}[${index}]`, stack);
+    validateJsonValue(descriptor.value, `${path}[${key}]`, stack);
   }
 }
 

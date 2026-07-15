@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 
 import { describe, expect, it } from "vitest";
@@ -60,6 +61,20 @@ describe("encodeDeterministicGzipV1", () => {
     );
     expect(encodeDeterministicGzipV1(new Uint8Array())).toEqual(
       encodeDeterministicGzipV1(new Uint8Array()),
+    );
+  });
+
+  it("matches the pinned fflate 0.8.3 golden vector", () => {
+    const gzip = encodeDeterministicGzipV1(
+      encode("Spotlight deterministic gzip v1"),
+    );
+    expect([...gzip]).toEqual([
+      31, 139, 8, 0, 0, 0, 0, 0, 2, 255, 11, 46, 200, 47, 201, 201, 76,
+      207, 40, 81, 72, 73, 45, 73, 45, 202, 205, 204, 203, 44, 46, 201, 76,
+      86, 72, 175, 202, 44, 80, 40, 51, 4, 0, 44, 99, 73, 151, 31, 0, 0, 0,
+    ]);
+    expect(createHash("sha256").update(gzip).digest("hex")).toBe(
+      "1288ec4cc6a81ecec426bbe0e0325012452555dd8e52d8bee692273b08403e97",
     );
   });
 });
