@@ -124,4 +124,23 @@ describe("canonicalizeJson", () => {
       "ARTIFACT_JSON_UNSUPPORTED_VALUE",
     );
   });
+
+  it("rejects array accessors without executing project getters", () => {
+    let executed = false;
+    const value: unknown[] = [];
+    Object.defineProperty(value, 0, {
+      enumerable: true,
+      get() {
+        executed = true;
+        return "hidden behavior";
+      },
+    });
+    value.length = 1;
+
+    expectArtifactError(
+      () => canonicalizeJson(value),
+      "ARTIFACT_JSON_UNSUPPORTED_VALUE",
+    );
+    expect(executed).toBe(false);
+  });
 });

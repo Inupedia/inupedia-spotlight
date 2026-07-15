@@ -64,14 +64,22 @@ function validateArray(
   }
 
   for (let index = 0; index < value.length; index += 1) {
-    if (!Object.prototype.hasOwnProperty.call(value, index)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index);
+    if (!descriptor) {
       fail(
         "ARTIFACT_JSON_UNSUPPORTED_VALUE",
         `${path}[${index}]`,
         "sparse array entries are not supported",
       );
     }
-    validateJsonValue(value[index], `${path}[${index}]`, stack);
+    if (!descriptor.enumerable || !("value" in descriptor)) {
+      fail(
+        "ARTIFACT_JSON_UNSUPPORTED_VALUE",
+        `${path}[${index}]`,
+        "accessor and non-enumerable array entries are not supported",
+      );
+    }
+    validateJsonValue(descriptor.value, `${path}[${index}]`, stack);
   }
 }
 

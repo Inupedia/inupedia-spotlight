@@ -130,4 +130,28 @@ describe("buildToolManifestV1", () => {
       "ARTIFACT_JSON_UNSUPPORTED_VALUE",
     );
   });
+
+  it.each([
+    ["null descriptor", null],
+    ["empty description", { ...tool("video.open", "1.0.0"), description: "" }],
+    ["array input schema", { ...tool("video.open", "1.0.0"), inputSchema: [] }],
+    ["array output schema", { ...tool("video.open", "1.0.0"), outputSchema: [] }],
+    ["invalid output limit", { ...tool("video.open", "1.0.0"), maxOutputBytes: 0 }],
+    ["invalid side effect", { ...tool("video.open", "1.0.0"), sideEffect: "filesystem" }],
+    ["invalid replay policy", { ...tool("video.open", "1.0.0"), replayPolicy: "always" }],
+    ["invalid risk level", { ...tool("video.open", "1.0.0"), riskLevel: "critical" }],
+    [
+      "invalid confirmation flag",
+      { ...tool("video.open", "1.0.0"), requiresConfirmation: "yes" },
+    ],
+    ["unknown serializable field", { ...tool("video.open", "1.0.0"), handlerId: "camera" }],
+  ])("rejects malformed runtime descriptors: %s", (_label, descriptor) => {
+    expectArtifactError(
+      () =>
+        buildToolManifestV1([
+          descriptor as unknown as FrontendToolDescriptorV1,
+        ]),
+      "ARTIFACT_TOOL_INVALID",
+    );
+  });
 });
