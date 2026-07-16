@@ -23,6 +23,9 @@ interface CapabilityPluginStateV1 {
   virtualModule: Readonly<CapabilityVirtualModuleV1>;
 }
 
+const SPOTLIGHT_CAPABILITIES_RUNTIME_MODULE_PATH =
+  "/@spotlight/capabilities-runtime";
+
 function isAtOrBelow(candidate: string, directory: string): boolean {
   const relativePath = relative(directory, candidate);
   return (
@@ -182,17 +185,23 @@ export function spotlightCapabilities(
       );
     },
     resolveId(id) {
-      return id === SPOTLIGHT_CAPABILITIES_MODULE_ID
+      return id === SPOTLIGHT_CAPABILITIES_MODULE_ID ||
+        id === SPOTLIGHT_CAPABILITIES_RUNTIME_MODULE_PATH
         ? RESOLVED_SPOTLIGHT_CAPABILITIES_MODULE_ID
         : null;
     },
-    transformIndexHtml() {
-      return [{
-        tag: "script",
-        attrs: { type: "module" },
-        children: `import ${JSON.stringify(SPOTLIGHT_CAPABILITIES_MODULE_ID)};`,
-        injectTo: "head-prepend",
-      }];
+    transformIndexHtml: {
+      order: "pre",
+      handler(html) {
+        const runtimeScript = `<script type="module" src="${SPOTLIGHT_CAPABILITIES_RUNTIME_MODULE_PATH}"></script>`;
+        const head = /<head(?:\s[^>]*)?>/i;
+        return head.test(html)
+          ? html.replace(
+              head,
+              (openingHead) => `${openingHead}\n  ${runtimeScript}`,
+            )
+          : `${runtimeScript}\n${html}`;
+      },
     },
     load(id) {
       if (id !== RESOLVED_SPOTLIGHT_CAPABILITIES_MODULE_ID) return null;

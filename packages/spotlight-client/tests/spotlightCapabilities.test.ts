@@ -1,9 +1,23 @@
 import { EventEmitter } from "node:events";
-import { mkdir, mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { Plugin, ResolvedConfig, ViteDevServer } from "vite";
+import {
+  build as viteBuild,
+  createServer,
+  type Plugin,
+  type ResolvedConfig,
+  type ViteDevServer,
+} from "vite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { canonicalizeJson } from "../src/node/capabilities/canonicalJson.js";
@@ -231,6 +245,85 @@ afterEach(async () => {
 });
 
 describe("spotlightCapabilities", () => {
+  it("loads the auto-registered runtime through the real Vite dev HTML pipeline", async () => {
+    const fixture = await createProject();
+    await writeFile(
+      join(fixture.root, "index.html"),
+      "<!doctype html><html><head></head><body></body></html>\n",
+      "utf8",
+    );
+    const server = await createServer({
+      root: fixture.root,
+      base: "/console/",
+      logLevel: "silent",
+      plugins: [
+        spotlightCapabilities({ projectId: "camera-console", tools: [] }),
+      ],
+      server: { host: "127.0.0.1", port: 0 },
+    });
+
+    try {
+      await server.listen();
+      const localUrl = server.resolvedUrls?.local[0];
+      if (!localUrl) throw new Error("Expected Vite local URL");
+      const origin = new URL(localUrl).origin;
+      const html = await fetch(`${origin}/console/`).then((response) =>
+        response.text(),
+      );
+      expect(html).not.toContain('import "virtual:spotlight/capabilities"');
+      expect(html).not.toContain("/@id/");
+      expect(html).not.toContain("__x00__");
+      const runtimePath = html.match(
+        /<script type="module" src="([^"]*\/@spotlight\/capabilities-runtime)"><\/script>/,
+      )?.[1];
+      expect(runtimePath).toBe("/console/@spotlight/capabilities-runtime");
+
+      const runtime = await fetch(`${origin}${runtimePath}`).then((response) =>
+        response.text(),
+      );
+      expect(runtime).toContain(
+        'Symbol.for("inupedia.spotlight.capability-runtime/1")',
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("bundles the auto-registered runtime through the real Vite build HTML pipeline", async () => {
+    const fixture = await createProject();
+    const buildRoot = await realpath(fixture.root);
+    await writeFile(
+      join(fixture.root, "index.html"),
+      "<!doctype html><html><head></head><body></body></html>\n",
+      "utf8",
+    );
+    await viteBuild({
+      root: buildRoot,
+      logLevel: "silent",
+      plugins: [
+        spotlightCapabilities(
+          { projectId: "camera-console", tools: [] },
+          { frontendBuildId: "frontend-build-test" },
+        ),
+      ],
+    });
+
+    const html = await readFile(join(buildRoot, "dist/index.html"), "utf8");
+    expect(html).not.toContain("virtual:spotlight/capabilities");
+    const scriptPaths = [
+      ...html.matchAll(/<script[^>]+src="([^"]+\.js)"/g),
+    ].map((match) => match[1]);
+    expect(scriptPaths.length).toBeGreaterThan(0);
+    const javascript = (
+      await Promise.all(
+        scriptPaths.map((path) =>
+          readFile(join(buildRoot, "dist", path.replace(/^\//, "")), "utf8"),
+        ),
+      )
+    ).join("\n");
+    expect(javascript).toContain("inupedia.spotlight.capability-runtime/1");
+  });
+
   it("auto-registers the virtual runtime and forwards HMR build notifications", async () => {
     const { source } = await buildPlugin({ devRuntimeUpload: true });
     expect(source).toContain("registerCapabilityRuntimeV1");
