@@ -482,29 +482,50 @@ export function composeRunCapabilityPayload<T extends Record<string, unknown>>(
   return { ...payload, ...capability };
 }
 
+export async function bindRunSessionIdentity<T>(
+  readSessionId: () => string,
+  connect?: (sessionId: string) => Promise<T>,
+): Promise<{ sessionId: string; capability?: T }> {
+  const sessionId = readSessionId();
+  const capability = connect ? await connect(sessionId) : undefined;
+  return { sessionId, ...(capability ? { capability } : {}) };
+}
+
 async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
   const session = useAgentSessionStore();
   const runtime = useSpotlightRuntimeStore();
   const memoryPreference = useSpotlightMemoryPreferenceStore();
   const hostManifest = await ensureHostToolsManifest(signal);
   const capabilityRuntime = getSpotlightCapabilityRuntime();
-  const capability = capabilityRuntime
-    ? await capabilityRuntime.connect({
-        sessionId: session.sessionId,
-        browserInstanceId: persistentRuntimeId("spotlight.browser-instance", localStorage),
-        tabInstanceId: persistentRuntimeId("spotlight.tab-instance", sessionStorage),
-        signal,
-      })
-    : undefined;
+  const boundSession = await bindRunSessionIdentity(
+    () => session.sessionId,
+    capabilityRuntime
+      ? (sessionId) =>
+          capabilityRuntime.connect({
+            sessionId,
+            browserInstanceId: persistentRuntimeId(
+              "spotlight.browser-instance",
+              localStorage,
+            ),
+            tabInstanceId: persistentRuntimeId(
+              "spotlight.tab-instance",
+              sessionStorage,
+            ),
+            signal,
+          })
+      : undefined,
+  );
+  const capability = boundSession.capability;
+  const sessionId = boundSession.sessionId;
   return {
     hostManifest,
     payload: composeRunCapabilityPayload({
       projectId: getSpotlightProjectId(),
-      sessionId: session.sessionId,
+      sessionId,
       userQuestion,
       uiContext: getSpotlightConfig().getUiContext?.() ?? {},
       sessionState: {
-        sessionId: session.sessionId,
+        sessionId,
         activeTaskId: session.activeTaskId,
         activeTopic: session.activeTopic,
         pendingTask: session.pendingTask,
