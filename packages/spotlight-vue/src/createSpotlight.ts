@@ -65,8 +65,6 @@ export function createSpotlight(options: CreateSpotlightOptionsV1): SpotlightPlu
     {
       project: options.project,
       async connect(input: CapabilityConnectInputV1) {
-        const existing = active.get(input.sessionId);
-        if (existing) return existing;
         const pending = connecting.get(input.sessionId);
         if (pending) return pending.promise;
         const controller = new AbortController();
@@ -75,6 +73,23 @@ export function createSpotlight(options: CreateSpotlightOptionsV1): SpotlightPlu
         else input.signal?.addEventListener("abort", abortFromCaller, { once: true });
         const cleanup = () => input.signal?.removeEventListener("abort", abortFromCaller);
         const attempt = (async () => {
+        const existing = active.get(input.sessionId);
+        if (existing) {
+          if (!existing.channel) return existing;
+          try {
+            await existing.channel.renew();
+            return existing;
+          } catch {
+            if (active.get(input.sessionId) === existing) {
+              existing.channel.close();
+              active.delete(input.sessionId);
+              // Offer ids are scoped to a Capability client. A dead lease must
+              // start a fresh idempotency scope instead of replaying its terminal
+              // Handshake response forever.
+              capabilityClient = undefined;
+            }
+          }
+        }
         const capabilities = await loadBuildModule(controller.signal);
         capabilityClient ??= createCapabilityClient({
           endpoint: options.endpoint,

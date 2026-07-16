@@ -42,6 +42,49 @@ function endpoint(base: string, path: string): string {
   return `${base.replace(/\/$/, "")}${path}`;
 }
 
+async function readUploadBody(
+  stream: ReadableStream<Uint8Array>,
+  byteLength: number,
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
+  if (!Number.isSafeInteger(byteLength) || byteLength < 0) {
+    throw new Error("Capability Artifact upload byte length is invalid.");
+  }
+  const body = new Uint8Array(byteLength);
+  const reader = stream.getReader();
+  let offset = 0;
+  const abortReason = () => signal?.reason instanceof Error
+    ? signal.reason
+    : new DOMException("Capability upload aborted.", "AbortError");
+  const cancelReader = () => {
+    void reader.cancel(abortReason()).catch(() => undefined);
+  };
+  signal?.addEventListener("abort", cancelReader, { once: true });
+  if (signal?.aborted) cancelReader();
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        throw abortReason();
+      }
+      const { done, value } = await reader.read();
+      if (signal?.aborted) throw abortReason();
+      if (done) break;
+      if (offset + value.byteLength > byteLength) {
+        throw new Error("Capability Artifact upload exceeded its declared byte length.");
+      }
+      body.set(value, offset);
+      offset += value.byteLength;
+    }
+  } finally {
+    signal?.removeEventListener("abort", cancelReader);
+    reader.releaseLock();
+  }
+  if (offset !== byteLength) {
+    throw new Error("Capability Artifact upload did not match its declared byte length.");
+  }
+  return body;
+}
+
 export function createCapabilityClient(options: CreateCapabilityClientOptionsV1) {
   const fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
   const offerIds = new Map<string, string>();
@@ -85,18 +128,28 @@ export function createCapabilityClient(options: CreateCapabilityClientOptionsV1)
       let handshake = await post<CapabilityHandshakeResultV1>("/v1/capabilities/handshakes", offer, input.signal);
       if (handshake.status === "upload_required") {
         const upload = await options.openUploadStream();
+        const uploadBody = await readUploadBody(upload.stream, upload.byteLength, input.signal);
         const uploadRequest = {
           method: "PUT",
           headers: {
             Authorization: `Bearer ${handshake.uploadToken}`,
             "Content-Type": upload.contentType,
-            "Content-Length": String(upload.byteLength),
           },
-          body: upload.stream,
+          body: uploadBody,
           signal: input.signal,
-          duplex: "half",
         } as RequestInit;
-        await capabilityResponseJson(await fetcher(endpoint(options.endpoint, handshake.uploadUrl), uploadRequest));
+        const uploadUrl = endpoint(options.endpoint, handshake.uploadUrl);
+        let uploadResponse: Response;
+        try {
+          uploadResponse = await fetcher(uploadUrl, uploadRequest);
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          throw new Error(
+            `Capability Artifact upload request failed (${uploadUrl}): ${detail}`,
+            { cause: error },
+          );
+        }
+        await capabilityResponseJson(uploadResponse);
         handshake = await post<CapabilityHandshakeResultV1>(
           `/v1/capabilities/handshakes/${encodeURIComponent(handshake.handshakeId)}/resume`,
           { resumeToken: handshake.resumeToken },

@@ -35,11 +35,14 @@ export function createCapabilityChannel(options: {
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let renewal: ReturnType<typeof setInterval> | undefined;
   let renewalPendingGeneration: number | undefined;
+  let renewPending: Promise<RenewCapabilityLeaseResultV1> | undefined;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   let reconnectAttempt = 0;
   let generation = 0;
   let reservationSerial = 0;
   let closed = false;
+  let mutationTail: Promise<void> = Promise.resolve();
+  const lifecycle = new AbortController();
   let reserveAndOpen!: () => Promise<void>;
   const scheduleReconnect = () => {
     if (closed || reconnectTimer) return;
@@ -47,7 +50,16 @@ export function createCapabilityChannel(options: {
     reconnectAttempt += 1;
     reconnectTimer = setTimeout(() => {
       reconnectTimer = undefined;
-      void reserveAndOpen().catch(scheduleReconnect);
+      void reserveAndOpen().catch((error: unknown) => {
+        if (
+          error instanceof SpotlightCapabilityError &&
+          ["HOST_OFFLINE", "CAPABILITY_LEASE_REVOKED", "CAPABILITY_LEASE_FENCED"].includes(error.code)
+        ) {
+          close();
+          return;
+        }
+        scheduleReconnect();
+      });
     }, delay);
   };
 
@@ -65,6 +77,7 @@ export function createCapabilityChannel(options: {
 
   const close = () => {
     closed = true;
+    lifecycle.abort(new DOMException("Capability channel closed.", "AbortError"));
     if (heartbeat) clearInterval(heartbeat);
     if (renewal) clearInterval(renewal);
     if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -134,10 +147,16 @@ export function createCapabilityChannel(options: {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      signal: options.identity.signal,
+      signal: lifecycle.signal,
     }));
 
-  const renew = async (): Promise<RenewCapabilityLeaseResultV1> => {
+  const mutate = <T>(operation: () => Promise<T>): Promise<T> => {
+    const task = mutationTail.then(operation, operation);
+    mutationTail = task.then(() => undefined, () => undefined);
+    return task;
+  };
+
+  const performRenew = (): Promise<RenewCapabilityLeaseResultV1> => mutate(async () => {
     const current = fence();
     const startedGeneration = generation;
     const result = await post<RenewCapabilityLeaseResultV1>(
@@ -151,9 +170,19 @@ export function createCapabilityChannel(options: {
     }
     leaseVersion = result.leaseVersion;
     return result;
+  });
+  const renew = (): Promise<RenewCapabilityLeaseResultV1> => {
+    if (renewPending) return renewPending;
+    const task = performRenew();
+    renewPending = task;
+    const clear = () => {
+      if (renewPending === task) renewPending = undefined;
+    };
+    void task.then(clear, clear);
+    return task;
   };
 
-  reserveAndOpen = async () => {
+  reserveAndOpen = () => mutate(async () => {
     const current = fence();
     const startedGeneration = generation;
     const serial = ++reservationSerial;
@@ -173,7 +202,7 @@ export function createCapabilityChannel(options: {
     connectionEpoch = reserved.connectionEpoch;
     channelToken = reserved.capabilityChannelToken;
     open();
-  };
+  });
 
   return Object.freeze({
     open,

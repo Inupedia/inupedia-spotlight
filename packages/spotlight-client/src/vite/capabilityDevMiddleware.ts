@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import type { CapabilityPluginBuildResultV1 } from "./capabilityBuildTypes.js";
 
-const ROUTE_PREFIX = "/@spotlight/capability-artifacts/";
+const ROUTE_SUFFIX = "@spotlight/capability-artifacts/";
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
 
 export type CapabilityDevMiddlewareV1 = (
@@ -13,15 +13,18 @@ export type CapabilityDevMiddlewareV1 = (
 
 export function createCapabilityDevMiddlewareV1(
   currentResult: () => Readonly<CapabilityPluginBuildResultV1>,
+  base = "/",
 ): CapabilityDevMiddlewareV1 {
+  const normalizedBase = `/${base}`.replace(/\/+/g, "/").replace(/\/?$/, "/");
+  const routePrefix = `${normalizedBase}${ROUTE_SUFFIX}`;
   return (request, response, next) => {
     const url = request.url ?? "";
-    if (!url.startsWith(ROUTE_PREFIX)) {
+    if (!url.startsWith(routePrefix)) {
       next();
       return;
     }
 
-    const requestedDigest = url.slice(ROUTE_PREFIX.length);
+    const requestedDigest = url.slice(routePrefix.length);
     if (!DIGEST_PATTERN.test(requestedDigest)) {
       response.statusCode = 404;
       response.end();

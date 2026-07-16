@@ -26,11 +26,13 @@ function developmentProviderSource(
   buildInfo: Readonly<CapabilityBuildInfoV1>,
 ): string {
   const digest = JSON.stringify(buildInfo.artifactDigest);
-  const path = JSON.stringify(
-    `/@spotlight/capability-artifacts/${buildInfo.artifactDigest}`,
+  const relativePath = JSON.stringify(
+    `capability-artifacts/${buildInfo.artifactDigest}`,
   );
   return `export async function openUploadStream() {
-    const response = await fetch(${path}, {
+    const runtimeModuleUrl = import.meta.url;
+    const artifactUrl = new URL(${relativePath}, runtimeModuleUrl).href;
+    const response = await fetch(artifactUrl, {
       method: "GET",
       cache: "no-store",
       credentials: "same-origin",

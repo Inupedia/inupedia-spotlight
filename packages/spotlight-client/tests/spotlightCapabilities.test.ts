@@ -95,7 +95,13 @@ async function importGeneratedSource(source: string): Promise<{
     stream: ReadableStream<Uint8Array>;
   }>;
 }> {
-  const encoded = Buffer.from(source, "utf8").toString("base64");
+  const executableSource = source.replaceAll(
+    "import.meta.url",
+    JSON.stringify(
+      "http://localhost/web/camera-console/@spotlight/capabilities-runtime",
+    ),
+  );
+  const encoded = Buffer.from(executableSource, "utf8").toString("base64");
   return import(`data:text/javascript;base64,${encoded}`);
 }
 
@@ -126,10 +132,14 @@ async function invokeMiddleware(input: {
   result: Awaited<ReturnType<typeof buildViteCapabilitiesV1>>;
   method: string;
   url: string;
+  base?: string;
 }) {
   const response = new ResponseDouble();
   const next = vi.fn();
-  const middleware = createCapabilityDevMiddlewareV1(() => input.result);
+  const middleware = createCapabilityDevMiddlewareV1(
+    () => input.result,
+    input.base,
+  );
   middleware(
     { method: input.method, url: input.url } as never,
     response as never,
@@ -356,6 +366,17 @@ describe("spotlightCapabilities", () => {
     expect(head.response.statusCode).toBe(200);
     expect(head.response.headers).toEqual(expectedHeaders);
     expect(head.response.body()).toHaveLength(0);
+
+    const basedPath = `/web/camera-console${path}`;
+    const based = await invokeMiddleware({
+      result,
+      method: "GET",
+      url: basedPath,
+      base: "/web/camera-console/",
+    });
+    expect(based.next).not.toHaveBeenCalled();
+    expect(based.response.statusCode).toBe(200);
+    expect(based.response.body()).toEqual(Buffer.from(result.archive));
   });
 
   it("delegates unrelated paths and rejects malformed, stale, and unsupported requests without digest disclosure", async () => {
@@ -431,7 +452,7 @@ describe("spotlightCapabilities", () => {
       stream: response.body,
     });
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      `/@spotlight/capability-artifacts/${result.buildInfo.artifactDigest}`,
+      `http://localhost/web/camera-console/@spotlight/capability-artifacts/${result.buildInfo.artifactDigest}`,
       {
         method: "GET",
         cache: "no-store",
@@ -489,7 +510,7 @@ describe("spotlightCapabilities", () => {
     expect(enabled.mounted).toHaveLength(1);
     const enabledModule = await importGeneratedSource(await enabled.source());
     expect(await enabled.source()).toContain(
-      `/@spotlight/capability-artifacts/${enabledModule.capabilityBuildInfo.artifactDigest}`,
+      `capability-artifacts/${enabledModule.capabilityBuildInfo.artifactDigest}`,
     );
 
     const disabled = await createServeHarness({ devRuntimeUpload: false });

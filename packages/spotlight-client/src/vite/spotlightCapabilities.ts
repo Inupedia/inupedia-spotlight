@@ -42,6 +42,7 @@ export function spotlightCapabilities(
 ): Plugin {
   let root: string | undefined;
   let command: ResolvedConfig["command"] | undefined;
+  let base = "/";
   let state: Readonly<CapabilityPluginStateV1> | undefined;
   let server: ViteDevServer | undefined;
   let rebuildChain: Promise<void> = Promise.resolve();
@@ -133,6 +134,7 @@ export function spotlightCapabilities(
     configResolved(config) {
       root = config.root;
       command = config.command;
+      base = config.base || "/";
       const roots = options?.skillRoots ?? project.skillRoots ?? DEFAULT_SKILL_ROOTS;
       relevantRoots = Object.freeze(
         roots.map((entry) => {
@@ -181,7 +183,7 @@ export function spotlightCapabilities(
       viteServer.httpServer?.once("close", cleanup);
       if (options?.devRuntimeUpload === false) return;
       viteServer.middlewares.use(
-        createCapabilityDevMiddlewareV1(() => currentState().result),
+        createCapabilityDevMiddlewareV1(() => currentState().result, base),
       );
     },
     resolveId(id) {
