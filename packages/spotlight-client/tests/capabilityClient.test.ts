@@ -21,6 +21,45 @@ const accepted = {
 describe("Capability Handshake client", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it("authenticates handshake requests with the configured API key", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(accepted)));
+    const project = defineSpotlightProject({ projectId: "authenticated", tools: [] });
+    const client = createCapabilityClient({
+      endpoint: "https://example.test",
+      apiKey: "secret-key",
+      project,
+      registry: createFrontendToolRegistry(project),
+      buildInfo: {
+        schemaVersion: "spotlight.capability-build-info/1",
+        projectId: "authenticated",
+        frontendBuildId: "build1",
+        artifactVersion: "spotlight.capability-artifact/1",
+        artifactDigest: "sha256:a",
+        manifestDigest: "sha256:m",
+        skillManifestDigest: "sha256:s",
+        toolManifestDigest: "sha256:t",
+        byteLength: 0,
+      },
+      openUploadStream: async () => ({
+        digest: "sha256:a",
+        byteLength: 0,
+        contentType: "application/gzip",
+        stream: new Blob([]).stream(),
+      }),
+      fetch,
+    });
+
+    await client.connect({
+      sessionId: "s1",
+      browserInstanceId: "b1",
+      tabInstanceId: "t1",
+      openChannel: false,
+    });
+
+    expect(new Headers(fetch.mock.calls[0]![1]!.headers).get("X-Spotlight-Api-Key"))
+      .toBe("secret-key");
+  });
+
   it("creates an offer id when crypto.randomUUID is unavailable", async () => {
     vi.stubGlobal("crypto", {
       getRandomValues<T extends ArrayBufferView>(array: T): T {

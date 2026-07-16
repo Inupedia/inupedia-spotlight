@@ -6,6 +6,7 @@ import {
   waitForCapabilityRuntimeV1,
   type CapabilityConnectInputV1,
   type CapabilityConnectResultV1,
+  type SpotlightClientConfig,
   type SpotlightProjectV1,
 } from "@inupedia/spotlight-client";
 import type { CapabilityBuildInfoV1 } from "@inupedia/spotlight-client/vite";
@@ -28,7 +29,12 @@ export function getSpotlightCapabilityRuntime(): SpotlightCapabilityRuntimeV1 | 
 }
 
 export interface CreateSpotlightOptionsV1 {
-  endpoint: string;
+  /** Reuse the same config as SpotlightVue so endpoint and auth cannot drift. */
+  config?: Pick<SpotlightClientConfig, "serverUrl" | "apiKey">;
+  /** @deprecated Prefer config.serverUrl. */
+  endpoint?: string;
+  /** @deprecated Prefer config.apiKey. */
+  apiKey?: string;
   project: SpotlightProjectV1;
   capabilities?: {
     capabilityBuildInfo: Readonly<CapabilityBuildInfoV1>;
@@ -48,6 +54,9 @@ export interface CreateSpotlightOptionsV1 {
 export type SpotlightPluginV1 = Plugin & SpotlightCapabilityRuntimeV1;
 
 export function createSpotlight(options: CreateSpotlightOptionsV1): SpotlightPluginV1 {
+  const endpoint = options.config?.serverUrl?.trim() || options.endpoint?.trim();
+  if (!endpoint) throw new Error("createSpotlight: config.serverUrl or endpoint is required");
+  const apiKey = options.config?.apiKey?.trim() || options.apiKey?.trim() || undefined;
   const registry = createFrontendToolRegistry(options.project);
   const active = new Map<string, CapabilityConnectResultV1>();
   const connecting = new Map<string, { promise: Promise<CapabilityConnectResultV1>; controller: AbortController; cleanup: () => void }>();
@@ -92,7 +101,8 @@ export function createSpotlight(options: CreateSpotlightOptionsV1): SpotlightPlu
         }
         const capabilities = await loadBuildModule(controller.signal);
         capabilityClient ??= createCapabilityClient({
-          endpoint: options.endpoint,
+          endpoint,
+          apiKey,
           project: options.project,
           registry,
           buildInfo: capabilities.capabilityBuildInfo,

@@ -3,6 +3,25 @@ import { defineFrontendTool, defineSpotlightProject, registerCapabilityRuntimeV1
 import { createSpotlight } from "../src/createSpotlight.js";
 
 describe("createSpotlight", () => {
+  it("uses the shared Spotlight config for endpoint and capability authentication", async () => {
+    const project = defineSpotlightProject({ projectId: "config-auth", tools: [] });
+    const info = { schemaVersion: "spotlight.capability-build-info/1", projectId: "config-auth", frontendBuildId: "b1", artifactVersion: "spotlight.capability-artifact/1", artifactDigest: "sha256:a", manifestDigest: "sha256:m", skillManifestDigest: "sha256:s", toolManifestDigest: "sha256:t", byteLength: 0 } as const;
+    const accepted = { status: "accepted", handshakeId: "h", capabilitySnapshotId: "snap", sessionBindingVersion: 1, leaseId: "l", leaseVersion: 1, connectionId: "c", connectionEpoch: 1, leaseExpiresAt: "2099-01-01T00:00:00.000Z", capabilityChannelUrl: "/channel", capabilityChannelToken: "token", acceptedTools: [], rejectedTools: [] } as const;
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(accepted)));
+    const runtime = createSpotlight({
+      config: { serverUrl: "/public/spotlight-api", apiKey: "prod-key" },
+      project,
+      capabilityBuildInfo: info,
+      openUploadStream: async () => { throw new Error("unused"); },
+      fetch,
+    });
+
+    await runtime.connect({ sessionId: "s", browserInstanceId: "b", tabInstanceId: "t", openChannel: false });
+
+    expect(fetch.mock.calls[0]![0]).toBe("/public/spotlight-api/v1/capabilities/handshakes");
+    expect(new Headers(fetch.mock.calls[0]![1]!.headers).get("X-Spotlight-Api-Key")).toBe("prod-key");
+  });
+
   it("keeps active sessions pinned when HMR announces a new build", () => {
     const project = defineSpotlightProject({ projectId: "ydjm", tools: [defineFrontendTool({ name: "video.open", version: "1", description: "Open", inputSchema: { type: "object" }, sideEffect: "ui", replayPolicy: "never", execute: async () => null })] });
     const first = { schemaVersion: "spotlight.capability-build-info/1", projectId: "ydjm", frontendBuildId: "b1", artifactVersion: "spotlight.capability-artifact/1", artifactDigest: "sha256:a", manifestDigest: "sha256:m", skillManifestDigest: "sha256:s", toolManifestDigest: "sha256:t", byteLength: 1 } as const;

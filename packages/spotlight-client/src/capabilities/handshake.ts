@@ -24,6 +24,8 @@ export interface CapabilityConnectResultV1 {
 
 export interface CreateCapabilityClientOptionsV1 {
   endpoint: string;
+  /** API key applied to all Capability HTTP requests. */
+  apiKey?: string;
   project: SpotlightProjectV1;
   registry: FrontendToolRegistryV1;
   buildInfo: Readonly<CapabilityBuildInfoV1>;
@@ -86,7 +88,17 @@ async function readUploadBody(
 }
 
 export function createCapabilityClient(options: CreateCapabilityClientOptionsV1) {
-  const fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
+  const rawFetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
+  const apiKey = options.apiKey?.trim();
+  const fetcher: typeof globalThis.fetch = apiKey
+    ? (input, init = {}) => {
+        const headers = new Headers(init.headers);
+        if (!headers.has("X-Spotlight-Api-Key")) {
+          headers.set("X-Spotlight-Api-Key", apiKey);
+        }
+        return rawFetcher(input, { ...init, headers });
+      }
+    : rawFetcher;
   const offerIds = new Map<string, string>();
   const offerIdFor = (key: string) => {
     const existing = offerIds.get(key);
