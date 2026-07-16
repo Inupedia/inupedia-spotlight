@@ -1,4 +1,5 @@
 export type { SpotlightClientConfig } from "./http.js";
+export { createRuntimeId } from "./runtimeId.js";
 export {
   appendProjectQuery,
   buildJsonHeaders,

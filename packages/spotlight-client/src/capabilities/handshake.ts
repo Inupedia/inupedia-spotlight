@@ -7,6 +7,7 @@ import type { CapabilityBuildInfoV1 } from "../vite/capabilityBuildTypes.js";
 import type { FrontendToolRegistryV1, SpotlightProjectV1 } from "../tools/frontendTool.js";
 import { createCapabilityChannel, type CapabilityChannelV1 } from "./channel.js";
 import { capabilityResponseJson } from "./errors.js";
+import { createRuntimeId } from "../runtimeId.js";
 
 export interface CapabilityConnectInputV1 {
   sessionId: string;
@@ -47,7 +48,7 @@ export function createCapabilityClient(options: CreateCapabilityClientOptionsV1)
   const offerIdFor = (key: string) => {
     const existing = offerIds.get(key);
     if (existing) return existing;
-    const created = options.createOfferId?.() ?? globalThis.crypto.randomUUID();
+    const created = options.createOfferId?.() ?? createRuntimeId();
     offerIds.set(key, created);
     return created;
   };

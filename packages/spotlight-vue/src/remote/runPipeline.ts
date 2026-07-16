@@ -1,4 +1,7 @@
-import { serializeSkillsForRemote } from "@inupedia/spotlight-client";
+import {
+  createRuntimeId,
+  serializeSkillsForRemote,
+} from "@inupedia/spotlight-client";
 import type { HostToolEffect } from "@inupedia/spotlight-protocol";
 import { getSkillsPoolForRun } from "../skills/index.js";
 import { useAgentSessionStore } from "../session/agentSession.js";
@@ -533,7 +536,7 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
 function persistentRuntimeId(key: string, storage: Storage): string {
   const existing = storage.getItem(key);
   if (existing) return existing;
-  const created = globalThis.crypto.randomUUID();
+  const created = createRuntimeId();
   storage.setItem(key, created);
   return created;
 }
