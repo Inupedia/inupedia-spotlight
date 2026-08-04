@@ -666,6 +666,7 @@ import {
   splitToolStepContent,
 } from "../store/pipeline/displayText.js";
 import { partitionToolCalls } from "../store/pipeline/toolDisplay.js";
+import { getSpotlightMemoryResultCopy } from "../store/memoryResultCopy.js";
 import { TOOL_NAMES } from "../constants/toolNames.js";
 interface StepAttachment {
   id: string;
@@ -893,16 +894,12 @@ const memoryResultAnswer = computed(() => {
   );
 });
 
-const memoryResultHeading = computed(() =>
-  props.memoryReplay?.source === "semantic"
-    ? "找到了高度相关的历史答案"
-    : "找到了相同问题的历史答案",
+const memoryResultCopy = computed(() =>
+  getSpotlightMemoryResultCopy(props.memoryReplay?.source),
 );
-
-const memoryResultDescription = computed(() =>
-  props.memoryReplay?.source === "semantic"
-    ? "问题语义与项目内已有问答高度相似，Spotlight 已直接复用该结论。"
-    : "该问题与项目内已有问答一致，Spotlight 已直接复用该结论。",
+const memoryResultHeading = computed(() => memoryResultCopy.value.heading);
+const memoryResultDescription = computed(
+  () => memoryResultCopy.value.description,
 );
 const activeStepCount = computed(
   () => props.steps.filter((step) => step.status === "active").length,
