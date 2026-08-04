@@ -217,13 +217,15 @@ const props = withDefaults(
 
 const store = useSpotlightStore();
 const memoryPreference = useSpotlightMemoryPreferenceStore();
-const { loading, pipelinePhase, lastMemoryReplay } = storeToRefs(store);
+const { loading, pipelinePhase, lastMemoryReplay, lastMemoryDecision } =
+  storeToRefs(store);
 const inputRef = ref<HTMLInputElement | null>(null);
 
 const { uiState, placeholder, badgeLabel } = useSpotlightPanelUi({
   pipelinePhase,
   loading,
   memoryReplay: lastMemoryReplay,
+  memoryDecision: lastMemoryDecision,
   voiceHoldActive: toRef(props, "voiceHoldActive"),
   speechPending: toRef(props, "speechPending"),
   voiceKeyLabel: props.voiceKeyLabel,

@@ -13,6 +13,8 @@
       :steps="store.agentSteps"
       :centered="thinkingCentered"
       :memory-replay="store.lastMemoryReplay"
+      :memory-decision="store.lastMemoryDecision"
+      @force-refresh="store.forceRefreshLastAnswer"
       @close="store.closeThinking"
     />
   </Teleport>

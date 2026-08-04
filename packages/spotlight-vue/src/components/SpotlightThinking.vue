@@ -16,6 +16,14 @@
         <span v-if="memoryBadge" class="thinking-bar-memory-badge">{{
           memoryBadge
         }}</span>
+        <button
+          v-if="memoryDecision?.canForceRefresh"
+          type="button"
+          class="thinking-bar-memory-refresh"
+          @click="$emit('force-refresh')"
+        >
+          重新查询
+        </button>
       </div>
       <div class="thinking-bar-metrics" aria-label="执行状态概览">
         <span class="thinking-bar-metric">
@@ -81,8 +89,7 @@
                       <pre
                         v-if="getToolStepPlanning(step)"
                         class="thinking-bar-execution-planning"
-                        >{{ getToolStepPlanning(step) }}</pre
-                      >
+                        >{{ getToolStepPlanning(step) }}</pre>
                       <details
                         v-for="toolCall in getStepToolCalls(step)"
                         :key="toolCall.id"
@@ -197,8 +204,7 @@
                             <pre
                               v-else-if="getToolResultDisplay(toolCall)"
                               class="thinking-bar-tool-call-pre"
-                              >{{ getToolResultDisplay(toolCall) }}</pre
-                            >
+                              >{{ getToolResultDisplay(toolCall) }}</pre>
                           </div>
                           <div
                             v-if="formatToolTrace(toolCall.trace)"
@@ -422,8 +428,7 @@
                           <pre
                             v-else-if="getToolResultDisplay(item.toolCall)"
                             class="thinking-bar-tool-call-pre"
-                            >{{ getToolResultDisplay(item.toolCall) }}</pre
-                          >
+                            >{{ getToolResultDisplay(item.toolCall) }}</pre>
                         </div>
                       </div>
                     </details>
@@ -777,10 +782,13 @@ const props = defineProps<{
     entryId: string;
     kind: string;
   } | null;
+  memoryDecision?:
+    import("@inupedia/spotlight-protocol").SpotlightMemoryDecision | null;
 }>();
 
 defineEmits<{
   close: [];
+  "force-refresh": [];
 }>();
 
 const titleText = computed(() => {
@@ -791,6 +799,15 @@ const titleText = computed(() => {
 });
 
 const memoryBadge = computed(() => {
+  if (props.memoryDecision) {
+    const labels = {
+      reuse: "已复用项目记忆",
+      augment: "已结合项目记忆",
+      refresh: "已重新验证资料",
+      ignore: "",
+    } as const;
+    return labels[props.memoryDecision.action];
+  }
   if (!props.memoryReplay) return "";
   if (props.memoryReplay.source === "semantic") return "语义缓存";
   if (props.memoryReplay.source === "exact") return "Memory 缓存";

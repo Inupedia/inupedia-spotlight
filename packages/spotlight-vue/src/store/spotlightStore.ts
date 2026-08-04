@@ -2,6 +2,7 @@
  * Spotlight 指令面板 Store：提交问题走 spotlight-server；此处仅 UI、宿主工具 sink 与遥测。
  */
 import { defineStore } from "pinia";
+import type { SpotlightMemoryDecision } from "@inupedia/spotlight-protocol";
 import type { ToolResult } from "../types/toolResult.js";
 import { getSpotlightConfig } from "../plugin.js";
 import {
@@ -246,11 +247,7 @@ function getTurnTimelineById(
 }
 
 // 对外保持原有导出路径，便于组件按需引用
-export type {
-  AgentStep,
-  IntentWithReason,
-  SubIntentConfig,
-} from "./types.js";
+export type { AgentStep, IntentWithReason, SubIntentConfig } from "./types.js";
 export {
   SpotlightIntent,
   SPOTLIGHT_INTENT_LABELS,
@@ -291,6 +288,8 @@ export const useSpotlightStore = defineStore("spotlight", {
     pipelineRunId: 0,
     pipelineAbortController: null as AbortController | null,
     lastMemoryReplay: null as SpotlightMemoryReplayBadge | null,
+    lastMemoryDecision: null as SpotlightMemoryDecision | null,
+    lastSubmittedQuestion: "",
     telemetrySnapshots:
       loadTelemetrySnapshots() as SpotlightTelemetrySnapshot[],
   }),
@@ -461,8 +460,7 @@ export const useSpotlightStore = defineStore("spotlight", {
         activeTarget: runtime.activeTarget,
       };
       this.suggestedQuestions =
-        config.getSuggestedQuestions?.(params) ??
-        getSuggestedQuestions(params);
+        config.getSuggestedQuestions?.(params) ?? getSuggestedQuestions(params);
     },
 
     getSelectionQuestions() {
@@ -506,6 +504,7 @@ export const useSpotlightStore = defineStore("spotlight", {
       this.error = "";
       this.result = null;
       this.lastMemoryReplay = null;
+      this.lastMemoryDecision = null;
       this.pipelinePhase = "idle";
     },
 
@@ -581,7 +580,7 @@ export const useSpotlightStore = defineStore("spotlight", {
         this.selectedIndex < 0 ? n - 1 : (this.selectedIndex - 1 + n) % n;
     },
 
-    async submit() {
+    async submit(options?: { forceMemoryRefresh?: boolean }) {
       if (!this.prompt.trim() || this.loading) return;
       const runId = this.pipelineRunId + 1;
       this.pipelineRunId = runId;
@@ -592,8 +591,10 @@ export const useSpotlightStore = defineStore("spotlight", {
       this.error = "";
       this.result = null;
       this.lastMemoryReplay = null;
+      this.lastMemoryDecision = null;
       this.executionEvents = [];
       const userQuestion = this.prompt.trim();
+      this.lastSubmittedQuestion = userQuestion;
       this.addRecentQuestion(userQuestion);
       this.agentSteps = [];
       this.openThinkingBar();
@@ -604,9 +605,13 @@ export const useSpotlightStore = defineStore("spotlight", {
           const outcome = await runRemoteSpotlightPipeline(
             userQuestion,
             handlerApi,
+            options,
           );
           if (outcome.memoryReplay) {
             this.lastMemoryReplay = outcome.memoryReplay;
+          }
+          if (outcome.memoryDecision) {
+            this.lastMemoryDecision = outcome.memoryDecision;
           }
           const session = useAgentSessionStore();
           session.pushTurn("user", userQuestion, "main_task");
@@ -651,6 +656,12 @@ export const useSpotlightStore = defineStore("spotlight", {
           }
         }
       }
+    },
+
+    async forceRefreshLastAnswer() {
+      if (this.loading || !this.lastSubmittedQuestion.trim()) return;
+      this.prompt = this.lastSubmittedQuestion;
+      await this.submit({ forceMemoryRefresh: true });
     },
 
     handleEnter() {

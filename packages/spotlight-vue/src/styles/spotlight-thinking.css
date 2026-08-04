@@ -138,6 +138,31 @@
   font-weight: 600;
 }
 
+.thinking-bar-memory-refresh {
+  width: fit-content;
+  border: 1px solid
+    color-mix(in srgb, var(--spotlight-accent, #0f766e) 35%, transparent);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  background: color-mix(
+    in srgb,
+    var(--spotlight-accent, #0f766e) 8%,
+    transparent
+  );
+  color: inherit;
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.thinking-bar-memory-refresh:hover {
+  background: color-mix(
+    in srgb,
+    var(--spotlight-accent, #0f766e) 16%,
+    transparent
+  );
+}
+
 .thinking-bar-metrics {
   display: flex;
   align-items: center;
@@ -852,7 +877,6 @@
 .thinking-bar--corner .thinking-bar-tool-call-block {
   max-height: min(24vh, 200px);
 }
-
 
 .thinking-bar--corner .thinking-bar-header {
   padding: 14px 16px 12px;

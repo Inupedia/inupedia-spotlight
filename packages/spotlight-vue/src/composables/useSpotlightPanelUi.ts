@@ -1,4 +1,5 @@
 import { computed, type Ref } from "vue";
+import type { SpotlightMemoryDecision } from "@inupedia/spotlight-protocol";
 
 export type SpotlightPanelUiState = "idle" | "running" | "done" | "error";
 
@@ -10,6 +11,7 @@ export type UseSpotlightPanelUiOptions = {
     entryId: string;
     kind: string;
   } | null>;
+  memoryDecision?: Ref<SpotlightMemoryDecision | null>;
   voiceHoldActive?: Ref<boolean>;
   speechPending?: Ref<boolean>;
   voiceKeyLabel?: string;
@@ -51,6 +53,15 @@ export function useSpotlightPanelUi(options: UseSpotlightPanelUiOptions) {
     if (options.speechPending?.value) return "语音识别中";
     if (uiState.value === "running") return "Agent 执行中";
     if (uiState.value === "done") {
+      if (options.memoryDecision?.value) {
+        const labels: Record<SpotlightMemoryDecision["action"], string> = {
+          reuse: "已复用项目记忆",
+          augment: "已结合项目记忆",
+          refresh: "已重新验证资料",
+          ignore: "已完成",
+        };
+        return labels[options.memoryDecision.value.action];
+      }
       if (options.memoryReplay?.value) {
         return options.memoryReplay.value.source === "semantic"
           ? "语义缓存命中"

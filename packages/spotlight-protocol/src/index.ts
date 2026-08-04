@@ -190,6 +190,8 @@ export interface CreateRunRequest {
   projectId?: string;
   sessionId?: string;
   userQuestion: string;
+  /** One-shot override: bypass reusable memory and verify against sources. */
+  memoryRefreshRequested?: boolean;
   uiContext?: AgentUiContext;
   sessionState?: SpotlightSessionState;
   runtimeState?: SpotlightRuntimeState;
@@ -246,17 +248,24 @@ export const SPOTLIGHT_CORE_TOOL_NAMES = {
 
 export {
   SPOTLIGHT_MEMORY_DEFAULT_TTL_SEC,
+  type SpotlightMemoryDecision,
+  type SpotlightMemoryDecisionAction,
   type SpotlightMemoryEntry,
   type SpotlightMemoryEntryKind,
+  type SpotlightMemoryEvidence,
+  type SpotlightMemoryEvidenceKind,
   type SpotlightMemoryGateResult,
   type SpotlightMemoryHit,
   type SpotlightMemoryHitSource,
   type SpotlightMemoryInvalidationContext,
   type SpotlightMemoryLookupInput,
+  type SpotlightMemoryMatchKind,
   type SpotlightMemoryMiss,
   type SpotlightMemoryPlan,
+  type SpotlightMemoryRecordType,
   type SpotlightMemoryReplayMeta,
   type SpotlightMemoryScope,
+  type SpotlightMemoryStatus,
   type SpotlightMemoryWriteInput,
   type SpotlightMemoryWriteResult,
 } from "./memory.js";

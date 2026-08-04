@@ -1,3 +1,4 @@
+import type { SpotlightMemoryDecision } from "@inupedia/spotlight-protocol";
 import type { SpotlightCommand } from "../store/types.js";
 
 export type SpotlightPipelineRunOutcome = {
@@ -9,4 +10,5 @@ export type SpotlightPipelineRunOutcome = {
     entryId: string;
     kind: string;
   } | null;
+  memoryDecision?: SpotlightMemoryDecision | null;
 };

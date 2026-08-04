@@ -1,5 +1,8 @@
 import { serializeSkillsForRemote } from "@inupedia/spotlight-client";
-import type { HostToolEffect } from "@inupedia/spotlight-protocol";
+import type {
+  HostToolEffect,
+  SpotlightMemoryDecision,
+} from "@inupedia/spotlight-protocol";
 import { getSkillsPoolForRun } from "../skills/index.js";
 import { useAgentSessionStore } from "../session/agentSession.js";
 import { useSpotlightMemoryPreferenceStore } from "../store/memoryPreferenceStore.js";
@@ -63,9 +66,16 @@ type RemoteRunEvent =
         replayedAt: number;
         kind: string;
       };
+      memoryDecision?: SpotlightMemoryDecision;
       sessionPatch?: Partial<
         import("@inupedia/spotlight-protocol").SpotlightSessionState
       >;
+    }
+  | {
+      type: "memory_decision";
+      at: number;
+      turnId: string;
+      decision: SpotlightMemoryDecision;
     }
   | {
       type: "run_error";
@@ -121,7 +131,8 @@ function isTelemetryEvent(
     event.type !== "host_action_request" &&
     event.type !== "run_completed" &&
     event.type !== "run_error" &&
-    event.type !== "ping"
+    event.type !== "ping" &&
+    event.type !== "memory_decision"
   );
 }
 
@@ -245,7 +256,10 @@ function ensureToolStepActive(api: HandlerApi, stepId: string) {
   api.setStep(stepId, "active", step.content);
 }
 
-function toolStepLabel(stepId: string, label: string | null | undefined): string {
+function toolStepLabel(
+  stepId: string,
+  label: string | null | undefined,
+): string {
   if (label) return label;
   return stepId === SPOTLIGHT_PIPELINE_STEP_IDS.tool
     ? "执行工具与回答"
@@ -385,6 +399,19 @@ async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
         event.summary ?? "Memory 缓存命中，跳过 LLM 规划。",
       );
     }
+  } else if (event.type === "memory_decision") {
+    ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.breakdown, "问题拆解");
+    const labels: Record<SpotlightMemoryDecision["action"], string> = {
+      reuse: "已复用项目记忆",
+      augment: "正在结合历史项目结论",
+      refresh: "资料可能变化，正在重新验证",
+      ignore: "未发现可直接使用的项目记忆",
+    };
+    api.setStep(
+      SPOTLIGHT_PIPELINE_STEP_IDS.breakdown,
+      event.decision.action === "reuse" ? "done" : "active",
+      labels[event.decision.action],
+    );
   } else if (event.type === "assistant_response") {
     ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
     const step = api
@@ -469,7 +496,11 @@ export async function warmupSpotlightRemoteContext(
   ]);
 }
 
-async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
+async function buildRemotePayload(
+  userQuestion: string,
+  signal?: AbortSignal,
+  options?: { forceMemoryRefresh?: boolean },
+) {
   const session = useAgentSessionStore();
   const runtime = useSpotlightRuntimeStore();
   const memoryPreference = useSpotlightMemoryPreferenceStore();
@@ -480,6 +511,7 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
       projectId: getSpotlightProjectId(),
       sessionId: session.sessionId,
       userQuestion,
+      memoryRefreshRequested: options?.forceMemoryRefresh === true,
       uiContext: getSpotlightConfig().getUiContext?.() ?? {},
       sessionState: {
         sessionId: session.sessionId,
@@ -511,12 +543,14 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
 export async function runRemoteSpotlightPipeline(
   userQuestion: string,
   api: HandlerApi,
+  options?: { forceMemoryRefresh?: boolean },
 ): Promise<SpotlightPipelineRunOutcome> {
   const base = getSpotlightServerBase();
   const signal = api.getSignal();
   const { payload, hostManifest } = await buildRemotePayload(
     userQuestion,
     signal,
+    options,
   );
   const allowedHostNames = new Set(hostManifest.tools.map((t) => t.name));
   const createResponse = await fetch(`${base}/v1/runs`, {
@@ -592,6 +626,7 @@ export async function runRemoteSpotlightPipeline(
             command: null,
             usedLegacyFallback: event.usedQueryLoop,
             memoryReplay: event.memoryReplay ?? null,
+            memoryDecision: event.memoryDecision ?? null,
             assistantReply: event.assistantReply,
           };
         }
