@@ -29,15 +29,16 @@
           role="switch"
           :aria-checked="memoryPreference.enabled"
           :aria-label="
-            memoryPreference.enabled
-              ? '关闭记忆（仍会继续更新缓存）'
-              : '开启记忆'
+            getSpotlightMemoryPreferenceCopy(memoryPreference.enabled).ariaLabel
           "
           :title="
-            memoryPreference.enabled ? '记忆已开启' : '记忆已关闭，仅更新缓存'
+            getSpotlightMemoryPreferenceCopy(memoryPreference.enabled).title
           "
           @click="memoryPreference.toggle()"
         >
+          <span class="spotlight-memory-label">{{
+            SPOTLIGHT_MEMORY_PREFERENCE_LABEL
+          }}</span>
           <span
             class="spotlight-memory-dot"
             :class="{ 'is-on': memoryPreference.enabled }"
@@ -196,6 +197,10 @@ import { nextTick, ref, toRef } from "vue";
 import { storeToRefs } from "pinia";
 import { useSpotlightStore } from "../store/spotlightStore.js";
 import { useSpotlightMemoryPreferenceStore } from "../store/memoryPreferenceStore.js";
+import {
+  getSpotlightMemoryPreferenceCopy,
+  SPOTLIGHT_MEMORY_PREFERENCE_LABEL,
+} from "../store/memoryPreferenceCopy.js";
 import { useSpotlightPanelUi } from "../composables/useSpotlightPanelUi.js";
 import InspiraCardSpotlight from "./InspiraCardSpotlight.vue";
 import OfficialBorderBeam from "./OfficialBorderBeam.vue";
