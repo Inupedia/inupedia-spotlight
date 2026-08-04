@@ -20,4 +20,10 @@ describe("Spotlight style isolation", () => {
       /\.thinking-bar-memory-refresh\s*\{[\s\S]*?white-space:\s*nowrap;/u,
     );
   });
+
+  it("keeps memory results on the standard Spotlight panel width", () => {
+    expect(thinkingStyles).not.toMatch(
+      /\.thinking-bar--memory-result\s*\{[\s\S]*?\bwidth\s*:/u,
+    );
+  });
 });

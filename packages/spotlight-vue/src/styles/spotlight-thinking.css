@@ -169,10 +169,6 @@
   );
 }
 
-.thinking-bar--memory-result {
-  width: min(760px, calc(100vw - 48px));
-}
-
 .thinking-bar-memory-result {
   position: relative;
   display: flex;
