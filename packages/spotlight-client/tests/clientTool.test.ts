@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createClientToolManifest,
   createClientToolRegistry,
@@ -16,6 +16,10 @@ const schema = {
 };
 
 describe("client tools", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("registers and executes a build-described browser tool", async () => {
     const openVideo = defineClientTool(
       async ({ videoId }: { videoId: string }) => `opened:${videoId}`,
@@ -52,5 +56,27 @@ describe("client tools", () => {
     expect(JSON.parse(JSON.stringify(first)).manifestDigest).toBe(
       first.manifestDigest,
     );
+  });
+
+  it("builds the same manifest without Web Crypto on an insecure HTTP origin", async () => {
+    const tool = defineClientTool(async () => undefined, {
+      name: "closePanel",
+      description: "Close panel",
+      schema: {
+        input: { type: "object", properties: {}, additionalProperties: false },
+        output: { type: "null" },
+      },
+    });
+    const options = {
+      projectId: "ydjm",
+      frontendBuildId: "build-http",
+      tools: [tool],
+    } as const;
+    const expected = await createClientToolManifest(options);
+
+    vi.stubGlobal("crypto", {});
+    const actual = await createClientToolManifest(options);
+
+    expect(actual.manifestDigest).toBe(expected.manifestDigest);
   });
 });
