@@ -8,8 +8,10 @@ Private source repository for the Inupedia Spotlight SDK packages.
 | --- | --- |
 | `@inupedia/spotlight-protocol` | Shared client/server wire types |
 | `@inupedia/spotlight-memory` | Memory Gate, exact/semantic cache stores |
-| `@inupedia/spotlight-client` | HTTP helpers, host tool bridge, agent registry |
-| `@inupedia/spotlight-vue` | Vue plugin, command UI, Spotlight workflow runtime |
+| `@inupedia/spotlight-client` | Client Tool、HTTP 与构建清单 |
+| `@inupedia/spotlight-vue` | Vue plugin、命令 UI 与远程运行管线 |
+
+业务项目从 [Client Tool 接入指南](docs/client-tools.md) 开始。`0.4.0` 起，前端只注册 Tool；LangChain Tool 与 LangGraph 工作流属于 Server 实现。
 
 ## Release
 

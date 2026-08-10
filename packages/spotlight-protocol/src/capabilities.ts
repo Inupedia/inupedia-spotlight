@@ -56,6 +56,15 @@ export interface FrontendToolDescriptorV1 {
   requiresConfirmation?: boolean;
 }
 
+/** Build-pinned browser tool manifest. Handlers never leave the browser bundle. */
+export interface FrontendToolManifestV1 {
+  protocolVersion: typeof SPOTLIGHT_CAPABILITY_PROTOCOL_V1;
+  projectId: string;
+  frontendBuildId: string;
+  manifestDigest: string;
+  tools: FrontendToolDescriptorV1[];
+}
+
 export interface ResolvedToolRefV1 {
   target: ToolExecutionTargetV1;
   registryId: string;

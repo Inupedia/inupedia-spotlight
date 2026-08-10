@@ -534,7 +534,10 @@ async function buildRemotePayload(
         resumableAction: runtime.resumableAction,
         lastResolvedTarget: runtime.lastResolvedTarget,
       },
-      clientToolsManifestVersion: hostManifest.version,
+      clientToolsManifestVersion: hostManifest.manifestDigest,
+      clientToolManifest: hostManifest,
+      frontendBuildId: hostManifest.frontendBuildId,
+      manifestDigest: hostManifest.manifestDigest,
       skills: serializeSkillsForRemote(getSkillsPoolForRun()),
     },
   };

@@ -105,12 +105,6 @@ const imports = [
     },
   },
   {
-    id: "@inupedia/spotlight-vue/workflow",
-    assert(mod) {
-      assertExport(mod, "createOperateDefinition", this.id);
-    },
-  },
-  {
     id: "@inupedia/spotlight-vue/testing",
     assert(mod) {
       assertExport(mod, "resetSpotlightRuntimeForTests", this.id);

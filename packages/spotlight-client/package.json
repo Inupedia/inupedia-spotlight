@@ -1,7 +1,7 @@
 {
   "name": "@inupedia/spotlight-client",
-  "version": "0.2.12",
-  "description": "HTTP/SSE helpers and host tool bridge for Inupedia Spotlight (monorepo workspace package)",
+  "version": "0.4.0",
+  "description": "Build-described browser Client Tools and HTTP helpers for Inupedia Spotlight",
   "type": "module",
   "license": "MIT",
   "author": "inupedia",
@@ -11,19 +11,12 @@
       "import": "./dist/index.js"
     },
     "./vite": {
-      "types": "./dist/vite/spotlightAgentIoc.d.ts",
-      "import": "./dist/vite/spotlightAgentIoc.js"
+      "types": "./dist/vite/index.d.ts",
+      "import": "./dist/vite/index.js"
     },
     "./node": {
       "types": "./dist/node/index.d.ts",
       "import": "./dist/node/index.js"
-    },
-    "./agent-decorator": {
-      "types": "./src/agentDecorator.d.ts"
-    },
-    "./agent-decorator-types": {
-      "types": "./dist/agentDecoratorTypes.d.ts",
-      "import": "./dist/agentDecoratorTypes.js"
     }
   },
   "main": "./dist/index.js",
@@ -32,8 +25,7 @@
     "access": "public"
   },
   "files": [
-    "dist",
-    "src/agentDecorator.d.ts"
+    "dist"
   ],
   "scripts": {
     "clean": "rm -rf dist",

@@ -1,5 +1,7 @@
 # Spotlight Frontend-Agnostic SDK Host 设计文档
 
+> **已废弃：**本文记录 `0.2.x` Host 方案，仅用于历史追溯。`0.3.0` 已采用破坏性的 Client Tool 路线，请以 [Client Tool 接入指南](client-tools.md) 为准，不要继续实现本文 API。
+
 ## 1. 摘要
 
 目标：借鉴 CopilotKit 的 `Core + framework adapter + runtime` 分层，把 Spotlight 前端接入从“复制 ydjm 项目胶水代码”改造成“任何 frontend 注入 capabilities/readable/actions/workflows 即可接入 Spotlight SaaS”。

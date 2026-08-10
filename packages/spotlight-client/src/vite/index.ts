@@ -1,8 +1,6 @@
-import type { SpotlightAgentIocOptions } from "./spotlightAgentIoc.js";
-
-export type { SpotlightAgentIocOptions };
-
 export {
-  transformSpotlightAgentIoc,
   default,
-} from "./spotlightAgentIoc.js";
+  default as spotlightClientTools,
+  transformSpotlightClientTools,
+  type SpotlightClientToolsOptions,
+} from "./spotlightClientTools.js";

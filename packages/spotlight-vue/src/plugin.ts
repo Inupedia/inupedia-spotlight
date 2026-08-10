@@ -1,8 +1,8 @@
 import type { App, InjectionKey } from "vue";
 import {
-  createSpotlightHostAdapter,
+  createClientToolRegistry,
   createSpotlightHttp,
-  type SpotlightHostAdapter,
+  type ClientTool,
   type SpotlightHttp,
 } from "@inupedia/spotlight-client";
 import {
@@ -16,12 +16,13 @@ import type { SpotlightAvatarConfig } from "./avatar/config.js";
 
 export const SPOTLIGHT_HTTP_KEY: InjectionKey<SpotlightHttp> =
   Symbol("spotlight-http");
-export const SPOTLIGHT_HOST_ADAPTER_KEY: InjectionKey<SpotlightHostAdapter> =
-  Symbol("spotlight-host-adapter");
+export type SpotlightClientToolRegistry = ReturnType<typeof createClientToolRegistry>;
+export const SPOTLIGHT_CLIENT_TOOLS_KEY: InjectionKey<SpotlightClientToolRegistry> =
+  Symbol("spotlight-client-tools");
 
 let installedConfig: SpotlightConfig | null = null;
 let installedHttp: SpotlightHttp | null = null;
-let installedAdapter: SpotlightHostAdapter | null = null;
+let installedClientTools: SpotlightClientToolRegistry | null = null;
 
 export function getSpotlightConfig(): SpotlightConfig {
   if (!installedConfig) {
@@ -40,12 +41,13 @@ export function getSpotlightHttp(): SpotlightHttp {
   return installedHttp;
 }
 
-export function getSpotlightHostAdapter(): SpotlightHostAdapter {
-  if (!installedAdapter) {
+export function getSpotlightClientTools(): SpotlightClientToolRegistry {
+  if (!installedClientTools) {
     const config = getSpotlightConfig();
-    installedAdapter = createSpotlightHostAdapter({ tools: config.tools });
+    const tools = typeof config.tools === "function" ? config.tools() : config.tools;
+    installedClientTools = createClientToolRegistry(tools as ClientTool[]);
   }
-  return installedAdapter;
+  return installedClientTools;
 }
 
 /** Reset singletons (tests / HMR). */
@@ -53,26 +55,27 @@ export function resetSpotlightRuntimeForTests(): void {
   unmountSpotlightShellForTests();
   installedConfig = null;
   installedHttp = null;
-  installedAdapter = null;
+  installedClientTools = null;
 }
 
 export const SpotlightVue = {
-  install(app: App, options: SpotlightVuePluginOptions): void {
+  install(appValue: unknown, options: SpotlightVuePluginOptions): void {
+    const app = appValue as App;
     const config = defineSpotlightConfig(options.config);
     const resolvedTools =
       typeof config.tools === "function" ? config.tools() : config.tools;
     if (!Array.isArray(resolvedTools) || resolvedTools.length === 0) {
       throw new Error(
-        "Spotlight config: at least one host tool is required after tools() resolves",
+        "Spotlight config: at least one client tool is required after tools() resolves",
       );
     }
     installedConfig = config;
     installedHttp = createSpotlightHttp(config);
-    installedAdapter = createSpotlightHostAdapter({ tools: config.tools });
+    installedClientTools = createClientToolRegistry(resolvedTools);
 
     app.provide(SPOTLIGHT_CONFIG_KEY, config);
     app.provide(SPOTLIGHT_HTTP_KEY, installedHttp);
-    app.provide(SPOTLIGHT_HOST_ADAPTER_KEY, installedAdapter);
+    app.provide(SPOTLIGHT_CLIENT_TOOLS_KEY, installedClientTools);
 
     app.config.globalProperties.$spotlightEnabled = options.enabled !== false;
     app.config.globalProperties.$spotlightAvatarEnabled =
