@@ -161,7 +161,7 @@ export class RunManager {
       at: Date.now(),
       turnId,
       phase: "routing",
-      summary: "正在通过 LangGraph 路由请求。",
+      summary: "正在识别本次请求属于知识问答、页面操作，还是需要补充信息。",
     });
     try {
       const result = await runSpotlightGraph(

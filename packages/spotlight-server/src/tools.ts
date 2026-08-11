@@ -3,6 +3,7 @@ import type { FrontendToolDescriptorV1 } from "@inupedia/spotlight-protocol";
 import { z } from "zod";
 import type { BaseStore } from "@langchain/langgraph";
 import type {
+  KnowledgeEvidence,
   KnowledgeProvider,
   RunContext,
   SpotlightServerTool,
@@ -49,10 +50,16 @@ export function createClientLangChainTool(
 export function createServerLangChainTool(
   definition: SpotlightServerTool,
   context: RunContext,
+  progress?: ServerToolProgress,
 ) {
   assertServerToolMetadata(definition);
   return tool(
-    async (input: Record<string, unknown>) => stringify(await definition.invoke(input, context)),
+    async (input: Record<string, unknown>) => {
+      progress?.onStart?.(input);
+      const output = await definition.invoke(input, context);
+      progress?.onComplete?.(input, output);
+      return stringify(output);
+    },
     {
       name: definition.name,
       description: definition.description,
@@ -75,57 +82,72 @@ const forgetSchema = z.object({
   key: z.string().min(1).max(120).describe("Key of the memory to delete"),
 });
 
+export interface SearchToolProgress {
+  onStart?: (input: { query: string; limit?: number }) => void;
+  onComplete?: (input: { query: string; limit?: number }, evidence: KnowledgeEvidence[]) => void;
+}
+
+export interface ServerToolProgress {
+  onStart?: (input: Record<string, unknown>) => void;
+  onComplete?: (input: Record<string, unknown>, output: unknown) => void;
+}
+
 export function memoryNamespace(projectId: string, subjectId: string): string[] {
   return [projectId, "subjects", subjectId];
 }
 
-export function createLongTermMemoryTools(
-  store: BaseStore,
-  namespace: string[],
-  mode: "remember" | "forget" | "both",
-) {
+export function createLongTermMemoryTools(store: BaseStore, namespace: string[], mode: "remember" | "forget" | "both") {
   const tools = [];
   if (mode === "remember" || mode === "both") {
-    tools.push(tool(
-      async ({ key, value }) => {
-        await store.put(namespace, key, { value, updatedAt: new Date().toISOString() });
-        return `Remembered ${key}.`;
-      },
-      {
-        name: "remember_user_preference",
-        description: "Persist a user preference or fact only when the user explicitly asks to remember it.",
-        schema: rememberSchema,
-      },
-    ));
+    tools.push(
+      tool(
+        async ({ key, value }) => {
+          await store.put(namespace, key, {
+            value,
+            updatedAt: new Date().toISOString(),
+          });
+          return `Remembered ${key}.`;
+        },
+        {
+          name: "remember_user_preference",
+          description: "Persist a user preference or fact only when the user explicitly asks to remember it.",
+          schema: rememberSchema,
+        },
+      ),
+    );
   }
   if (mode === "forget" || mode === "both") {
-    tools.push(tool(
-      async ({ key }) => {
-        await store.delete(namespace, key);
-        return `Forgot ${key}.`;
-      },
-      {
-        name: "forget_user_preference",
-        description: "Delete a persisted preference only when the user explicitly asks to forget it.",
-        schema: forgetSchema,
-      },
-    ));
+    tools.push(
+      tool(
+        async ({ key }) => {
+          await store.delete(namespace, key);
+          return `Forgot ${key}.`;
+        },
+        {
+          name: "forget_user_preference",
+          description: "Delete a persisted preference only when the user explicitly asks to forget it.",
+          schema: forgetSchema,
+        },
+      ),
+    );
   }
   return tools;
 }
 
-export function createKnowledgeTool(provider: KnowledgeProvider, context: RunContext) {
+export function createKnowledgeTool(provider: KnowledgeProvider, context: RunContext, progress?: SearchToolProgress) {
   return tool(
-    async ({ query, limit }) =>
-      stringify(
-        await provider.search({
-          query,
-          limit,
-          projectId: context.project.projectId,
-          sessionId: context.request.sessionId ?? context.runId,
-          signal: context.signal,
-        }),
-      ),
+    async ({ query, limit }) => {
+      const input = { query, ...(limit === undefined ? {} : { limit }) };
+      progress?.onStart?.(input);
+      const evidence = await provider.search({
+        ...input,
+        projectId: context.project.projectId,
+        sessionId: context.request.sessionId ?? context.runId,
+        signal: context.signal,
+      });
+      progress?.onComplete?.(input, evidence);
+      return stringify(evidence);
+    },
     {
       name: "project_knowledge_search",
       description: "Search the configured project knowledge base and return source evidence.",
@@ -134,18 +156,20 @@ export function createKnowledgeTool(provider: KnowledgeProvider, context: RunCon
   );
 }
 
-export function createWebSearchTool(provider: WebSearchProvider, context: RunContext) {
+export function createWebSearchTool(provider: WebSearchProvider, context: RunContext, progress?: SearchToolProgress) {
   return tool(
-    async ({ query, limit }) =>
-      stringify(
-        await provider.search({
-          query,
-          limit,
-          projectId: context.project.projectId,
-          sessionId: context.request.sessionId ?? context.runId,
-          signal: context.signal,
-        }),
-      ),
+    async ({ query, limit }) => {
+      const input = { query, ...(limit === undefined ? {} : { limit }) };
+      progress?.onStart?.(input);
+      const evidence = await provider.search({
+        ...input,
+        projectId: context.project.projectId,
+        sessionId: context.request.sessionId ?? context.runId,
+        signal: context.signal,
+      });
+      progress?.onComplete?.(input, evidence);
+      return stringify(evidence);
+    },
     {
       name: "web_search",
       description: "Search the web for current evidence using the configured provider.",

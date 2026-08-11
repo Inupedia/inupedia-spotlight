@@ -5,11 +5,7 @@ import { Annotation, END, START, StateGraph, messagesStateReducer } from "@langc
 import type { BaseCheckpointSaver, BaseStore } from "@langchain/langgraph";
 import { createAgent, toolCallLimitMiddleware, toolRetryMiddleware } from "langchain";
 import type { FrontendToolDescriptorV1 } from "@inupedia/spotlight-protocol";
-import type {
-  IntentDecision,
-  RunContext,
-  SpotlightRunResult,
-} from "./contracts.js";
+import type { IntentDecision, KnowledgeEvidence, RunContext, SpotlightRunResult } from "./contracts.js";
 import type { IntentRouter } from "./router.js";
 import { actionToolAllowlist, memoryControlMode } from "./safety.js";
 import {
@@ -44,6 +40,56 @@ function finalAgentText(result: { messages?: BaseMessage[] }): string {
   return messageText(result.messages?.at(-1)).trim();
 }
 
+function compactText(value: string, maxLength = 72): string {
+  const normalized = value.replace(/\s+/gu, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 1)}…`;
+}
+
+function routeProgressSummary(question: string, decision: IntentDecision): string {
+  const request = `“${compactText(question)}”`;
+  if (decision.route === "knowledge") {
+    if (memoryControlMode(question)) {
+      return `识别为记忆管理：${request}；只处理用户明确要求的记住或忘记操作。`;
+    }
+    return `识别为知识问答：${request}；未检测到需要执行的页面操作。`;
+  }
+  if (decision.route === "action") {
+    const evidence = decision.explicitActionEvidence ? `，检测到明确动作“${decision.explicitActionEvidence}”` : "";
+    return `识别为页面操作：${request}${evidence}；将只从已注册的客户端工具中选择。`;
+  }
+  return `暂不能安全执行：${request}；操作目标或指令不够明确，需要进一步确认。`;
+}
+
+function toolInputSummary(input: Record<string, unknown>): string {
+  const query = typeof input.query === "string" ? input.query : null;
+  if (query) return `“${compactText(query, 56)}”`;
+  const serialized = JSON.stringify(input);
+  return serialized === "{}" ? "无参数" : compactText(serialized, 72);
+}
+
+function toolOutputSummary(output: unknown): string {
+  if (Array.isArray(output)) return `返回 ${output.length} 条结果`;
+  if (output && typeof output === "object") {
+    for (const key of ["results", "items", "data", "hits"]) {
+      const value = (output as Record<string, unknown>)[key];
+      if (Array.isArray(value)) return `返回 ${value.length} 条结果`;
+    }
+  }
+  return "已返回结果";
+}
+
+function evidenceProgressSummary(source: string, query: string, evidence: KnowledgeEvidence[]): string {
+  if (evidence.length === 0) {
+    return `${source}未找到与“${compactText(query, 48)}”匹配的资料。`;
+  }
+  const titles = [
+    ...new Set(evidence.map((item) => item.title?.trim()).filter((title): title is string => Boolean(title))),
+  ].slice(0, 3);
+  const titleSummary = titles.length > 0 ? `：${titles.join("；")}` : "";
+  return `${source}检索“${compactText(query, 48)}”命中 ${evidence.length} 条资料${titleSummary}。`;
+}
+
 export interface SpotlightGraphOptions {
   model: BaseChatModel;
   router: IntentRouter;
@@ -58,36 +104,95 @@ export async function runSpotlightGraph(
 ): Promise<SpotlightRunResult> {
   const clientTools = context.request.clientToolManifest?.tools ?? [];
   const memorySubjectId = context.request.memorySubjectId?.trim();
-  const namespace = memorySubjectId
-    ? memoryNamespace(context.project.projectId, memorySubjectId)
-    : null;
+  const namespace = memorySubjectId ? memoryNamespace(context.project.projectId, memorySubjectId) : null;
   const graph = new StateGraph(RuntimeState)
     .addNode("route", async (state) => {
       const decision = await options.router.route(state.question, clientTools);
       const allowed = actionToolAllowlist(clientTools, decision);
       if (decision.route === "action" && allowed.length === 0) {
-        options.onPhase?.("router_done", "路由要求澄清，未开放任何 Client Tool。");
+        const clarifiedDecision = {
+          ...decision,
+          route: "clarify" as const,
+          reason: "No registered client tool safely matches the requested action.",
+        };
+        options.onPhase?.(
+          "router_done",
+          `${routeProgressSummary(state.question, clarifiedDecision)} 当前没有已注册且可安全匹配的页面工具。`,
+        );
         return {
-          decision: {
-            ...decision,
-            route: "clarify" as const,
-            reason: "No registered client tool safely matches the requested action.",
-          },
+          decision: clarifiedDecision,
         };
       }
-      options.onPhase?.("router_done", `已路由到 ${decision.route} Agent。`);
+      options.onPhase?.("router_done", routeProgressSummary(state.question, decision));
       return { decision };
     })
     .addNode("knowledge", async (state) => {
-      options.onPhase?.("knowledge_agent_start", "Knowledge Agent 已启动。");
+      const completedSearches: string[] = [];
+      let attemptedSources = 0;
+      const availableSources = [
+        context.project.knowledgeProvider ? `项目知识库“${context.project.knowledgeProvider.id}”` : null,
+        context.project.webSearchProvider ? `联网搜索“${context.project.webSearchProvider.id}”` : null,
+        ...context.project.serverTools
+          .filter((item) => item.metadata.effect === "read")
+          .map((item) => `服务端工具“${item.name}”`),
+      ].filter((item): item is string => Boolean(item));
+      options.onPhase?.(
+        "knowledge_agent_start",
+        availableSources.length > 0
+          ? `可用资料源：${availableSources.join("、")}；正在判断是否需要调用这些来源查找“${compactText(state.question, 48)}”的依据。`
+          : "当前没有配置外部资料源，将仅依据项目上下文回答。",
+      );
       const tools: StructuredToolInterface[] = context.project.serverTools
         .filter((item) => item.metadata.effect === "read")
-        .map((item) => createServerLangChainTool(item, context));
+        .map((item) =>
+          createServerLangChainTool(item, context, {
+            onStart: (input) => {
+              attemptedSources += 1;
+              options.onPhase?.(
+                "knowledge_agent_start",
+                `正在调用服务端资料工具“${item.name}”：${toolInputSummary(input)}。`,
+              );
+            },
+            onComplete: (input, output) => {
+              const summary = `服务端资料工具“${item.name}”已完成（${toolInputSummary(input)}，${toolOutputSummary(output)}）。`;
+              completedSearches.push(summary);
+              options.onPhase?.("knowledge_agent_start", `${summary} 正在依据资料组织回答。`);
+            },
+          }),
+        );
       if (context.project.knowledgeProvider) {
-        tools.push(createKnowledgeTool(context.project.knowledgeProvider, context));
+        const provider = context.project.knowledgeProvider;
+        const source = `项目知识库“${provider.id}”`;
+        tools.push(
+          createKnowledgeTool(provider, context, {
+            onStart: ({ query }) => {
+              attemptedSources += 1;
+              options.onPhase?.("knowledge_agent_start", `正在检索${source}：“${compactText(query, 64)}”。`);
+            },
+            onComplete: ({ query }, evidence) => {
+              const summary = evidenceProgressSummary(source, query, evidence);
+              completedSearches.push(summary);
+              options.onPhase?.("knowledge_agent_start", `${summary} 正在依据资料组织回答。`);
+            },
+          }),
+        );
       }
       if (context.project.webSearchProvider) {
-        tools.push(createWebSearchTool(context.project.webSearchProvider, context));
+        const provider = context.project.webSearchProvider;
+        const source = `联网搜索“${provider.id}”`;
+        tools.push(
+          createWebSearchTool(provider, context, {
+            onStart: ({ query }) => {
+              attemptedSources += 1;
+              options.onPhase?.("knowledge_agent_start", `正在使用${source}搜索：“${compactText(query, 64)}”。`);
+            },
+            onComplete: ({ query }, evidence) => {
+              const summary = evidenceProgressSummary(source, query, evidence);
+              completedSearches.push(summary);
+              options.onPhase?.("knowledge_agent_start", `${summary} 正在依据资料组织回答。`);
+            },
+          }),
+        );
       }
       const controlMode = memoryControlMode(state.question);
       if (controlMode && !namespace) {
@@ -102,9 +207,7 @@ export async function runSpotlightGraph(
       if (controlMode && namespace) {
         tools.push(...createLongTermMemoryTools(options.store, namespace, controlMode));
       }
-      const storedMemories = namespace
-        ? await options.store.search(namespace, { limit: 20 })
-        : [];
+      const storedMemories = namespace ? await options.store.search(namespace, { limit: 20 }) : [];
       const memoryContext = storedMemories.length
         ? `User-approved long-term memory:\n${storedMemories
             .map((item) => `- ${item.key}: ${JSON.stringify(item.value)}`)
@@ -118,7 +221,9 @@ export async function runSpotlightGraph(
           "Answer informational questions using evidence. Never perform or propose a client UI action.",
           "Cite source titles or URLs returned by tools when available. Say when evidence is insufficient.",
           "Long-term memory is user-scoped context, not evidence. Never write or delete it unless the latest message explicitly requests that operation.",
-          controlMode ? `The user explicitly requested a ${controlMode} operation. You must call the provided memory tool before confirming success.` : "No memory mutation is allowed for this turn.",
+          controlMode
+            ? `The user explicitly requested a ${controlMode} operation. You must call the provided memory tool before confirming success.`
+            : "No memory mutation is allowed for this turn.",
           memoryContext,
           context.project.systemPrompt ?? "",
         ].join("\n"),
@@ -126,7 +231,14 @@ export async function runSpotlightGraph(
       });
       const result = await agent.invoke({ messages: state.messages });
       const reply = finalAgentText(result);
-      options.onPhase?.("knowledge_agent_done", "Knowledge Agent 已完成回答。");
+      options.onPhase?.(
+        "knowledge_agent_done",
+        completedSearches.length > 0
+          ? completedSearches.join("\n")
+          : attemptedSources > 0
+            ? "已尝试调用外部资料源，但没有取得可用结果；回答仅依据模型与当前项目上下文生成。"
+            : "本轮未调用项目知识库、联网搜索或服务端资料工具；回答仅依据模型与当前项目上下文生成。",
+      );
       return {
         assistantReply: reply,
         invokedClientTools: [],
@@ -134,9 +246,12 @@ export async function runSpotlightGraph(
       };
     })
     .addNode("action", async (state) => {
-      options.onPhase?.("action_agent_start", "Action Agent 已启动。");
       const invoked: string[] = [];
       const allowed = actionToolAllowlist(clientTools, state.decision);
+      options.onPhase?.(
+        "action_agent_start",
+        `正在从 ${allowed.length} 个已注册页面工具中匹配“${compactText(state.question, 56)}”。`,
+      );
       const tools = allowed.map((item) => createClientLangChainTool(item, context, invoked));
       const agent = createAgent({
         model: options.model,
@@ -151,7 +266,16 @@ export async function runSpotlightGraph(
       });
       const result = await agent.invoke({ messages: state.messages });
       const reply = finalAgentText(result);
-      options.onPhase?.("action_agent_done", "Action Agent 已完成操作。");
+      const invokedSummary = invoked.map((name) => {
+        const descriptor = clientTools.find((item) => item.name === name);
+        return descriptor?.description ? `“${descriptor.description}”（${name}）` : name;
+      });
+      options.onPhase?.(
+        "action_agent_done",
+        invokedSummary.length > 0
+          ? `已选择并调用：${invokedSummary.join("、")}。`
+          : "本轮未调用页面工具；没有得到可安全执行的完整工具参数。",
+      );
       return {
         assistantReply: reply,
         invokedClientTools: invoked,
@@ -162,7 +286,11 @@ export async function runSpotlightGraph(
       const reply =
         context.project.clarificationPrompt ??
         "我还不能安全地确定你要执行的操作或目标，请明确说要打开、关闭、播放或切换什么。";
-      return { assistantReply: reply, invokedClientTools: [], messages: [new AIMessage(reply)] };
+      return {
+        assistantReply: reply,
+        invokedClientTools: [],
+        messages: [new AIMessage(reply)],
+      };
     })
     .addEdge(START, "route")
     .addConditionalEdges("route", (state) => state.decision.route, {
