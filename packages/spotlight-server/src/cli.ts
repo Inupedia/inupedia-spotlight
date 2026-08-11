@@ -6,45 +6,48 @@ import { LangChainIntentRouter } from "./router.js";
 import { RunManager } from "./runManager.js";
 import { buildServer } from "./server.js";
 
-function required(name: string, fallbackName?: string): string {
-  const value = process.env[name]?.trim() || (fallbackName ? process.env[fallbackName]?.trim() : "");
+function required(env: NodeJS.ProcessEnv, name: string, fallbackName?: string): string {
+  const value = env[name]?.trim() || (fallbackName ? env[fallbackName]?.trim() : "");
   if (!value) throw new Error(`${name}${fallbackName ? ` or ${fallbackName}` : ""} is required`);
   return value;
 }
 
-export async function main(): Promise<void> {
-  const project = await loadProjectPack(required("SPOTLIGHT_PROJECT_CONFIG"));
-  const useQwen = process.env.SPOTLIGHT_LLM_PROVIDER?.trim().toLowerCase() === "qwen";
+export function resolveModelConfigs(env: NodeJS.ProcessEnv = process.env) {
+  const useQwen = env.SPOTLIGHT_LLM_PROVIDER?.trim().toLowerCase() === "qwen";
   const modelConfig = {
     apiKey: required(
+      env,
       "SPOTLIGHT_LLM_API_KEY",
       useQwen ? "QWEN_API_KEY" : "SILICONFLOW_API_KEY",
     ),
     baseURL:
-      process.env.SPOTLIGHT_LLM_BASE_URL ??
-      (useQwen ? process.env.QWEN_API_BASE : process.env.SILICONFLOW_API_BASE),
+      env.SPOTLIGHT_LLM_BASE_URL ??
+      (useQwen ? env.QWEN_API_BASE : env.SILICONFLOW_API_BASE),
     model:
-      process.env.SPOTLIGHT_LLM_MODEL ??
-      (useQwen ? process.env.QWEN_MODEL : process.env.SILICONFLOW_MODEL) ??
+      env.SPOTLIGHT_LLM_MODEL ??
+      (useQwen ? env.QWEN_MODEL : env.SILICONFLOW_MODEL) ??
       "gpt-4.1-mini",
-    routerModel: process.env.SPOTLIGHT_ROUTER_MODEL,
-    timeoutMs: Number(process.env.SPOTLIGHT_LLM_TIMEOUT_MS ?? 45_000),
+    routerModel: env.SPOTLIGHT_ROUTER_MODEL,
+    timeoutMs: Number(env.SPOTLIGHT_LLM_TIMEOUT_MS ?? 45_000),
   };
   const routerConfig = {
     apiKey:
-      process.env.SPOTLIGHT_ROUTER_API_KEY?.trim() ||
-      process.env.QWEN_API_KEY?.trim() ||
+      env.SPOTLIGHT_ROUTER_API_KEY?.trim() ||
       modelConfig.apiKey,
     baseURL:
-      process.env.SPOTLIGHT_ROUTER_BASE_URL ??
-      process.env.QWEN_API_BASE ??
+      env.SPOTLIGHT_ROUTER_BASE_URL ??
       modelConfig.baseURL,
     model:
-      process.env.SPOTLIGHT_ROUTER_MODEL ??
-      process.env.QWEN_MODEL ??
+      env.SPOTLIGHT_ROUTER_MODEL ??
       modelConfig.model,
-    timeoutMs: Number(process.env.SPOTLIGHT_ROUTER_TIMEOUT_MS ?? 20_000),
+    timeoutMs: Number(env.SPOTLIGHT_ROUTER_TIMEOUT_MS ?? 20_000),
   };
+  return { modelConfig, routerConfig };
+}
+
+export async function main(): Promise<void> {
+  const project = await loadProjectPack(required(process.env, "SPOTLIGHT_PROJECT_CONFIG"));
+  const { modelConfig, routerConfig } = resolveModelConfigs();
   const memory = createMemoryRuntime(process.env.SPOTLIGHT_DATABASE_URL);
   await memory.setup();
   const manager = new RunManager({
