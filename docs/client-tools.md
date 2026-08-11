@@ -34,7 +34,7 @@ export const spotlightTools = [playVideoFullscreen, closeVideo];
 ## 1. 安装
 
 ```bash
-pnpm add @inupedia/spotlight-client@^0.5.8 @inupedia/spotlight-vue@^0.5.8
+pnpm add @inupedia/spotlight-client@^0.5.9 @inupedia/spotlight-vue@^0.5.9
 ```
 
 ## 2. 配置 Vite
@@ -201,7 +201,7 @@ dist/spotlight-client-manifest.json
 
 Server 读取可信清单后，将 Client Tool 转为真正的 LangChain Tool。模型调用该 Tool 时，执行请求通过现有浏览器 RPC 回到对应页面。LangChain 和 LangGraph 因此属于 Server 实现细节，不增加业务项目的接入成本。
 
-## 从 0.5.6 迁移到 0.5.8
+## 从 0.5.6 迁移到 0.5.9
 
 1. 将 `@inupedia/spotlight-client`、`@inupedia/spotlight-protocol`、`@inupedia/spotlight-vue` 升级到同一版本。
 2. 单步 Tool 不必增加 Skill；需要业务流程、动态能力说明或相似 Tool 消歧时，再增加 `.inupedia/skills/**/SKILL.md`。

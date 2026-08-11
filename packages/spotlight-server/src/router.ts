@@ -1,6 +1,7 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { FrontendToolDescriptorV1 } from "@inupedia/spotlight-protocol";
+import type { SpotlightSkill } from "@inupedia/spotlight-protocol";
 import { z } from "zod";
 import type { IntentDecision } from "./contracts.js";
 import {
@@ -18,7 +19,31 @@ const intentSchema = z.object({
 });
 
 export interface IntentRouter {
-  route(question: string, clientTools: FrontendToolDescriptorV1[]): Promise<IntentDecision>;
+  route(
+    question: string,
+    clientTools: FrontendToolDescriptorV1[],
+    skills?: SpotlightSkill[],
+  ): Promise<IntentDecision>;
+}
+
+function normalizeCapabilityExample(value: string): string {
+  return value.replace(/[\s，。！？、,.!?]/gu, "").toLowerCase();
+}
+
+function matchSkillCapabilityExample(
+  question: string,
+  skills: SpotlightSkill[],
+): { skill: SpotlightSkill; example: string } | null {
+  const normalizedQuestion = normalizeCapabilityExample(question);
+  for (const skill of skills) {
+    if (!skill.allowedTools?.length) continue;
+    for (const example of skill.capabilityExamples ?? []) {
+      if (normalizeCapabilityExample(example) === normalizedQuestion) {
+        return { skill, example };
+      }
+    }
+  }
+  return null;
 }
 
 export class LangChainIntentRouter implements IntentRouter {
@@ -27,6 +52,7 @@ export class LangChainIntentRouter implements IntentRouter {
   async route(
     question: string,
     clientTools: FrontendToolDescriptorV1[],
+    skills: SpotlightSkill[] = [],
   ): Promise<IntentDecision> {
     if (hasMemoryControlEvidence(question)) {
       return {
@@ -46,6 +72,16 @@ export class LangChainIntentRouter implements IntentRouter {
         explicitActionEvidence: null,
       };
     }
+    const matchedSkillExample = matchSkillCapabilityExample(question, skills);
+    if (matchedSkillExample) {
+      return {
+        route: "action",
+        confidence: 1,
+        reason: `Deterministic consumer Skill capability example match: ${matchedSkillExample.skill.name}.`,
+        requestedToolNames: [],
+        explicitActionEvidence: matchedSkillExample.example,
+      };
+    }
     const explicitActionEvidence = extractActionEvidence(question);
     if (explicitActionEvidence) {
       return {
@@ -60,6 +96,13 @@ export class LangChainIntentRouter implements IntentRouter {
       name: item.name,
       description: item.description,
       sideEffect: item.sideEffect,
+    }));
+    const skillCatalog = skills.map((skill) => ({
+      name: skill.name,
+      description: skill.description,
+      whenToUse: skill.whenToUse,
+      capabilityExamples: skill.capabilityExamples,
+      allowedTools: skill.allowedTools,
     }));
     const structured = this.model.withStructuredOutput(intentSchema, {
       name: "spotlight_intent_route",
@@ -76,7 +119,11 @@ export class LangChainIntentRouter implements IntentRouter {
         ].join("\n"),
       ),
       new HumanMessage(
-        JSON.stringify({ latestUserMessage: question, clientTools: toolCatalog }),
+        JSON.stringify({
+          latestUserMessage: question,
+          clientTools: toolCatalog,
+          consumerSkills: skillCatalog,
+        }),
       ),
     ]);
     return applyIntentSafetyFence(question, {

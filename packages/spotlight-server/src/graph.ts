@@ -116,7 +116,7 @@ export async function runSpotlightGraph(
   const namespace = memorySubjectId ? memoryNamespace(context.project.projectId, memorySubjectId) : null;
   const graph = new StateGraph(RuntimeState)
     .addNode("route", async (state) => {
-      const decision = await options.router.route(state.question, clientTools);
+      const decision = await options.router.route(state.question, clientTools, runSkills);
       const allowed = actionToolAllowlist(skillBoundClientTools, decision);
       if (decision.route === "action" && allowed.length === 0) {
         const clarifiedDecision = {
