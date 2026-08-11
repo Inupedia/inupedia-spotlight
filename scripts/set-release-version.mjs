@@ -15,6 +15,7 @@ const packageDirs = [
   "packages/spotlight-protocol",
   "packages/spotlight-memory",
   "packages/spotlight-client",
+  "packages/spotlight-server",
   "packages/spotlight-vue",
 ];
 

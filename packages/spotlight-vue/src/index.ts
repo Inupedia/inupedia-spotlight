@@ -2,48 +2,20 @@ export {
   defineSpotlightConfig,
   SPOTLIGHT_CONFIG_KEY,
   type SpotlightConfig,
-  type SpotlightConfigInput,
-  type SpotlightHostServicesRegistration,
   type SpotlightQuickPanelActions,
   type SpotlightVuePluginOptions,
 } from "./config.js";
 export {
-  resolveSpotlightConfig,
-  type SpotlightHostRegistration,
-} from "./resolveConfig.js";
-export {
-  defineSpotlightApp,
   readSpotlightEnv,
-  type DefineSpotlightAppOptions,
   type SpotlightEnvDefaults,
-} from "./host/defineApp.js";
-export {
-  defineSpotlightHost,
-  type DefineSpotlightHostOptions,
-  type SpotlightHostFactory,
-  type SpotlightHostSkillsInput,
-} from "./host/defineHost.js";
-export {
-  defineSpotlightCapabilityHost,
-  type DefineSpotlightCapabilityHostOptions,
-} from "./host/capabilityHost.js";
-export {
-  getDefaultSpotlightHostCore,
-  useSpotlightAction,
-  useSpotlightReadable,
-  type UseSpotlightHostCoreOptions,
-} from "./composables/useSpotlightHostCore.js";
-export {
-  normalizeSkillsOption,
-  type SpotlightHostSkillsOption,
-} from "./host/normalizeSkills.js";
+} from "./env.js";
 export { mergeSpotlightSkills } from "./host/mergeSkills.js";
 export {
   getSpotlightConfig,
-  getSpotlightHostAdapter,
+  getSpotlightClientTools,
   getSpotlightHttp,
   SpotlightVue,
-  SPOTLIGHT_HOST_ADAPTER_KEY,
+  SPOTLIGHT_CLIENT_TOOLS_KEY,
   SPOTLIGHT_HTTP_KEY,
 } from "./plugin.js";
 
@@ -138,34 +110,6 @@ export { useSpotlightPanelUi } from "./composables/useSpotlightPanelUi.js";
 export { useSpotlightCommandShortcuts } from "./composables/useSpotlightCommandShortcuts.js";
 export { isGenericHostExecutionReply } from "./avatar/speech/live2dAnswerSpeechPolicy.js";
 export type { SpotlightAvatarConfig } from "./avatar/config.js";
-export {
-  buildCommonWorkflowSteps,
-  buildCommonSteps,
-  COMMON_WORKFLOW_STEPS,
-} from "./workflow/shared.js";
-export { runHostTool } from "./workflow/runHostTool.js";
-export {
-  buildOperateWorkflowSteps,
-  createOperateExecutor,
-  isOperateWorkflowContext,
-  type OperateToolCall,
-  type OperateWorkflowDefinition,
-} from "./workflow/operate.js";
-export {
-  createOperateDefinition,
-  type CreateOperateDefinitionOptions,
-  type OperateActionBinding,
-} from "./workflow/createOperateDefinition.js";
-export {
-  buildRepeatLastAnswerContext,
-  buildOperateCommandContext,
-  buildSessionControlWorkflowSteps,
-  createRunSessionHostTool,
-  createSessionControlExecutor,
-  type ExecuteOperateWorkflow,
-  type SessionControlHooksFactory,
-  type SessionControlWorkflowHooks,
-} from "./workflow/sessionControl.js";
 
 export type { ToolResult, ToolTraceEvent } from "./types/toolResult.js";
 export type { SessionControlIntent } from "./types/session.js";

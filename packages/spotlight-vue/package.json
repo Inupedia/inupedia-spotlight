@@ -1,7 +1,7 @@
 {
   "name": "@inupedia/spotlight-vue",
-  "version": "0.2.9",
-  "description": "Vue plugin and config entry for Inupedia Spotlight (monorepo workspace package)",
+  "version": "0.5.11",
+  "description": "Thin Vue runtime for Inupedia Spotlight Client Tools",
   "type": "module",
   "license": "MIT",
   "author": "inupedia",
@@ -25,10 +25,6 @@
     "./store": {
       "types": "./dist/store/index.d.ts",
       "import": "./dist/store/index.js"
-    },
-    "./workflow": {
-      "types": "./dist/workflow/index.d.ts",
-      "import": "./dist/workflow/index.js"
     },
     "./testing": {
       "types": "./dist/testing/index.d.ts",

@@ -5,6 +5,7 @@ export const SPOTLIGHT_PIPELINE_STEP_IDS = {
   intent: "2",
   tool: "3",
   analysis: "4",
+  agent: "langgraph-agent",
 } as const;
 
 export const SPOTLIGHT_PIPELINE_STEP_LABELS = {

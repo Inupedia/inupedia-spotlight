@@ -1,0 +1,132 @@
+{
+  "repository": "https://github.com/agentskills/agentskills.git",
+  "commit": "38a2ff82958afee88dadf4831509e6f7e9d8ef4e",
+  "packageVersion": "0.1.0",
+  "cases": [
+    {
+      "id": "valid-basic",
+      "directoryName": "monitoring",
+      "markdown": "---\nname: monitoring\ndescription: Query cameras when monitoring status is requested.\n---\n# Monitoring\n",
+      "officialValid": true,
+      "spotlightStrictValid": true
+    },
+    {
+      "id": "valid-all-fields",
+      "directoryName": "monitoring",
+      "markdown": "---\nname: monitoring\ndescription: Query cameras when monitoring status is requested.\nlicense: Apache-2.0\ncompatibility: Requires Node.js 22.\nmetadata:\n  owner: platform\nallowed-tools: data.get-video-info video.open\n---\n# Monitoring\n",
+      "officialValid": true,
+      "spotlightStrictValid": true
+    },
+    {
+      "id": "invalid-uppercase-name",
+      "directoryName": "Monitoring",
+      "markdown": "---\nname: Monitoring\ndescription: Query cameras.\n---\n# Monitoring\n",
+      "officialValid": false,
+      "spotlightStrictValid": false
+    },
+    {
+      "id": "invalid-underscore-name",
+      "directoryName": "camera_monitoring",
+      "markdown": "---\nname: camera_monitoring\ndescription: Query cameras.\n---\n# Monitoring\n",
+      "officialValid": false,
+      "spotlightStrictValid": false
+    },
+    {
+      "id": "invalid-directory-mismatch",
+      "directoryName": "monitoring",
+      "markdown": "---\nname: camera-monitoring\ndescription: Query cameras.\n---\n# Monitoring\n",
+      "officialValid": false,
+      "spotlightStrictValid": false
+    },
+    {
+      "id": "invalid-missing-name",
+      "directoryName": "monitoring",
+      "markdown": "---\ndescription: Query cameras.\n---\n# Monitoring\n",
+      "officialValid": false,
+      "spotlightStrictValid": false
+    },
+    {
+      "id": "invalid-missing-description",
+      "directoryName": "monitoring",
+      "markdown": "---\nname: monitoring\n---\n# Monitoring\n",
+      "officialValid": false,
+      "spotlightStrictValid": false
+    },
+    {
+      "id": "invalid-unknown-field",
+      "directoryName": "monitoring",
+      "markdown": "---\nname: monitoring\ndescription: Query cameras.\nwhen_to_use: Always\n---\n# Monitoring\n",
+      "officialValid": false,
+      "spotlightStrictValid": false
+    },
+    {
+      "id": "invalid-name-too-long",
+      "directoryName": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "markdown": "---\nname: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ndescription: Query cameras.\n---\n# Monitoring\n",
+      "officialValid": false,
+      "spotlightStrictValid": false
+    },
+    {
+      "id": "invalid-description-too-long",
+      "directoryName": "monitoring",
+      "markdown": "---\nname: monitoring\ndescription: >\n  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n---\n# Monitoring\n",
+      "officialValid": false,
+      "spotlightStrictValid": false
+    },
+    {
+      "id": "invalid-yaml",
+      "directoryName": "monitoring",
+      "markdown": "---\nname: monitoring\ndescription: Query cameras.\nmetadata: [unterminated\n---\n# Monitoring\n",
+      "officialValid": false,
+      "spotlightStrictValid": false
+    },
+    {
+      "id": "divergence-unicode-name",
+      "directoryName": "监控",
+      "markdown": "---\nname: 监控\ndescription: Query cameras.\n---\n# Monitoring\n",
+      "officialValid": true,
+      "spotlightStrictValid": false,
+      "divergenceReason": "The normative specification limits name characters to ASCII a-z, 0-9, and hyphen; pinned skills-ref uses Unicode isalnum()."
+    },
+    {
+      "id": "divergence-numeric-metadata",
+      "directoryName": "monitoring",
+      "markdown": "---\nname: monitoring\ndescription: Query cameras.\nmetadata:\n  retries: 3\n---\n# Monitoring\n",
+      "officialValid": true,
+      "spotlightStrictValid": false,
+      "divergenceReason": "The normative specification requires string-to-string metadata; pinned skills-ref coerces metadata values to strings."
+    },
+    {
+      "id": "divergence-numeric-metadata-key",
+      "directoryName": "monitoring",
+      "markdown": "---\nname: monitoring\ndescription: Query cameras.\nmetadata:\n  42: owner\n---\n# Monitoring\n",
+      "officialValid": true,
+      "spotlightStrictValid": false,
+      "divergenceReason": "The normative specification requires string-to-string metadata; pinned skills-ref coerces metadata keys to strings."
+    },
+    {
+      "id": "divergence-comma-allowed-tools",
+      "directoryName": "monitoring",
+      "markdown": "---\nname: monitoring\ndescription: Query cameras.\nallowed-tools: camera.open,camera.close\n---\n# Monitoring\n",
+      "officialValid": true,
+      "spotlightStrictValid": false,
+      "divergenceReason": "The normative specification defines a space-delimited string; pinned skills-ref does not validate the delimiter."
+    },
+    {
+      "id": "divergence-empty-compatibility",
+      "directoryName": "monitoring",
+      "markdown": "---\nname: monitoring\ndescription: Query cameras.\ncompatibility: \"\"\n---\n# Monitoring\n",
+      "officialValid": true,
+      "spotlightStrictValid": false,
+      "divergenceReason": "The normative specification requires compatibility to contain 1-500 characters when present; pinned skills-ref accepts an empty value."
+    },
+    {
+      "id": "divergence-non-string-license",
+      "directoryName": "monitoring",
+      "markdown": "---\nname: monitoring\ndescription: Query cameras.\nlicense: 42\n---\n# Monitoring\n",
+      "officialValid": true,
+      "spotlightStrictValid": false,
+      "divergenceReason": "The normative license field is represented as a YAML string; pinned skills-ref does not type-check license."
+    }
+  ]
+}

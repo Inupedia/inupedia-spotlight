@@ -158,8 +158,60 @@ describe("createMemoryGate", () => {
     expect(lookup.hit).toBe(true);
     if (lookup.hit) {
       expect(lookup.result.source).toBe("exact");
+      expect(lookup.result.matchKind).toBe("exact");
+      expect(lookup.result.scope).toBe("project");
       expect(lookup.result.entry.answer).toContain("引大济岷");
     }
+  });
+
+  it("persists v2 provenance and excludes pending candidates from recall", async () => {
+    const store = new Map<string, SpotlightMemoryEntry>();
+    const reader = {
+      getExact: async (key: string) => store.get(key) ?? null,
+      findSemantic: async () => [],
+      touch: async () => {},
+    };
+    const writer = {
+      putExact: async (key: string, entry: SpotlightMemoryEntry) => {
+        store.set(key, entry);
+      },
+      putSemantic: async () => {},
+      hasExact: async (key: string) => store.has(key),
+    };
+    const gate = createMemoryGate(reader, writer);
+    const write = await gate.write({
+      schemaVersion: 2,
+      projectId: "p1",
+      question: "未经验证的项目说法",
+      kind: "qa_answer",
+      recordType: "candidate",
+      status: "pending",
+      answer: "这条候选内容不能直接成为共享项目事实。",
+      invalidation: {},
+      confidence: 0.95,
+      evidence: [
+        {
+          id: "external-1",
+          kind: "external",
+          source: "tavily.search",
+          capturedAt: 1,
+        },
+      ],
+    });
+    expect(write.written).toBe(true);
+    expect([...store.values()][0]).toMatchObject({
+      schemaVersion: 2,
+      recordType: "candidate",
+      status: "pending",
+    });
+
+    const lookup = await gate.lookup({
+      projectId: "p1",
+      question: "未经验证的项目说法",
+      invalidation: {},
+      exactOnly: true,
+    });
+    expect(lookup).toMatchObject({ hit: false, miss: { reason: "not_found" } });
   });
 });
 
@@ -243,6 +295,13 @@ describe("SemanticMemoryStore", () => {
       exactOnly: true,
     });
     expect(ownSession.hit).toBe(true);
+    if (ownSession.hit) {
+      expect(ownSession.result).toMatchObject({
+        source: "session",
+        matchKind: "exact",
+        scope: "session",
+      });
+    }
 
     const otherSession = await stores.gate.lookup({
       projectId: "demo",
@@ -262,6 +321,11 @@ describe("SemanticMemoryStore", () => {
     });
     expect(projectFallback.hit).toBe(true);
     if (projectFallback.hit) {
+      expect(projectFallback.result).toMatchObject({
+        source: "exact",
+        matchKind: "exact",
+        scope: "project",
+      });
       expect(projectFallback.result.entry.answer).toContain("公共");
     }
   });
@@ -279,7 +343,11 @@ describe("file memory", () => {
     tempRoot = mkdtempSync(join(tmpdir(), "spotlight-file-memory-"));
     const cwd = join(tempRoot, "workspace", "app");
     mkdirSync(cwd, { recursive: true });
-    writeFileSync(join(cwd, "CLAUDE.md"), "Project rule: use metric units.", "utf8");
+    writeFileSync(
+      join(cwd, "CLAUDE.md"),
+      "Project rule: use metric units.",
+      "utf8",
+    );
 
     const memoryBase = join(tempRoot, "memory");
     const paths = resolveSpotlightFileMemoryPaths({
@@ -288,9 +356,17 @@ describe("file memory", () => {
       baseDir: memoryBase,
     });
     mkdirSync(paths.autoDir, { recursive: true });
-    writeFileSync(paths.autoEntrypoint, "Auto memory: prefer tunnel context.", "utf8");
+    writeFileSync(
+      paths.autoEntrypoint,
+      "Auto memory: prefer tunnel context.",
+      "utf8",
+    );
     mkdirSync(paths.sessionDir!, { recursive: true });
-    writeFileSync(paths.sessionEntrypoint!, "Session memory: user is comparing reports.", "utf8");
+    writeFileSync(
+      paths.sessionEntrypoint!,
+      "Session memory: user is comparing reports.",
+      "utf8",
+    );
 
     const agentPath = resolveAgentMemoryEntrypoint({
       projectId: "demo/project",
@@ -300,7 +376,11 @@ describe("file memory", () => {
       cwd,
     });
     mkdirSync(join(agentPath, ".."), { recursive: true });
-    writeFileSync(agentPath, "Agent memory: ask for missing time range.", "utf8");
+    writeFileSync(
+      agentPath,
+      "Agent memory: ask for missing time range.",
+      "utf8",
+    );
 
     const prompt = await buildSpotlightFileMemoryPrompt({
       projectId: "demo/project",

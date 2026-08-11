@@ -1,13 +1,49 @@
 /** Spotlight Memory — shared types (client ↔ server, persisted entries). */
 
 export type SpotlightMemoryEntryKind =
-  | "qa_answer"
-  | "action_plan"
-  | "routing_hint"
-  | "data_snapshot";
+  "qa_answer" | "action_plan" | "routing_hint" | "data_snapshot";
 
 export type SpotlightMemoryHitSource = "exact" | "semantic" | "session";
 export type SpotlightMemoryScope = "project" | "session";
+export type SpotlightMemoryMatchKind = "exact" | "semantic";
+export type SpotlightMemoryRecordType =
+  | "answer_artifact"
+  | "atomic_fact"
+  | "dynamic_snapshot"
+  | "candidate"
+  | "operation_observation";
+export type SpotlightMemoryStatus =
+  "active" | "pending" | "superseded" | "invalid";
+export type SpotlightMemoryEvidenceKind =
+  | "knowledge"
+  | "project_api"
+  | "project_pack"
+  | "user_confirmed"
+  | "external"
+  | "derived"
+  | "historical";
+
+export interface SpotlightMemoryEvidence {
+  id: string;
+  kind: SpotlightMemoryEvidenceKind;
+  source: string;
+  sourceVersion?: string;
+  capturedAt: number;
+  uri?: string;
+}
+
+export type SpotlightMemoryDecisionAction =
+  "reuse" | "augment" | "refresh" | "ignore";
+
+export interface SpotlightMemoryDecision {
+  action: SpotlightMemoryDecisionAction;
+  reasonCode: string;
+  confidence: number;
+  memoryIds: string[];
+  sourceLabel?: string;
+  verifiedAt?: number;
+  canForceRefresh: boolean;
+}
 
 /** Version pins — entry invalid when context versions diverge. */
 export interface SpotlightMemoryInvalidationContext {
@@ -26,9 +62,12 @@ export interface SpotlightMemoryPlan {
 /** One persisted memory row (exact jsonl or semantic sqlite). */
 export interface SpotlightMemoryEntry {
   id: string;
+  schemaVersion?: 2;
   projectId: string;
   scope?: SpotlightMemoryScope;
   sessionId?: string;
+  recordType?: SpotlightMemoryRecordType;
+  status?: SpotlightMemoryStatus;
   questionNorm: string;
   questionRaw?: string;
   kind: SpotlightMemoryEntryKind;
@@ -42,6 +81,10 @@ export interface SpotlightMemoryEntry {
   hitCount: number;
   confidence: number;
   sourceRunId?: string;
+  evidence?: SpotlightMemoryEvidence[];
+  sourceVersion?: string;
+  verifiedAt?: number;
+  supersedes?: string[];
 }
 
 export interface SpotlightMemoryLookupInput {
@@ -55,7 +98,10 @@ export interface SpotlightMemoryLookupInput {
 }
 
 export interface SpotlightMemoryHit {
+  /** @deprecated Compatibility label. Prefer matchKind + scope. */
   source: SpotlightMemoryHitSource;
+  matchKind?: SpotlightMemoryMatchKind;
+  scope?: SpotlightMemoryScope;
   entry: SpotlightMemoryEntry;
   confidence: number;
   lookupLatencyMs: number;
@@ -63,11 +109,7 @@ export interface SpotlightMemoryHit {
 
 export interface SpotlightMemoryMiss {
   reason:
-    | "disabled"
-    | "not_found"
-    | "stale"
-    | "below_threshold"
-    | "kind_blocked";
+    "disabled" | "not_found" | "stale" | "below_threshold" | "kind_blocked";
   lookupLatencyMs: number;
 }
 
@@ -87,6 +129,13 @@ export interface SpotlightMemoryWriteInput {
   ttlSec?: number;
   confidence: number;
   sourceRunId?: string;
+  schemaVersion?: 2;
+  recordType?: SpotlightMemoryRecordType;
+  status?: SpotlightMemoryStatus;
+  evidence?: SpotlightMemoryEvidence[];
+  sourceVersion?: string;
+  verifiedAt?: number;
+  supersedes?: string[];
 }
 
 export interface SpotlightMemoryWriteResult {
@@ -98,6 +147,8 @@ export interface SpotlightMemoryWriteResult {
 /** SSE / run meta — optional cache attribution. */
 export interface SpotlightMemoryReplayMeta {
   source: SpotlightMemoryHitSource;
+  matchKind?: SpotlightMemoryMatchKind;
+  scope?: SpotlightMemoryScope;
   entryId: string;
   replayedAt: number;
   kind: SpotlightMemoryEntryKind;

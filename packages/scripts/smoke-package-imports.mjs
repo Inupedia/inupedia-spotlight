@@ -21,7 +21,9 @@ try {
 
   for (const packageName of [
     "spotlight-protocol",
+    "spotlight-memory",
     "spotlight-client",
+    "spotlight-server",
     "spotlight-vue",
   ]) {
     symlinkSync(
@@ -43,11 +45,33 @@ const imports = [
     },
   },
   {
+    id: "@inupedia/spotlight-memory",
+    assert(mod) {
+      assertExport(mod, "classifyMemoryKind", this.id);
+    },
+  },
+  {
+    id: "@inupedia/spotlight-server",
+    assert(mod) {
+      assertExport(mod, "runSpotlightGraph", this.id);
+      assertExport(mod, "buildServer", this.id);
+      assertExport(mod, "YuxiKnowledgeProvider", this.id);
+    },
+  },
+  {
     id: "@inupedia/spotlight-client",
     assert(mod) {
       assertExport(mod, "createSpotlightHttp", this.id);
       if ("createNodeSkillScriptRunner" in mod) {
         throw new Error(\`\${this.id} leaked Node-only createNodeSkillScriptRunner\`);
+      }
+      for (const nodeOnlyExport of [
+        "validateAgentSkillMarkdown",
+        "validateScannedSkill",
+      ]) {
+        if (nodeOnlyExport in mod) {
+          throw new Error(\`\${this.id} leaked Node-only \${nodeOnlyExport}\`);
+        }
       }
     },
   },
@@ -56,6 +80,9 @@ const imports = [
     assert(mod) {
       assertExport(mod, "createNodeSkillScriptRunner", this.id);
       assertExport(mod, "joinSkillScriptPath", this.id);
+      assertExport(mod, "scanProjectSkills", this.id);
+      assertExport(mod, "validateAgentSkillMarkdown", this.id);
+      assertExport(mod, "validateScannedSkill", this.id);
     },
   },
   {
@@ -91,12 +118,6 @@ const imports = [
     id: "@inupedia/spotlight-vue/store",
     assert(mod) {
       assertExport(mod, "useSpotlightStore", this.id);
-    },
-  },
-  {
-    id: "@inupedia/spotlight-vue/workflow",
-    assert(mod) {
-      assertExport(mod, "createOperateDefinition", this.id);
     },
   },
   {

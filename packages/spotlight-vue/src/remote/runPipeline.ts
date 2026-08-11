@@ -1,6 +1,8 @@
+import type {
+  HostToolEffect,
+  SpotlightMemoryDecision,
+} from "@inupedia/spotlight-protocol";
 import { serializeSkillsForRemote } from "@inupedia/spotlight-client";
-import type { HostToolEffect } from "@inupedia/spotlight-protocol";
-import { getSkillsPoolForRun } from "../skills/index.js";
 import { useAgentSessionStore } from "../session/agentSession.js";
 import { useSpotlightMemoryPreferenceStore } from "../store/memoryPreferenceStore.js";
 import { useSpotlightRuntimeStore } from "../store/runtimeStore.js";
@@ -15,6 +17,7 @@ import type { HandlerApi } from "../store/pipeline/types.js";
 import type { AgentStep, AgentStepToolCall } from "../store/types.js";
 import type { SpotlightExecutionEvent } from "../store/runtime/types.js";
 import { getSpotlightConfig } from "../plugin.js";
+import { getSkillsPoolForRun } from "../skills/index.js";
 import {
   ensureHostToolsManifest,
   executeRemoteHostTool,
@@ -53,7 +56,6 @@ type RemoteRunEvent =
       turnId: string;
       assistantReply: string | null;
       commandName: string | null;
-      usedQueryLoop: boolean;
       stopReason: string;
       failureClass: string | null;
       elapsedMs: number;
@@ -63,9 +65,16 @@ type RemoteRunEvent =
         replayedAt: number;
         kind: string;
       };
+      memoryDecision?: SpotlightMemoryDecision;
       sessionPatch?: Partial<
         import("@inupedia/spotlight-protocol").SpotlightSessionState
       >;
+    }
+  | {
+      type: "memory_decision";
+      at: number;
+      turnId: string;
+      decision: SpotlightMemoryDecision;
     }
   | {
       type: "run_error";
@@ -109,11 +118,6 @@ type RemoteRunEvent =
       reason?: string;
     };
 
-type RemoteRunCompletedEvent = Extract<
-  RemoteRunEvent,
-  { type: "run_completed" }
->;
-
 function isTelemetryEvent(
   event: RemoteRunEvent,
 ): event is SpotlightExecutionEvent {
@@ -121,7 +125,8 @@ function isTelemetryEvent(
     event.type !== "host_action_request" &&
     event.type !== "run_completed" &&
     event.type !== "run_error" &&
-    event.type !== "ping"
+    event.type !== "ping" &&
+    event.type !== "memory_decision"
   );
 }
 
@@ -245,11 +250,109 @@ function ensureToolStepActive(api: HandlerApi, stepId: string) {
   api.setStep(stepId, "active", step.content);
 }
 
-function toolStepLabel(stepId: string, label: string | null | undefined): string {
+function toolStepLabel(
+  stepId: string,
+  label: string | null | undefined,
+): string {
   if (label) return label;
   return stepId === SPOTLIGHT_PIPELINE_STEP_IDS.tool
     ? "执行工具与回答"
     : stepId;
+}
+
+export function responseStepLabel(api: HandlerApi): string {
+  const agentStep = api
+    .getSteps()
+    .find((item) => item.id === SPOTLIGHT_PIPELINE_STEP_IDS.agent);
+  if (agentStep?.label === "检索知识") return "知识问答";
+  if (agentStep?.label === "选择工具") return "执行工具与回答";
+  return "生成回答";
+}
+
+function setTransitionStep(
+  api: HandlerApi,
+  id: string,
+  label: string,
+  status: AgentStep["status"],
+  content: string,
+) {
+  ensureStep(api, id, label);
+  api.setStep(id, status, content);
+}
+
+export function applyLangGraphTransition(
+  api: HandlerApi,
+  event: Extract<SpotlightExecutionEvent, { type: "turn_transition" }>,
+) {
+  const summary = event.summary?.trim();
+  switch (event.phase) {
+    case "routing":
+    case "analyzing":
+      setTransitionStep(
+        api,
+        SPOTLIGHT_PIPELINE_STEP_IDS.intent,
+        "分析意图",
+        "active",
+        summary ?? "正在分析用户意图。",
+      );
+      return;
+    case "router_done":
+      setTransitionStep(
+        api,
+        SPOTLIGHT_PIPELINE_STEP_IDS.intent,
+        "分析意图",
+        "done",
+        summary ?? "意图分析已完成。",
+      );
+      return;
+    case "knowledge_agent_start":
+      setTransitionStep(
+        api,
+        SPOTLIGHT_PIPELINE_STEP_IDS.agent,
+        "检索知识",
+        "active",
+        summary ?? "正在检索项目知识。",
+      );
+      return;
+    case "knowledge_agent_done":
+      setTransitionStep(
+        api,
+        SPOTLIGHT_PIPELINE_STEP_IDS.agent,
+        "检索知识",
+        "done",
+        summary ?? "项目知识检索已完成。",
+      );
+      return;
+    case "action_agent_start":
+      setTransitionStep(
+        api,
+        SPOTLIGHT_PIPELINE_STEP_IDS.agent,
+        "选择工具",
+        "active",
+        summary ?? "正在从已注册工具中选择操作。",
+      );
+      return;
+    case "action_agent_done":
+      setTransitionStep(
+        api,
+        SPOTLIGHT_PIPELINE_STEP_IDS.agent,
+        "选择工具",
+        "done",
+        summary ?? "工具选择与调用已完成。",
+      );
+      return;
+    case "memory_replay":
+      setTransitionStep(
+        api,
+        SPOTLIGHT_PIPELINE_STEP_IDS.breakdown,
+        "问题拆解",
+        "done",
+        summary ?? "Memory 缓存命中，跳过 LLM 规划。",
+      );
+      return;
+    default:
+      return;
+  }
 }
 
 async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
@@ -377,16 +480,26 @@ async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
       `\n[fork ${event.agentId}] 第 ${event.iteration} 轮 · ${event.phase}：${event.summary}\n`,
     );
   } else if (event.type === "turn_transition") {
-    if (event.phase === "memory_replay") {
-      ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.breakdown, "问题拆解");
-      api.setStep(
-        SPOTLIGHT_PIPELINE_STEP_IDS.breakdown,
-        "done",
-        event.summary ?? "Memory 缓存命中，跳过 LLM 规划。",
-      );
-    }
+    applyLangGraphTransition(api, event);
+  } else if (event.type === "memory_decision") {
+    ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.breakdown, "问题拆解");
+    const labels: Record<SpotlightMemoryDecision["action"], string> = {
+      reuse: "已复用项目记忆",
+      augment: "正在结合历史项目结论",
+      refresh: "资料可能变化，正在重新验证",
+      ignore: "未发现可直接使用的项目记忆",
+    };
+    api.setStep(
+      SPOTLIGHT_PIPELINE_STEP_IDS.breakdown,
+      event.decision.action === "reuse" ? "done" : "active",
+      labels[event.decision.action],
+    );
   } else if (event.type === "assistant_response") {
-    ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
+    ensureStep(
+      api,
+      SPOTLIGHT_PIPELINE_STEP_IDS.tool,
+      responseStepLabel(api),
+    );
     const step = api
       .getSteps()
       .find((item) => item.id === SPOTLIGHT_PIPELINE_STEP_IDS.tool);
@@ -469,7 +582,11 @@ export async function warmupSpotlightRemoteContext(
   ]);
 }
 
-async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
+async function buildRemotePayload(
+  userQuestion: string,
+  signal?: AbortSignal,
+  options?: { forceMemoryRefresh?: boolean },
+) {
   const session = useAgentSessionStore();
   const runtime = useSpotlightRuntimeStore();
   const memoryPreference = useSpotlightMemoryPreferenceStore();
@@ -479,7 +596,9 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
     payload: {
       projectId: getSpotlightProjectId(),
       sessionId: session.sessionId,
+      memorySubjectId: getSpotlightConfig().getMemorySubjectId?.() ?? undefined,
       userQuestion,
+      memoryRefreshRequested: options?.forceMemoryRefresh === true,
       uiContext: getSpotlightConfig().getUiContext?.() ?? {},
       sessionState: {
         sessionId: session.sessionId,
@@ -502,8 +621,11 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
         resumableAction: runtime.resumableAction,
         lastResolvedTarget: runtime.lastResolvedTarget,
       },
-      clientToolsManifestVersion: hostManifest.version,
+      clientToolsManifestVersion: hostManifest.manifestDigest,
+      clientToolManifest: hostManifest,
       skills: serializeSkillsForRemote(getSkillsPoolForRun()),
+      frontendBuildId: hostManifest.frontendBuildId,
+      manifestDigest: hostManifest.manifestDigest,
     },
   };
 }
@@ -511,12 +633,14 @@ async function buildRemotePayload(userQuestion: string, signal?: AbortSignal) {
 export async function runRemoteSpotlightPipeline(
   userQuestion: string,
   api: HandlerApi,
+  options?: { forceMemoryRefresh?: boolean },
 ): Promise<SpotlightPipelineRunOutcome> {
   const base = getSpotlightServerBase();
   const signal = api.getSignal();
   const { payload, hostManifest } = await buildRemotePayload(
     userQuestion,
     signal,
+    options,
   );
   const allowedHostNames = new Set(hostManifest.tools.map((t) => t.name));
   const createResponse = await fetch(`${base}/v1/runs`, {
@@ -556,7 +680,6 @@ export async function runRemoteSpotlightPipeline(
   const reader = eventsResponse.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let completed: RemoteRunCompletedEvent | null = null;
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -587,11 +710,10 @@ export async function runRemoteSpotlightPipeline(
           if (event.sessionPatch) {
             useAgentSessionStore().applySessionPatch(event.sessionPatch);
           }
-          completed = event;
           return {
             command: null,
-            usedLegacyFallback: event.usedQueryLoop,
             memoryReplay: event.memoryReplay ?? null,
+            memoryDecision: event.memoryDecision ?? null,
             assistantReply: event.assistantReply,
           };
         }
@@ -603,8 +725,6 @@ export async function runRemoteSpotlightPipeline(
 
   return {
     command: null,
-    usedLegacyFallback:
-      (completed as { usedQueryLoop?: boolean } | null)?.usedQueryLoop ?? true,
   };
 }
 

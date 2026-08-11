@@ -35,6 +35,10 @@ function asStringList(value: unknown): string[] {
 /**
  * Validate skill frontmatter against Spotlight + Agent Skills conventions.
  * Use in CI or local skill authoring tools.
+ *
+ * @deprecated Legacy Inupedia compatibility validator; use
+ * `validateAgentSkillMarkdown` from `@inupedia/spotlight-client/node` for
+ * Agent Skills conformance.
  */
 export function validateSkillFrontmatter(
   data: Record<string, unknown>,
@@ -90,7 +94,9 @@ export function validateSkillFrontmatter(
     });
   }
 
-  const errors = issues.filter((i) => i.level === "error").map((i) => i.message);
+  const errors = issues
+    .filter((i) => i.level === "error")
+    .map((i) => i.message);
   const warnings = issues
     .filter((i) => i.level === "warning")
     .map((i) => i.message);

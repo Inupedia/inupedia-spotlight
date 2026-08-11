@@ -1,5 +1,10 @@
 /** Shared Spotlight protocol types (client ↔ spotlight-server). */
 
+import type { FrontendToolManifestV1 } from "./capabilities.js";
+
+export * from "./capabilities.js";
+export * from "./capabilitySecurity.js";
+
 export type ToolExecutionTarget = "runtime" | "host";
 
 export interface HostToolEffect {
@@ -50,11 +55,7 @@ export interface AgentStep {
 }
 
 export type SpotlightStepContentChannel =
-  | "body"
-  | "planning"
-  | "answer"
-  | "tool"
-  | "trace";
+  "body" | "planning" | "answer" | "tool" | "trace";
 
 /** Host-reported UI context; keep generic for SaaS consumers. */
 export type AgentUiContext = Record<string, unknown>;
@@ -122,9 +123,7 @@ export type AssetType =
   | "scene_target";
 
 export type SpotlightSkillResponseStrategy =
-  | "direct_answer"
-  | "tool_answer"
-  | "clarify";
+  "direct_answer" | "tool_answer" | "clarify";
 
 export interface SpotlightSkill {
   name: string;
@@ -138,6 +137,8 @@ export interface SpotlightSkill {
   responseStrategy?: SpotlightSkillResponseStrategy;
   assetTypes?: AssetType[];
   capabilityExamples?: string[];
+  /** Exact consumer examples bound to one registered tool for ambiguous sibling tools. */
+  toolExamples?: Array<{ example: string; toolName: string }>;
   version?: string;
   model?: string;
   disableModelInvocation?: boolean;
@@ -192,12 +193,18 @@ export interface SpotlightCommandCatalog {
 export interface CreateRunRequest {
   projectId?: string;
   sessionId?: string;
+  /** Stable authenticated subject id for opt-in cross-session memory. */
+  memorySubjectId?: string;
   userQuestion: string;
+  /** One-shot override: bypass reusable memory and verify against sources. */
+  memoryRefreshRequested?: boolean;
   uiContext?: AgentUiContext;
   sessionState?: SpotlightSessionState;
   runtimeState?: SpotlightRuntimeState;
   clientTools?: ClientToolDescriptor[];
   clientToolsManifestVersion?: string;
+  /** Build-pinned browser capability manifest used by the LangGraph Action Agent. */
+  clientToolManifest?: FrontendToolManifestV1;
   skills?: SpotlightSkill[];
   commandCatalog?: SpotlightCommandCatalog;
 }
@@ -249,17 +256,24 @@ export const SPOTLIGHT_CORE_TOOL_NAMES = {
 
 export {
   SPOTLIGHT_MEMORY_DEFAULT_TTL_SEC,
+  type SpotlightMemoryDecision,
+  type SpotlightMemoryDecisionAction,
   type SpotlightMemoryEntry,
   type SpotlightMemoryEntryKind,
+  type SpotlightMemoryEvidence,
+  type SpotlightMemoryEvidenceKind,
   type SpotlightMemoryGateResult,
   type SpotlightMemoryHit,
   type SpotlightMemoryHitSource,
   type SpotlightMemoryInvalidationContext,
   type SpotlightMemoryLookupInput,
+  type SpotlightMemoryMatchKind,
   type SpotlightMemoryMiss,
   type SpotlightMemoryPlan,
+  type SpotlightMemoryRecordType,
   type SpotlightMemoryReplayMeta,
   type SpotlightMemoryScope,
+  type SpotlightMemoryStatus,
   type SpotlightMemoryWriteInput,
   type SpotlightMemoryWriteResult,
 } from "./memory.js";

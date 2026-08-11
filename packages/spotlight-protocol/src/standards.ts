@@ -37,7 +37,8 @@ export function spotlightSkillsGlobPattern(
  * - `mcp` — MCP server tool (external systems, shared across projects)
  * - `runtime` — spotlight-server runtime tool (server-side only)
  */
-export type CapabilitySurface = "host-tool" | "skill-script" | "mcp" | "runtime";
+export type CapabilitySurface =
+  "host-tool" | "skill-script" | "mcp" | "runtime";
 
 /** Agent Skills–compatible frontmatter (+ Spotlight extensions). */
 export interface SpotlightSkillFrontmatter {
@@ -65,6 +66,8 @@ export interface SpotlightSkillFrontmatter {
   /** Spotlight: asset retrieval scope. */
   "spotlight-asset-types"?: string | string[];
   "capability-examples"?: string | string[];
+  /** Entries use `user example => registeredToolName`. */
+  "tool-examples"?: string | string[];
 }
 
 /** Recommended service injection contract (consumer implements). */
@@ -100,8 +103,10 @@ export const SPOTLIGHT_SKILLS_SERVICE_SPLIT = {
 /** Progressive disclosure levels (matches spotlight-server + host adapter). */
 export const SPOTLIGHT_SKILL_LOAD_LEVELS = {
   listing: "name + description + when_to_use in skill catalog (always)",
-  invoke: "SKILL.md body + references/templates/examples appendix (after skill.invoke)",
-  scripts: "scripts/ paths listed in appendix only — execution is consumer-defined",
+  invoke:
+    "SKILL.md body + references/templates/examples appendix (after skill.invoke)",
+  scripts:
+    "scripts/ paths listed in appendix only — execution is consumer-defined",
 } as const;
 
 /** Frontmatter keys recognized by @inupedia/spotlight-vue parser. */

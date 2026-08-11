@@ -13,7 +13,11 @@ import { buildCacheKey, createMemoryEntryId } from "./cacheKey.js";
 import type { MemoryEntryScope } from "./memoryEntryScope.js";
 
 export interface MemoryStoreReader {
-  getExact(cacheKey: string): Promise<import("@inupedia/spotlight-protocol").SpotlightMemoryEntry | null>;
+  getExact(
+    cacheKey: string,
+  ): Promise<
+    import("@inupedia/spotlight-protocol").SpotlightMemoryEntry | null
+  >;
   findSemantic(
     projectId: string,
     questionNorm: string,
@@ -86,7 +90,9 @@ function resolveLookupScopes(input: ScopedLookupInput): Array<{
   return [{ scope: "session", sessionId }, { scope: "project" }];
 }
 
-function pickViableSemanticHit<T extends { entry: SpotlightMemoryEntry; score: number }>(
+function pickViableSemanticHit<
+  T extends { entry: SpotlightMemoryEntry; score: number },
+>(
   candidates: T[],
   params: {
     threshold: number;
@@ -95,11 +101,16 @@ function pickViableSemanticHit<T extends { entry: SpotlightMemoryEntry; score: n
 ): T | null {
   const viable = candidates
     .filter((candidate) => candidate.score >= params.threshold)
+    .filter((candidate) => isMemoryEntryActive(candidate.entry))
     .filter(
       (candidate) => !isMemoryEntryStale(candidate.entry, params.invalidation),
     )
     .filter((candidate) => isMemoryKindAllowedForRead(candidate.entry.kind));
   return viable[0] ?? null;
+}
+
+function isMemoryEntryActive(entry: SpotlightMemoryEntry): boolean {
+  return entry.schemaVersion !== 2 || (entry.status ?? "active") === "active";
 }
 
 export function createMemoryGate(
@@ -138,6 +149,7 @@ export function createMemoryGate(
 
         const exact = await reader.getExact(cacheKey);
         if (exact) {
+          if (!isMemoryEntryActive(exact)) continue;
           if (isMemoryEntryStale(exact, input.invalidation)) {
             continue;
           }
@@ -149,6 +161,8 @@ export function createMemoryGate(
             hit: true,
             result: {
               source: scope.scope === "session" ? "session" : "exact",
+              matchKind: "exact",
+              scope: scope.scope,
               entry: exact,
               confidence: 1,
               lookupLatencyMs: performance.now() - started,
@@ -177,6 +191,8 @@ export function createMemoryGate(
               hit: true,
               result: {
                 source: "semantic",
+                matchKind: "semantic",
+                scope: top.entry.scope ?? scope.scope,
                 entry: top.entry,
                 confidence: top.score,
                 lookupLatencyMs: performance.now() - started,
@@ -205,14 +221,17 @@ export function createMemoryGate(
     },
 
     async write(input): Promise<SpotlightMemoryWriteResult> {
-      if (!enabled) return { written: false, skippedReason: "below_confidence" };
+      if (!enabled)
+        return { written: false, skippedReason: "below_confidence" };
       if (input.confidence < writeMinConfidence) {
         return { written: false, skippedReason: "below_confidence" };
       }
 
       const classified = classifyMemoryKind({
         question: input.question,
-        hasToolPlan: Boolean(input.plan?.toolCalls?.length || input.plan?.command),
+        hasToolPlan: Boolean(
+          input.plan?.toolCalls?.length || input.plan?.command,
+        ),
         hasTextAnswer: Boolean(input.answer?.trim()),
         usedDataTools: input.kind === "data_snapshot",
       });
@@ -238,9 +257,12 @@ export function createMemoryGate(
 
       const entry: ScopedMemoryEntry = {
         id: createMemoryEntryId(),
+        schemaVersion: input.schemaVersion,
         projectId: input.projectId,
         scope: scope.scope,
         sessionId: scope.sessionId,
+        recordType: input.recordType,
+        status: input.status,
         questionNorm,
         questionRaw: input.question,
         kind,
@@ -252,6 +274,10 @@ export function createMemoryGate(
         hitCount: 0,
         confidence: input.confidence,
         sourceRunId: input.sourceRunId,
+        evidence: input.evidence,
+        sourceVersion: input.sourceVersion,
+        verifiedAt: input.verifiedAt,
+        supersedes: input.supersedes,
       };
 
       await writer.putExact(cacheKey, entry);

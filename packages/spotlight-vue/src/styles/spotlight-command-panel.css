@@ -1,13 +1,12 @@
 .spotlight-backdrop {
   position: fixed;
   inset: 0;
-  background:
-    radial-gradient(
-      120% 80% at 50% 0%,
-      rgba(186, 230, 253, 0.28) 0%,
-      rgba(240, 253, 250, 0.08) 42%,
-      rgba(15, 23, 42, 0.22) 100%
-    );
+  background: radial-gradient(
+    120% 80% at 50% 0%,
+    rgba(186, 230, 253, 0.28) 0%,
+    rgba(240, 253, 250, 0.08) 42%,
+    rgba(15, 23, 42, 0.22) 100%
+  );
   backdrop-filter: blur(18px) saturate(1.15);
   -webkit-backdrop-filter: blur(18px) saturate(1.15);
   z-index: 9999;
@@ -29,20 +28,14 @@
   max-height: 82vh;
   overflow: hidden;
   font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "SF Pro Display",
-    "SF Pro Text",
-    "Helvetica Neue",
-    system-ui,
-    sans-serif;
-  background:
-    linear-gradient(
-      165deg,
-      rgba(255, 255, 255, 0.92) 0%,
-      rgba(248, 250, 252, 0.88) 52%,
-      rgba(240, 253, 250, 0.86) 100%
-    );
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", system-ui, sans-serif;
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(248, 250, 252, 0.88) 52%,
+    rgba(240, 253, 250, 0.86) 100%
+  );
   border-radius: 22px;
   border: 1px solid rgba(148, 163, 184, 0.28);
   box-shadow:
@@ -298,12 +291,14 @@
 }
 
 .spotlight-memory-dot-btn {
-  display: grid;
-  place-items: center;
-  width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 44px;
   height: 44px;
   margin: -8px -6px -8px 0;
-  padding: 0;
+  padding: 0 10px;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -311,6 +306,14 @@
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
   transition: transform 0.18s ease;
+}
+
+.spotlight-memory-label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .spotlight-memory-dot-btn:active {

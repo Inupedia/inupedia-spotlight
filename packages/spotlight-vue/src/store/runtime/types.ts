@@ -40,6 +40,11 @@ export type SpotlightTurnPhase =
   | "memory_replay"
   | "analyzing"
   | "routing"
+  | "router_done"
+  | "knowledge_agent_start"
+  | "knowledge_agent_done"
+  | "action_agent_start"
+  | "action_agent_done"
   | "query_planning"
   | "tool_execution"
   | "responding"
@@ -180,7 +185,6 @@ export type SpotlightExecutionEvent =
       turnId: string;
       assistantReply: string | null;
       commandName: string | null;
-      usedQueryLoop: boolean;
       stopReason: SpotlightTurnStopReason;
       failureClass: SpotlightTurnFailureClass;
       elapsedMs: number;

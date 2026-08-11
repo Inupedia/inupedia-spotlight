@@ -6,6 +6,7 @@
       { 'thinking-bar--open': isOpen },
       { 'thinking-bar--centered': centered },
       { 'thinking-bar--corner': !centered && !embedded },
+      { 'thinking-bar--memory-result': isMemoryReuseResult },
     ]"
   >
     <div class="thinking-bar-grid" aria-hidden="true" />
@@ -13,11 +14,25 @@
       <div class="thinking-bar-title-stack">
         <span class="thinking-bar-kicker">Spotlight</span>
         <span class="thinking-bar-title">{{ titleText }}</span>
-        <span v-if="memoryBadge" class="thinking-bar-memory-badge">{{
-          memoryBadge
-        }}</span>
+        <span
+          v-if="memoryBadge && !isMemoryReuseResult"
+          class="thinking-bar-memory-badge"
+          >{{ memoryBadge }}</span
+        >
+        <button
+          v-if="memoryDecision?.canForceRefresh && !isMemoryReuseResult"
+          type="button"
+          class="thinking-bar-memory-refresh"
+          @click="$emit('force-refresh')"
+        >
+          重新查询
+        </button>
       </div>
-      <div class="thinking-bar-metrics" aria-label="执行状态概览">
+      <div
+        v-if="!isMemoryReuseResult"
+        class="thinking-bar-metrics"
+        aria-label="执行状态概览"
+      >
         <span class="thinking-bar-metric">
           <strong>{{ steps.length }}</strong>
           <em>阶段</em>
@@ -40,7 +55,47 @@
         ×
       </button>
     </div>
-    <div ref="stepsContainerRef" class="thinking-bar-steps">
+    <main
+      v-if="isMemoryReuseResult"
+      class="thinking-bar-memory-result"
+      aria-label="项目记忆回答"
+    >
+      <div class="thinking-bar-memory-result-intro">
+        <span class="thinking-bar-memory-result-icon" aria-hidden="true"
+          >✓</span
+        >
+        <div class="thinking-bar-memory-result-copy">
+          <span class="thinking-bar-memory-result-eyebrow">来自项目记忆</span>
+          <strong>{{ memoryResultHeading }}</strong>
+          <p>{{ memoryResultDescription }}</p>
+        </div>
+      </div>
+
+      <section class="thinking-bar-memory-result-answer">
+        <div class="thinking-bar-memory-result-answer-label">回答</div>
+        <div
+          class="thinking-bar-step-text thinking-bar-step-markdown thinking-bar-step-answer"
+        >
+          <SpotlightMarkdownPreview
+            :model-value="memoryResultAnswer"
+            format-knowledge
+          />
+        </div>
+      </section>
+
+      <footer class="thinking-bar-memory-result-footer">
+        <span>本次直接复用已验证答案，未重新查询数据源。</span>
+        <button
+          v-if="memoryDecision?.canForceRefresh"
+          type="button"
+          class="thinking-bar-memory-refresh thinking-bar-memory-result-refresh"
+          @click="$emit('force-refresh')"
+        >
+          重新查询最新资料
+        </button>
+      </footer>
+    </main>
+    <div v-else ref="stepsContainerRef" class="thinking-bar-steps">
       <div
         v-for="step in steps"
         :key="step.id"
@@ -81,8 +136,7 @@
                       <pre
                         v-if="getToolStepPlanning(step)"
                         class="thinking-bar-execution-planning"
-                        >{{ getToolStepPlanning(step) }}</pre
-                      >
+                        >{{ getToolStepPlanning(step) }}</pre>
                       <details
                         v-for="toolCall in getStepToolCalls(step)"
                         :key="toolCall.id"
@@ -197,8 +251,7 @@
                             <pre
                               v-else-if="getToolResultDisplay(toolCall)"
                               class="thinking-bar-tool-call-pre"
-                              >{{ getToolResultDisplay(toolCall) }}</pre
-                            >
+                              >{{ getToolResultDisplay(toolCall) }}</pre>
                           </div>
                           <div
                             v-if="formatToolTrace(toolCall.trace)"
@@ -422,8 +475,7 @@
                           <pre
                             v-else-if="getToolResultDisplay(item.toolCall)"
                             class="thinking-bar-tool-call-pre"
-                            >{{ getToolResultDisplay(item.toolCall) }}</pre
-                          >
+                            >{{ getToolResultDisplay(item.toolCall) }}</pre>
                         </div>
                       </div>
                     </details>
@@ -614,6 +666,7 @@ import {
   splitToolStepContent,
 } from "../store/pipeline/displayText.js";
 import { partitionToolCalls } from "../store/pipeline/toolDisplay.js";
+import { getSpotlightMemoryResultCopy } from "../store/memoryResultCopy.js";
 import { TOOL_NAMES } from "../constants/toolNames.js";
 interface StepAttachment {
   id: string;
@@ -777,13 +830,17 @@ const props = defineProps<{
     entryId: string;
     kind: string;
   } | null;
+  memoryDecision?:
+    import("@inupedia/spotlight-protocol").SpotlightMemoryDecision | null;
 }>();
 
 defineEmits<{
   close: [];
+  "force-refresh": [];
 }>();
 
 const titleText = computed(() => {
+  if (isMemoryReuseResult.value) return "项目记忆已回答";
   const allEnded =
     props.steps.length > 0 &&
     props.steps.every((s) => s.status === "done" || s.status === "error");
@@ -791,6 +848,15 @@ const titleText = computed(() => {
 });
 
 const memoryBadge = computed(() => {
+  if (props.memoryDecision) {
+    const labels = {
+      reuse: "已复用项目记忆",
+      augment: "已结合项目记忆",
+      refresh: "已重新验证资料",
+      ignore: "",
+    } as const;
+    return labels[props.memoryDecision.action];
+  }
   if (!props.memoryReplay) return "";
   if (props.memoryReplay.source === "semantic") return "语义缓存";
   if (props.memoryReplay.source === "exact") return "Memory 缓存";
@@ -807,6 +873,33 @@ const isThinkingActive = computed(() =>
           toolCall.status === "pending" || toolCall.status === "running",
       ),
   ),
+);
+
+const isMemoryReuseResult = computed(
+  () =>
+    props.memoryDecision?.action === "reuse" &&
+    props.steps.length > 0 &&
+    props.steps.every(
+      (step) => step.status === "done" || step.status === "error",
+    ),
+);
+
+const memoryResultAnswer = computed(() => {
+  const answerStep = props.steps.find((step) => isToolExecutionStep(step.id));
+  if (!answerStep) return "项目记忆中没有可展示的回答。";
+  return (
+    getToolStepAnswer(answerStep).trim() ||
+    answerStep.content?.trim() ||
+    "项目记忆中没有可展示的回答。"
+  );
+});
+
+const memoryResultCopy = computed(() =>
+  getSpotlightMemoryResultCopy(props.memoryReplay?.source),
+);
+const memoryResultHeading = computed(() => memoryResultCopy.value.heading);
+const memoryResultDescription = computed(
+  () => memoryResultCopy.value.description,
 );
 const activeStepCount = computed(
   () => props.steps.filter((step) => step.status === "active").length,

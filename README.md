@@ -7,9 +7,12 @@ Private source repository for the Inupedia Spotlight SDK packages.
 | Package | Role |
 | --- | --- |
 | `@inupedia/spotlight-protocol` | Shared client/server wire types |
-| `@inupedia/spotlight-memory` | Memory Gate, exact/semantic cache stores |
-| `@inupedia/spotlight-client` | HTTP helpers, host tool bridge, agent registry |
-| `@inupedia/spotlight-vue` | Vue plugin, command UI, Spotlight workflow runtime |
+| `@inupedia/spotlight-memory` | 兼容期数据与类型工具；0.5.0 Agent Memory 由 LangGraph Store/Checkpointer 负责 |
+| `@inupedia/spotlight-client` | Client Tool、HTTP 与构建清单 |
+| `@inupedia/spotlight-vue` | Vue plugin、命令 UI 与远程运行管线 |
+| `@inupedia/spotlight-server` | 可部署的 LangChain/LangGraph Agent Server |
+
+业务项目从 [Client Tool / Skill 接入指南](docs/client-tools.md) 开始，部署人员阅读 [Server 部署与 Project Pack](docs/server-deployment.md)。业务项目只注册页面 Tool 与可选业务 Skill；路由、Knowledge Agent、Action Agent、Provider 与 Memory 全部属于 Server。
 
 ## Release
 
