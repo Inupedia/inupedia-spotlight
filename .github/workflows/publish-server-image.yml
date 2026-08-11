@@ -1,0 +1,47 @@
+name: Publish Spotlight Server image
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semver version to publish from the matching vX.Y.Z tag
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Validate version
+        run: |
+          if ! echo "${{ inputs.version }}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Invalid version: ${{ inputs.version }}"
+            exit 1
+          fi
+
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ inputs.version }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish Spotlight Server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/spotlight-server/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/inupedia/spotlight-server:${{ inputs.version }}
+            ghcr.io/inupedia/spotlight-server:latest
