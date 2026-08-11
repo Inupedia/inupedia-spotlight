@@ -96,8 +96,8 @@ jobs:
           file: packages/spotlight-server/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/spotlight-server:${{ steps.meta.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/spotlight-server:latest
+            ghcr.io/inupedia/spotlight-server:${{ steps.meta.outputs.version }}
+            ghcr.io/inupedia/spotlight-server:latest
 
       - name: Summary
         run: |
