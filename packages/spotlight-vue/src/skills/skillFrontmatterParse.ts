@@ -233,6 +233,8 @@ export function parseSpotlightSkillMarkdownFields(
     name: skillId,
     description,
   };
+  const instructionBody = body.trim();
+  if (instructionBody) skill.skillInstructionBody = instructionBody;
   if (displayName) skill.displayName = displayName;
   const whenToUse = pickStr(data, "when_to_use", "whenToUse");
   if (whenToUse) skill.whenToUse = whenToUse;
