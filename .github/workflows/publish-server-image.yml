@@ -7,6 +7,10 @@ on:
         description: Semver version to publish from the matching vX.Y.Z tag
         required: true
         type: string
+      source_ref:
+        description: Optional source ref override for build-only fixes
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -27,7 +31,7 @@ jobs:
       - name: Checkout release tag
         uses: actions/checkout@v4
         with:
-          ref: v${{ inputs.version }}
+          ref: ${{ inputs.source_ref || format('v{0}', inputs.version) }}
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
