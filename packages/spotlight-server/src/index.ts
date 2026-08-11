@@ -8,5 +8,6 @@ export * from "./providers/yuxi.js";
 export * from "./router.js";
 export * from "./runManager.js";
 export * from "./safety.js";
+export * from "./skills.js";
 export * from "./server.js";
 export * from "./tools.js";

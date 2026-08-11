@@ -224,14 +224,19 @@ export function mergeCommandCatalogs(
   return merged;
 }
 
-/** Strip skill bodies before create-run; server loads via skill.invoke. */
+/**
+ * Serialize browser-bundled Skills for the remote LangGraph runtime.
+ *
+ * Local source paths are intentionally removed, while the instruction body is
+ * retained: a consumer-owned Skill only exists in the browser bundle and the
+ * shared server cannot read that consumer's filesystem.
+ */
 export function serializeSkillsForRemote(skills: SpotlightSkill[]): SpotlightSkill[] {
   return skills.map(
     ({
-      skillInstructionBody: _body,
-      skillPackAppendix: _appendix,
       loadedFrom: _loadedFrom,
       sourcePath: _sourcePath,
+      skillRoot: _skillRoot,
       ...meta
     }) => meta,
   );

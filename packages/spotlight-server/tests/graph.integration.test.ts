@@ -8,6 +8,7 @@ import {
   type IntentDecision,
   type IntentRouter,
   type ProjectPack,
+  type RunContext,
 } from "../src/index.js";
 
 const descriptor: FrontendToolDescriptorV1 = {
@@ -41,7 +42,7 @@ function context(
   question: string,
   hostResults: HostToolResultRequest[],
   options: { sessionId?: string; memorySubjectId?: string } = {},
-) {
+): RunContext {
   return {
     request: {
       projectId: "test-project",
@@ -77,6 +78,42 @@ function context(
 }
 
 describe("LangGraph runtime isolation", () => {
+  it("answers capability help from run Skills without calling the model", async () => {
+    const runContext = context("你能做什么", []);
+    runContext.request = {
+      ...runContext.request,
+      skills: [{
+        name: "skill.monitoring",
+        displayName: "现场监控",
+        description: "处理监控画面",
+        allowedTools: [descriptor.name],
+        capabilityExamples: ["打开钢筋棚监控"],
+      }],
+    };
+    runContext.project.uiPrompts = { capabilityHelpPatterns: ["你能做什么"] };
+    const phases: Array<{ phase: string; summary: string }> = [];
+    const result = await runSpotlightGraph(runContext, {
+      model: new FakeToolCallingModel(),
+      router: router({
+        route: "knowledge",
+        confidence: 1,
+        reason: "capability help",
+        requestedToolNames: [],
+        explicitActionEvidence: null,
+      }),
+      checkpointer: new MemorySaver(),
+      store: new InMemoryStore(),
+      onPhase: (phase, summary) => phases.push({ phase, summary }),
+    });
+
+    expect(result.assistantReply).toContain("现场监控");
+    expect(result.assistantReply).toContain("打开钢筋棚监控");
+    expect(phases).toContainEqual({
+      phase: "knowledge_agent_done",
+      summary: "已根据本次注册的 1 个 Skill 和 1 个页面 Tool 生成能力说明。",
+    });
+  });
+
   it("never exposes a client tool to the knowledge agent", async () => {
     const hostResults: HostToolResultRequest[] = [];
     const phases: Array<{ phase: string; summary: string }> = [];

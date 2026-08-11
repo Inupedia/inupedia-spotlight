@@ -1,4 +1,4 @@
-# Spotlight Server 0.5.6 部署与 Project Pack
+# Spotlight Server 0.5.7 部署与 Project Pack
 
 ## 结论
 
@@ -13,7 +13,7 @@
 ```yaml
 services:
   spotlight-server:
-    image: ghcr.io/inupedia/spotlight-server:0.5.6
+    image: ghcr.io/inupedia/spotlight-server:0.5.7
     ports: ["8787:8787"]
     env_file: .env
     environment:
@@ -51,6 +51,8 @@ Agent 只看见稳定的逻辑 Tool：
 
 - `project_knowledge_search`：当前配置可用 Yuxi；替换 RAGFlow 时只换 Provider。
 - `web_search`：当前可用 Hikari；不改变 Agent Prompt 和工作流。
+
+浏览器还可以随每个 Run 注册项目业务 Skill。Server 会限制 Skill 数量和正文大小，并把 `allowed-tools` 绑定到该浏览器构建上报的 Tool Manifest；Skill 只提供流程语义，不增加执行权限。能力说明也从当前 Run 的 Skills / Tools 动态生成，不进入长期 Memory。
 
 ## 自定义 Server Tool
 

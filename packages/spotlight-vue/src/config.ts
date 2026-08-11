@@ -13,7 +13,7 @@ export type SpotlightConfig = SpotlightClientConfig & {
   tools: ClientTool[] | (() => ClientTool[]);
   /** Immutable frontend build identifier used to bind the production manifest. */
   frontendBuildId?: string;
-  /** Skills sent on each create-run (metadata only; bodies loaded server-side). */
+  /** Consumer-owned Skills sent to the server for LangGraph planning. */
   skills?: SpotlightSkill[] | (() => SpotlightSkill[]);
   /** Preferred: host resolves bundled + inline skills per run. */
   getSkillsForRun?: () => SpotlightSkill[];

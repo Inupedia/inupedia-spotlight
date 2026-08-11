@@ -2,6 +2,7 @@ import type {
   HostToolEffect,
   SpotlightMemoryDecision,
 } from "@inupedia/spotlight-protocol";
+import { serializeSkillsForRemote } from "@inupedia/spotlight-client";
 import { useAgentSessionStore } from "../session/agentSession.js";
 import { useSpotlightMemoryPreferenceStore } from "../store/memoryPreferenceStore.js";
 import { useSpotlightRuntimeStore } from "../store/runtimeStore.js";
@@ -16,6 +17,7 @@ import type { HandlerApi } from "../store/pipeline/types.js";
 import type { AgentStep, AgentStepToolCall } from "../store/types.js";
 import type { SpotlightExecutionEvent } from "../store/runtime/types.js";
 import { getSpotlightConfig } from "../plugin.js";
+import { getSkillsPoolForRun } from "../skills/index.js";
 import {
   ensureHostToolsManifest,
   executeRemoteHostTool,
@@ -621,6 +623,7 @@ async function buildRemotePayload(
       },
       clientToolsManifestVersion: hostManifest.manifestDigest,
       clientToolManifest: hostManifest,
+      skills: serializeSkillsForRemote(getSkillsPoolForRun()),
       frontendBuildId: hostManifest.frontendBuildId,
       manifestDigest: hostManifest.manifestDigest,
     },

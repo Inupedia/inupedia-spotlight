@@ -1,4 +1,4 @@
-# Spotlight Client Tool 接入指南
+# Spotlight Client Tool / Skill 接入指南
 
 ## 你最终需要写多少代码
 
@@ -34,7 +34,7 @@ export const spotlightTools = [playVideoFullscreen, closeVideo];
 ## 1. 安装
 
 ```bash
-pnpm add @inupedia/spotlight-client@^0.5.6 @inupedia/spotlight-vue@^0.5.6
+pnpm add @inupedia/spotlight-client@^0.5.7 @inupedia/spotlight-vue@^0.5.7
 ```
 
 ## 2. 配置 Vite
@@ -96,7 +96,56 @@ createApp(App)
   .mount("#app");
 ```
 
-到这里，普通前端开发者的接入工作已经结束。
+到这里，单步操作项目的接入工作已经结束。
+
+## 4. 可选：注册业务 Skill
+
+Tool 说明“页面能做什么”，Skill 说明“什么时候用、多个 Tool 怎样组成业务流程”。例如另一个项目也有视频能力，只需增加：
+
+```md
+<!-- .inupedia/skills/skill.monitoring/SKILL.md -->
+---
+id: skill.monitoring
+name: 现场监控
+description: 打开、播放或关闭项目视频监控。
+when_to_use: 用户点名监控点位要求播放，或要求打开、关闭监控界面。
+allowed-tools: openVideoMonitoring, playVideoFullscreen, closeVideo
+capability-examples: 打开监控列表, 播放钢筋棚监控, 关闭监控
+---
+
+# 现场监控
+
+- 没有具体点位时调用 `openVideoMonitoring`。
+- 给出具体点位时调用 `playVideoFullscreen`，不要擅自改写点位名称。
+- 要求关闭时调用 `closeVideo`。
+```
+
+然后在同一份配置中加载：
+
+```ts
+import {
+  defineSpotlightConfig,
+  loadBundledSkillsFromGlob,
+  readSpotlightEnv,
+} from "@inupedia/spotlight-vue";
+
+const skills = loadBundledSkillsFromGlob(
+  import.meta.glob("../../.inupedia/skills/**/SKILL.md", {
+    eager: true,
+    query: "?raw",
+    import: "default",
+  }) as Record<string, string>,
+);
+
+export default defineSpotlightConfig({
+  ...readSpotlightEnv(import.meta.env, { projectId: "video-console" }),
+  frontendBuildId: import.meta.env.VITE_BUILD_SHA,
+  tools: spotlightTools,
+  skills,
+});
+```
+
+SDK 会把 Skill 与当前构建的 Tool Manifest 一起发送给 Server。Server 保留业务说明，但会把 `allowed-tools` 与真实注册 Tool 求交集；Skill 不能创造权限，也不能调用另一个项目或旧版本中不存在的 Tool。
 
 `getMemorySubjectId` 是可选项：不配置时仍有当前会话的短期 Memory，但不会保存跨会话长期记忆，避免匿名用户之间串数据。长期记忆只会在用户明确说“记住”或“忘记”时写入或删除。
 
@@ -134,7 +183,8 @@ export const switchVideoGroup = defineClientTool(
 | --- | --- | --- |
 | 页面专属动作 | Client Tool | 打开视频、切换图层、进入隧洞、选中构件 |
 | 通用外部能力 | Server LangChain Tool | 联网搜索、知识检索、数据库、MCP、第三方 API |
-| 关键多步流程 | Server LangGraph | 进入巡检视图后开始巡检、打开监控后全屏播放 |
+| 项目业务流程说明 | 前端注册的 Skill | 进入巡检视图后开始巡检、按名称播放监控 |
+| 通用编排与安全门禁 | Server LangGraph | 选择 Skill、约束 Tool、等待浏览器执行结果 |
 | 页面状态 | `getUiContext` | 当前路由、选中对象、打开的面板 |
 
 不要把 GIS、视频播放器或项目 Store 搬到 Server。Server 只知道 Tool 契约，具体页面动作仍由浏览器执行。
@@ -151,10 +201,16 @@ dist/spotlight-client-manifest.json
 
 Server 读取可信清单后，将 Client Tool 转为真正的 LangChain Tool。模型调用该 Tool 时，执行请求通过现有浏览器 RPC 回到对应页面。LangChain 和 LangGraph 因此属于 Server 实现细节，不增加业务项目的接入成本。
 
-## 从 0.4.x 迁移到 0.5.0
+## 从 0.5.6 迁移到 0.5.7
+
+1. 将 `@inupedia/spotlight-client`、`@inupedia/spotlight-protocol`、`@inupedia/spotlight-vue` 升级到同一版本。
+2. 单步 Tool 不必增加 Skill；需要业务流程、动态能力说明或相似 Tool 消歧时，再增加 `.inupedia/skills/**/SKILL.md`。
+3. 不需要在 Spotlight Server 上复制业务项目的 Skill 文件；SDK 会按 Run 发送，并移除本地路径。
+
+## 从 0.4.x 迁移到 0.5.x
 
 1. 依赖升级到 `0.5.0`。
-2. 删除 `getSkillsForRun` 和每轮 Skills 序列化；Project 知识与搜索改为 Server Provider。
+2. Project 知识与搜索改为 Server Provider；页面业务 Skill 通过 `skills` 或 `getSkillsForRun` 注册。
 3. 保留 `tools` 与 `getUiContext`，页面动作函数不用重写。
 4. 将自建 Agent Server 替换为官方镜像和 `spotlight.project.yml`。
 
