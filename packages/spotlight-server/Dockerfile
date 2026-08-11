@@ -8,7 +8,7 @@ COPY packages/spotlight-server/package.json ./packages/spotlight-server/package.
 COPY packages/spotlight-vue/package.json ./packages/spotlight-vue/package.json
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store corepack enable && pnpm config set store-dir /pnpm/store && pnpm install --frozen-lockfile
 COPY packages ./packages
-RUN pnpm --filter @inupedia/spotlight-server build
+RUN pnpm --filter @inupedia/spotlight-protocol build && pnpm --filter @inupedia/spotlight-server build
 
 FROM node:22-alpine
 WORKDIR /app
