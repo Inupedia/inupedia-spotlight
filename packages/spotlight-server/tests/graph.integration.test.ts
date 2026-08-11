@@ -165,6 +165,45 @@ describe("LangGraph runtime isolation", () => {
     );
   });
 
+  it("reports an attempted knowledge source that produced no usable result", async () => {
+    const runContext = context("介绍下引大济岷", []);
+    runContext.project = {
+      ...runContext.project,
+      knowledgeProvider: {
+        id: "yuxi",
+        async search() {
+          throw new Error("knowledge provider unavailable");
+        },
+      },
+    };
+    const phases: Array<{ phase: string; summary: string }> = [];
+    await runSpotlightGraph(runContext, {
+      model: new FakeToolCallingModel({
+        toolCalls: [[{
+          id: "failed-knowledge-call",
+          name: "project_knowledge_search",
+          args: { query: "引大济岷" },
+          type: "tool_call",
+        }], []],
+      }),
+      router: router({
+        route: "knowledge",
+        confidence: 1,
+        reason: "information request",
+        requestedToolNames: [],
+        explicitActionEvidence: null,
+      }),
+      checkpointer: new MemorySaver(),
+      store: new InMemoryStore(),
+      onPhase: (phase, summary) => phases.push({ phase, summary }),
+    });
+
+    expect(phases).toContainEqual({
+      phase: "knowledge_agent_done",
+      summary: "项目知识库“yuxi”已尝试调用，但未取得可用结果。",
+    });
+  });
+
   it("executes the selected client tool through the host bridge", async () => {
     const hostResults: HostToolResultRequest[] = [];
     const phases: Array<{ phase: string; summary: string }> = [];

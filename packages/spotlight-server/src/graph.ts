@@ -128,7 +128,8 @@ export async function runSpotlightGraph(
     })
     .addNode("knowledge", async (state) => {
       const completedSearches: string[] = [];
-      let attemptedSources = 0;
+      const attemptedSources = new Set<string>();
+      const completedSources = new Set<string>();
       const availableSources = [
         context.project.knowledgeProvider ? `项目知识库“${context.project.knowledgeProvider.id}”` : null,
         context.project.webSearchProvider ? `联网搜索“${context.project.webSearchProvider.id}”` : null,
@@ -144,32 +145,35 @@ export async function runSpotlightGraph(
       );
       const tools: StructuredToolInterface[] = context.project.serverTools
         .filter((item) => item.metadata.effect === "read")
-        .map((item) =>
-          createServerLangChainTool(item, context, {
+        .map((item) => {
+          const source = `服务端资料工具“${item.name}”`;
+          return createServerLangChainTool(item, context, {
             onStart: (input) => {
-              attemptedSources += 1;
+              attemptedSources.add(source);
               options.onPhase?.(
                 "knowledge_agent_start",
-                `正在调用服务端资料工具“${item.name}”：${toolInputSummary(input)}。`,
+                `正在调用${source}：${toolInputSummary(input)}。`,
               );
             },
             onComplete: (input, output) => {
-              const summary = `服务端资料工具“${item.name}”已完成（${toolInputSummary(input)}，${toolOutputSummary(output)}）。`;
+              completedSources.add(source);
+              const summary = `${source}已完成（${toolInputSummary(input)}，${toolOutputSummary(output)}）。`;
               completedSearches.push(summary);
               options.onPhase?.("knowledge_agent_start", `${summary} 正在依据资料组织回答。`);
             },
-          }),
-        );
+          });
+        });
       if (context.project.knowledgeProvider) {
         const provider = context.project.knowledgeProvider;
         const source = `项目知识库“${provider.id}”`;
         tools.push(
           createKnowledgeTool(provider, context, {
             onStart: ({ query }) => {
-              attemptedSources += 1;
+              attemptedSources.add(source);
               options.onPhase?.("knowledge_agent_start", `正在检索${source}：“${compactText(query, 64)}”。`);
             },
             onComplete: ({ query }, evidence) => {
+              completedSources.add(source);
               const summary = evidenceProgressSummary(source, query, evidence);
               completedSearches.push(summary);
               options.onPhase?.("knowledge_agent_start", `${summary} 正在依据资料组织回答。`);
@@ -183,10 +187,11 @@ export async function runSpotlightGraph(
         tools.push(
           createWebSearchTool(provider, context, {
             onStart: ({ query }) => {
-              attemptedSources += 1;
+              attemptedSources.add(source);
               options.onPhase?.("knowledge_agent_start", `正在使用${source}搜索：“${compactText(query, 64)}”。`);
             },
             onComplete: ({ query }, evidence) => {
+              completedSources.add(source);
               const summary = evidenceProgressSummary(source, query, evidence);
               completedSearches.push(summary);
               options.onPhase?.("knowledge_agent_start", `${summary} 正在依据资料组织回答。`);
@@ -231,11 +236,15 @@ export async function runSpotlightGraph(
       });
       const result = await agent.invoke({ messages: state.messages });
       const reply = finalAgentText(result);
+      const incompleteSearches = [...attemptedSources]
+        .filter((source) => !completedSources.has(source))
+        .map((source) => `${source}已尝试调用，但未取得可用结果。`);
+      const activitySummary = [...completedSearches, ...incompleteSearches];
       options.onPhase?.(
         "knowledge_agent_done",
-        completedSearches.length > 0
-          ? completedSearches.join("\n")
-          : attemptedSources > 0
+        activitySummary.length > 0
+          ? activitySummary.join("\n")
+          : attemptedSources.size > 0
             ? "已尝试调用外部资料源，但没有取得可用结果；回答仅依据模型与当前项目上下文生成。"
             : "本轮未调用项目知识库、联网搜索或服务端资料工具；回答仅依据模型与当前项目上下文生成。",
       );

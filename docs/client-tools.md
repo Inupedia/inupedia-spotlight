@@ -34,7 +34,7 @@ export const spotlightTools = [playVideoFullscreen, closeVideo];
 ## 1. 安装
 
 ```bash
-pnpm add @inupedia/spotlight-client@^0.5.5 @inupedia/spotlight-vue@^0.5.5
+pnpm add @inupedia/spotlight-client@^0.5.6 @inupedia/spotlight-vue@^0.5.6
 ```
 
 ## 2. 配置 Vite
