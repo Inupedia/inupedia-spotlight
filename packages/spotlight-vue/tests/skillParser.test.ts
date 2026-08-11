@@ -10,6 +10,7 @@ describe("parseSpotlightSkillMarkdown", () => {
         "name: 现场监控",
         "description: 打开指定监控。",
         "allowed-tools: playVideoFullscreen",
+        "tool-examples: 打开钢筋棚监控 => playVideoFullscreen",
         "---",
         "",
         "# 现场监控",
@@ -22,5 +23,8 @@ describe("parseSpotlightSkillMarkdown", () => {
     expect(skill.skillInstructionBody).toBe(
       "# 现场监控\n\n指定点位时调用 `playVideoFullscreen`。",
     );
+    expect(skill.toolExamples).toEqual([
+      { example: "打开钢筋棚监控", toolName: "playVideoFullscreen" },
+    ]);
   });
 });

@@ -1,6 +1,9 @@
 import { InMemoryStore, MemorySaver } from "@langchain/langgraph";
 import { FakeToolCallingModel } from "langchain";
-import type { FrontendToolDescriptorV1, HostToolResultRequest } from "@inupedia/spotlight-protocol";
+import type {
+  FrontendToolDescriptorV1,
+  HostToolResultRequest,
+} from "@inupedia/spotlight-protocol";
 import {
   runSpotlightGraph,
   langChainClientToolName,
@@ -60,7 +63,12 @@ function context(
     runId: crypto.randomUUID(),
     project: pack(),
     host: {
-      async request(call: { id: string; name: string; input: Record<string, unknown>; displayName: string }) {
+      async request(call: {
+        id: string;
+        name: string;
+        input: Record<string, unknown>;
+        displayName: string;
+      }) {
         hostResults.push({
           correlationId: call.id,
           success: true,
@@ -82,13 +90,15 @@ describe("LangGraph runtime isolation", () => {
     const runContext = context("你能做什么", []);
     runContext.request = {
       ...runContext.request,
-      skills: [{
-        name: "skill.monitoring",
-        displayName: "现场监控",
-        description: "处理监控画面",
-        allowedTools: [descriptor.name],
-        capabilityExamples: ["打开钢筋棚监控"],
-      }],
+      skills: [
+        {
+          name: "skill.monitoring",
+          displayName: "现场监控",
+          description: "处理监控画面",
+          allowedTools: [descriptor.name],
+          capabilityExamples: ["打开钢筋棚监控"],
+        },
+      ],
     };
     runContext.project.uiPrompts = { capabilityHelpPatterns: ["你能做什么"] };
     const phases: Array<{ phase: string; summary: string }> = [];
@@ -117,19 +127,22 @@ describe("LangGraph runtime isolation", () => {
   it("never exposes a client tool to the knowledge agent", async () => {
     const hostResults: HostToolResultRequest[] = [];
     const phases: Array<{ phase: string; summary: string }> = [];
-    const result = await runSpotlightGraph(context("介绍下引大济岷", hostResults), {
-      model: new FakeToolCallingModel(),
-      router: router({
-        route: "knowledge",
-        confidence: 1,
-        reason: "information request",
-        requestedToolNames: [],
-        explicitActionEvidence: null,
-      }),
-      checkpointer: new MemorySaver(),
-      store: new InMemoryStore(),
-      onPhase: (phase, summary) => phases.push({ phase, summary }),
-    });
+    const result = await runSpotlightGraph(
+      context("介绍下引大济岷", hostResults),
+      {
+        model: new FakeToolCallingModel(),
+        router: router({
+          route: "knowledge",
+          confidence: 1,
+          reason: "information request",
+          requestedToolNames: [],
+          explicitActionEvidence: null,
+        }),
+        checkpointer: new MemorySaver(),
+        store: new InMemoryStore(),
+        onPhase: (phase, summary) => phases.push({ phase, summary }),
+      },
+    );
     expect(result.route).toBe("knowledge");
     expect(result.invokedClientTools).toEqual([]);
     expect(hostResults).toEqual([]);
@@ -141,13 +154,22 @@ describe("LangGraph runtime isolation", () => {
     );
     expect(phases).toContainEqual({
       phase: "knowledge_agent_done",
-      summary: "本轮未调用项目知识库、联网搜索或服务端资料工具；回答仅依据模型与当前项目上下文生成。",
+      summary:
+        "本轮未调用项目知识库、联网搜索或服务端资料工具；回答仅依据模型与当前项目上下文生成。",
     });
   });
 
   it("reports the real knowledge query, hit count, and source titles", async () => {
     const hostResults: HostToolResultRequest[] = [];
     const runContext = context("介绍下引大济岷", hostResults);
+    runContext.request.skills = [
+      {
+        name: "skill.knowledge",
+        displayName: "项目知识问答",
+        description: "查询项目知识库",
+        capabilityExamples: ["介绍下引大济岷"],
+      },
+    ];
     runContext.project = {
       ...runContext.project,
       knowledgeProvider: {
@@ -191,13 +213,24 @@ describe("LangGraph runtime isolation", () => {
     expect(phases).toContainEqual(
       expect.objectContaining({
         phase: "knowledge_agent_start",
-        summary: "正在检索项目知识库“yuxi”：“引大济岷 工程介绍”。",
+        summary: "正在检索知识库：“引大济岷 工程介绍”。",
       }),
     );
     expect(phases).toContainEqual(
       expect.objectContaining({
+        phase: "knowledge_agent_start",
+        summary: expect.stringContaining(
+          "使用 Skill：项目知识问答（skill.knowledge）",
+        ),
+      }),
+    );
+    expect(phases.some(({ summary }) => summary.includes("yuxi"))).toBe(false);
+    expect(phases).toContainEqual(
+      expect.objectContaining({
         phase: "knowledge_agent_done",
-        summary: expect.stringMatching(/命中 2 条资料.*引大济岷工程概况.*工程线路与规模/u),
+        summary: expect.stringMatching(
+          /命中 2 条资料.*引大济岷工程概况.*工程线路与规模/u,
+        ),
       }),
     );
   });
@@ -216,12 +249,17 @@ describe("LangGraph runtime isolation", () => {
     const phases: Array<{ phase: string; summary: string }> = [];
     await runSpotlightGraph(runContext, {
       model: new FakeToolCallingModel({
-        toolCalls: [[{
-          id: "failed-knowledge-call",
-          name: "project_knowledge_search",
-          args: { query: "引大济岷" },
-          type: "tool_call",
-        }], []],
+        toolCalls: [
+          [
+            {
+              id: "failed-knowledge-call",
+              name: "project_knowledge_search",
+              args: { query: "引大济岷" },
+              type: "tool_call",
+            },
+          ],
+          [],
+        ],
       }),
       router: router({
         route: "knowledge",
@@ -237,14 +275,24 @@ describe("LangGraph runtime isolation", () => {
 
     expect(phases).toContainEqual({
       phase: "knowledge_agent_done",
-      summary: "项目知识库“yuxi”已尝试调用，但未取得可用结果。",
+      summary: "知识库已尝试调用，但未取得可用结果。",
     });
   });
 
   it("executes the selected client tool through the host bridge", async () => {
     const hostResults: HostToolResultRequest[] = [];
     const phases: Array<{ phase: string; summary: string }> = [];
-    const result = await runSpotlightGraph(context("打开钢筋棚加工区室外监控", hostResults), {
+    const runContext = context("打开钢筋棚加工区室外监控", hostResults);
+    runContext.request.skills = [
+      {
+        name: "skill.monitoring",
+        displayName: "现场监控",
+        description: "处理监控画面",
+        allowedTools: [descriptor.name],
+        capabilityExamples: ["打开钢筋棚加工区室外监控"],
+      },
+    ];
+    const result = await runSpotlightGraph(runContext, {
       model: new FakeToolCallingModel({
         toolCalls: [
           [
@@ -264,6 +312,7 @@ describe("LangGraph runtime isolation", () => {
         reason: "explicit action",
         requestedToolNames: [descriptor.name],
         explicitActionEvidence: "打开",
+        matchedSkillNames: ["skill.monitoring"],
       }),
       checkpointer: new MemorySaver(),
       store: new InMemoryStore(),
@@ -275,7 +324,83 @@ describe("LangGraph runtime isolation", () => {
     expect(phases).toContainEqual(
       expect.objectContaining({
         phase: "action_agent_done",
-        summary: expect.stringContaining(`“${descriptor.description}”（${descriptor.name}）`),
+        summary: expect.stringContaining(
+          `“${descriptor.description}”（${descriptor.name}）`,
+        ),
+      }),
+    );
+    expect(phases).toContainEqual(
+      expect.objectContaining({
+        phase: "action_agent_done",
+        summary: expect.stringContaining(
+          "使用 Skill：现场监控（skill.monitoring）",
+        ),
+      }),
+    );
+  });
+
+  it("directly executes a uniquely planned Skill tool with structured input", async () => {
+    const hostResults: HostToolResultRequest[] = [];
+    const phases: Array<{ phase: string; summary: string }> = [];
+    const runContext = context("查看2024年质量数据", hostResults);
+    const qualityYearTool = {
+      ...descriptor,
+      name: "selectQualityYear",
+      description: "切换质量管理年份筛选",
+      inputSchema: {
+        type: "object" as const,
+        properties: { year: { type: "string", enum: ["2024"] } },
+        required: ["year"],
+        additionalProperties: false,
+      },
+    };
+    const currentManifest = runContext.request.clientToolManifest;
+    if (!currentManifest) throw new Error("Expected client tool manifest");
+    runContext.request.clientToolManifest = {
+      ...currentManifest,
+      tools: [qualityYearTool],
+    };
+    runContext.request.skills = [
+      {
+        name: "skill.progress.filters",
+        displayName: "主场景筛选",
+        description: "质量筛选",
+        allowedTools: [qualityYearTool.name],
+        capabilityExamples: ["查看2024年质量数据"],
+      },
+    ];
+    const result = await runSpotlightGraph(runContext, {
+      model: new FakeToolCallingModel(),
+      router: router({
+        route: "action",
+        confidence: 1,
+        reason: "structured Skill plan",
+        requestedToolNames: [qualityYearTool.name],
+        requestedToolInput: { year: "2024" },
+        explicitActionEvidence: "查看2024年质量数据",
+        matchedSkillNames: ["skill.progress.filters"],
+      }),
+      checkpointer: new MemorySaver(),
+      store: new InMemoryStore(),
+      onPhase: (phase, summary) => phases.push({ phase, summary }),
+    });
+
+    expect(result.route).toBe("action");
+    expect(result.invokedClientTools).toEqual([qualityYearTool.name]);
+    expect(hostResults).toHaveLength(1);
+    expect(hostResults[0]).toMatchObject({ success: true });
+    expect(phases).toContainEqual(
+      expect.objectContaining({
+        phase: "action_agent_done",
+        summary: expect.stringContaining(
+          "使用 Skill：主场景筛选（skill.progress.filters）",
+        ),
+      }),
+    );
+    expect(phases).toContainEqual(
+      expect.objectContaining({
+        phase: "action_agent_done",
+        summary: expect.stringContaining("selectQualityYear"),
       }),
     );
   });
@@ -297,7 +422,10 @@ describe("LangGraph runtime isolation", () => {
       store,
     };
     await runSpotlightGraph(context("第一轮问题", [], { sessionId }), options);
-    const second = await runSpotlightGraph(context("第二轮问题", [], { sessionId }), options);
+    const second = await runSpotlightGraph(
+      context("第二轮问题", [], { sessionId }),
+      options,
+    );
     expect(second.assistantReply).toContain("第一轮问题");
     expect(second.assistantReply).toContain("第二轮问题");
   });
@@ -305,19 +433,24 @@ describe("LangGraph runtime isolation", () => {
   it("does not mutate long-term memory during an ordinary knowledge turn", async () => {
     const store = new InMemoryStore();
     const subjectId = "user-ordinary";
-    await runSpotlightGraph(context("介绍下引大济岷", [], { memorySubjectId: subjectId }), {
-      model: new FakeToolCallingModel(),
-      router: router({
-        route: "knowledge",
-        confidence: 1,
-        reason: "information request",
-        requestedToolNames: [],
-        explicitActionEvidence: null,
-      }),
-      checkpointer: new MemorySaver(),
-      store,
-    });
-    expect(await store.search(memoryNamespace("test-project", subjectId))).toEqual([]);
+    await runSpotlightGraph(
+      context("介绍下引大济岷", [], { memorySubjectId: subjectId }),
+      {
+        model: new FakeToolCallingModel(),
+        router: router({
+          route: "knowledge",
+          confidence: 1,
+          reason: "information request",
+          requestedToolNames: [],
+          explicitActionEvidence: null,
+        }),
+        checkpointer: new MemorySaver(),
+        store,
+      },
+    );
+    expect(
+      await store.search(memoryNamespace("test-project", subjectId)),
+    ).toEqual([]);
   });
 
   it("writes and deletes long-term memory only through explicit memory tools", async () => {
@@ -334,41 +467,49 @@ describe("LangGraph runtime isolation", () => {
       checkpointer: new MemorySaver(),
       store,
     };
-    await runSpotlightGraph(context("记住我偏好简洁回答", [], { memorySubjectId: subjectId }), {
-      ...baseOptions,
-      model: new FakeToolCallingModel({
-        toolCalls: [
-          [
-            {
-              id: "remember-1",
-              name: "remember_user_preference",
-              args: { key: "answer-style", value: "简洁回答" },
-              type: "tool_call",
-            },
+    await runSpotlightGraph(
+      context("记住我偏好简洁回答", [], { memorySubjectId: subjectId }),
+      {
+        ...baseOptions,
+        model: new FakeToolCallingModel({
+          toolCalls: [
+            [
+              {
+                id: "remember-1",
+                name: "remember_user_preference",
+                args: { key: "answer-style", value: "简洁回答" },
+                type: "tool_call",
+              },
+            ],
+            [],
           ],
-          [],
-        ],
-      }),
-    });
+        }),
+      },
+    );
     const namespace = memoryNamespace("test-project", subjectId);
-    expect((await store.search(namespace)).map((item) => item.key)).toContain("answer-style");
+    expect((await store.search(namespace)).map((item) => item.key)).toContain(
+      "answer-style",
+    );
 
-    await runSpotlightGraph(context("忘记我的回答风格偏好", [], { memorySubjectId: subjectId }), {
-      ...baseOptions,
-      model: new FakeToolCallingModel({
-        toolCalls: [
-          [
-            {
-              id: "forget-1",
-              name: "forget_user_preference",
-              args: { key: "answer-style" },
-              type: "tool_call",
-            },
+    await runSpotlightGraph(
+      context("忘记我的回答风格偏好", [], { memorySubjectId: subjectId }),
+      {
+        ...baseOptions,
+        model: new FakeToolCallingModel({
+          toolCalls: [
+            [
+              {
+                id: "forget-1",
+                name: "forget_user_preference",
+                args: { key: "answer-style" },
+                type: "tool_call",
+              },
+            ],
+            [],
           ],
-          [],
-        ],
-      }),
-    });
+        }),
+      },
+    );
     expect(await store.search(namespace)).toEqual([]);
   });
 });

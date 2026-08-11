@@ -11,7 +11,11 @@ export interface IntentDecision {
   confidence: number;
   reason: string;
   requestedToolNames: string[];
+  /** Structured arguments extracted for an exactly selected Skill tool. */
+  requestedToolInput?: Record<string, unknown>;
   explicitActionEvidence: string | null;
+  /** Consumer Skills deterministically matched for this turn. */
+  matchedSkillNames?: string[];
 }
 
 export interface KnowledgeEvidence {

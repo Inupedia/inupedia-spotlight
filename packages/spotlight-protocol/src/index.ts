@@ -137,6 +137,8 @@ export interface SpotlightSkill {
   responseStrategy?: SpotlightSkillResponseStrategy;
   assetTypes?: AssetType[];
   capabilityExamples?: string[];
+  /** Exact consumer examples bound to one registered tool for ambiguous sibling tools. */
+  toolExamples?: Array<{ example: string; toolName: string }>;
   version?: string;
   model?: string;
   disableModelInvocation?: boolean;

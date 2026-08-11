@@ -1,5 +1,9 @@
 import type { FrontendToolDescriptorV1 } from "@inupedia/spotlight-protocol";
-import { actionToolAllowlist, applyIntentSafetyFence, memoryControlMode } from "../src/index.js";
+import {
+  actionToolAllowlist,
+  applyIntentSafetyFence,
+  memoryControlMode,
+} from "../src/index.js";
 
 const actionTool: FrontendToolDescriptorV1 = {
   name: "panel.playVideoMonitoringFullscreenByName",
@@ -9,6 +13,14 @@ const actionTool: FrontendToolDescriptorV1 = {
   sideEffect: "ui",
   replayPolicy: "never",
   riskLevel: "low",
+};
+
+const readTool: FrontendToolDescriptorV1 = {
+  ...actionTool,
+  name: "getVideoInfo",
+  description: "查询摄像头覆盖场景",
+  sideEffect: "none",
+  replayPolicy: "safe",
 };
 
 describe("intent safety fence", () => {
@@ -39,20 +51,36 @@ describe("intent safety fence", () => {
     expect(actionToolAllowlist([actionTool], decision)).toEqual([actionTool]);
   });
 
-  it.each(["返回项目主场景", "查看水工建筑物中场景", "继续隧洞巡检", "开启人员定位专注模式"])(
-    "recognizes every supported action verb: %s",
-    (question) => {
-      const decision = applyIntentSafetyFence(question, {
-        route: "action",
-        confidence: 0.99,
-        reason: "explicit UI action",
-        requestedToolNames: [actionTool.name],
-        explicitActionEvidence: null,
-      });
-      expect(decision.route).toBe("action");
-      expect(decision.explicitActionEvidence).not.toBeNull();
-    },
-  );
+  it("allows an explicitly Skill-matched read-only client query", () => {
+    const decision = {
+      route: "action" as const,
+      confidence: 1,
+      reason: "matched read-only Skill",
+      requestedToolNames: [readTool.name],
+      explicitActionEvidence: "摄像头具体涉及了哪些场景",
+      matchedSkillNames: ["skill.monitoring"],
+    };
+    expect(actionToolAllowlist([actionTool, readTool], decision)).toEqual([
+      readTool,
+    ]);
+  });
+
+  it.each([
+    "返回项目主场景",
+    "查看水工建筑物中场景",
+    "继续隧洞巡检",
+    "开启人员定位专注模式",
+  ])("recognizes every supported action verb: %s", (question) => {
+    const decision = applyIntentSafetyFence(question, {
+      route: "action",
+      confidence: 0.99,
+      reason: "explicit UI action",
+      requestedToolNames: [actionTool.name],
+      explicitActionEvidence: null,
+    });
+    expect(decision.route).toBe("action");
+    expect(decision.explicitActionEvidence).not.toBeNull();
+  });
 
   it("fails closed when the model selects action without action evidence", () => {
     const decision = applyIntentSafetyFence("钢筋棚加工区室外监控", {

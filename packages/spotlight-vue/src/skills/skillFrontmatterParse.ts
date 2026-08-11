@@ -114,6 +114,21 @@ function pickStrList(
   return undefined;
 }
 
+function pickToolExamples(
+  data: Record<string, unknown>,
+): SpotlightSkill["toolExamples"] {
+  const raw = pickStrList(data, "tool-examples", "toolExamples");
+  if (!raw) return undefined;
+  const examples = raw.flatMap((item) => {
+    const separator = item.lastIndexOf("=>");
+    if (separator <= 0) return [];
+    const example = item.slice(0, separator).trim();
+    const toolName = item.slice(separator + 2).trim();
+    return example && toolName ? [{ example, toolName }] : [];
+  });
+  return examples.length ? examples : undefined;
+}
+
 function pickBool(
   data: Record<string, unknown>,
   ...keys: string[]
@@ -257,6 +272,8 @@ export function parseSpotlightSkillMarkdownFields(
   if (assetTypes) skill.assetTypes = assetTypes;
   const capEx = pickStrList(data, "capability-examples", "capabilityExamples");
   if (capEx) skill.capabilityExamples = capEx;
+  const toolExamples = pickToolExamples(data);
+  if (toolExamples) skill.toolExamples = toolExamples;
 
   const version = pickStr(data, "version");
   if (version) skill.version = version;

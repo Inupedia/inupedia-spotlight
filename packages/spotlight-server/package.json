@@ -1,6 +1,6 @@
 {
   "name": "@inupedia/spotlight-server",
-  "version": "0.5.9",
+  "version": "0.5.10",
   "description": "Deployable LangChain and LangGraph runtime for Inupedia Spotlight",
   "type": "module",
   "license": "MIT",
@@ -38,6 +38,7 @@
     "@langchain/langgraph": "^1.4.9",
     "@langchain/langgraph-checkpoint-postgres": "^1.0.4",
     "@langchain/openai": "^1.5.6",
+    "deepagents": "1.12.2",
     "fastify": "^5.6.2",
     "langchain": "^1.5.5",
     "yaml": "^2.8.4",

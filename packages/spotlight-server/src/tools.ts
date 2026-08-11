@@ -24,8 +24,10 @@ export function createClientLangChainTool(
   context: RunContext,
   invoked: string[],
 ) {
+  let completedOutput: string | undefined;
   return tool(
     async (input: Record<string, unknown>) => {
+      if (completedOutput !== undefined) return completedOutput;
       const call = {
         id: crypto.randomUUID(),
         name: descriptor.name,
@@ -34,10 +36,13 @@ export function createClientLangChainTool(
       };
       const result = await context.host.request(call);
       if (!result.success) {
-        throw new Error(result.error || `Client tool failed: ${descriptor.name}`);
+        throw new Error(
+          result.error || `Client tool failed: ${descriptor.name}`,
+        );
       }
       invoked.push(descriptor.name);
-      return stringify(result.output ?? { success: true });
+      completedOutput = stringify(result.output ?? { success: true });
+      return completedOutput;
     },
     {
       name: langChainClientToolName(descriptor.name),
@@ -74,8 +79,16 @@ const searchSchema = z.object({
 });
 
 const rememberSchema = z.object({
-  key: z.string().min(1).max(120).describe("Short stable key for the preference or fact"),
-  value: z.string().min(1).max(2000).describe("The exact user-provided preference or fact to remember"),
+  key: z
+    .string()
+    .min(1)
+    .max(120)
+    .describe("Short stable key for the preference or fact"),
+  value: z
+    .string()
+    .min(1)
+    .max(2000)
+    .describe("The exact user-provided preference or fact to remember"),
 });
 
 const forgetSchema = z.object({
@@ -84,7 +97,10 @@ const forgetSchema = z.object({
 
 export interface SearchToolProgress {
   onStart?: (input: { query: string; limit?: number }) => void;
-  onComplete?: (input: { query: string; limit?: number }, evidence: KnowledgeEvidence[]) => void;
+  onComplete?: (
+    input: { query: string; limit?: number },
+    evidence: KnowledgeEvidence[],
+  ) => void;
 }
 
 export interface ServerToolProgress {
@@ -92,11 +108,18 @@ export interface ServerToolProgress {
   onComplete?: (input: Record<string, unknown>, output: unknown) => void;
 }
 
-export function memoryNamespace(projectId: string, subjectId: string): string[] {
+export function memoryNamespace(
+  projectId: string,
+  subjectId: string,
+): string[] {
   return [projectId, "subjects", subjectId];
 }
 
-export function createLongTermMemoryTools(store: BaseStore, namespace: string[], mode: "remember" | "forget" | "both") {
+export function createLongTermMemoryTools(
+  store: BaseStore,
+  namespace: string[],
+  mode: "remember" | "forget" | "both",
+) {
   const tools = [];
   if (mode === "remember" || mode === "both") {
     tools.push(
@@ -110,7 +133,8 @@ export function createLongTermMemoryTools(store: BaseStore, namespace: string[],
         },
         {
           name: "remember_user_preference",
-          description: "Persist a user preference or fact only when the user explicitly asks to remember it.",
+          description:
+            "Persist a user preference or fact only when the user explicitly asks to remember it.",
           schema: rememberSchema,
         },
       ),
@@ -125,7 +149,8 @@ export function createLongTermMemoryTools(store: BaseStore, namespace: string[],
         },
         {
           name: "forget_user_preference",
-          description: "Delete a persisted preference only when the user explicitly asks to forget it.",
+          description:
+            "Delete a persisted preference only when the user explicitly asks to forget it.",
           schema: forgetSchema,
         },
       ),
@@ -134,7 +159,11 @@ export function createLongTermMemoryTools(store: BaseStore, namespace: string[],
   return tools;
 }
 
-export function createKnowledgeTool(provider: KnowledgeProvider, context: RunContext, progress?: SearchToolProgress) {
+export function createKnowledgeTool(
+  provider: KnowledgeProvider,
+  context: RunContext,
+  progress?: SearchToolProgress,
+) {
   return tool(
     async ({ query, limit }) => {
       const input = { query, ...(limit === undefined ? {} : { limit }) };
@@ -150,13 +179,18 @@ export function createKnowledgeTool(provider: KnowledgeProvider, context: RunCon
     },
     {
       name: "project_knowledge_search",
-      description: "Search the configured project knowledge base and return source evidence.",
+      description:
+        "Search the configured project knowledge base and return source evidence.",
       schema: searchSchema,
     },
   );
 }
 
-export function createWebSearchTool(provider: WebSearchProvider, context: RunContext, progress?: SearchToolProgress) {
+export function createWebSearchTool(
+  provider: WebSearchProvider,
+  context: RunContext,
+  progress?: SearchToolProgress,
+) {
   return tool(
     async ({ query, limit }) => {
       const input = { query, ...(limit === undefined ? {} : { limit }) };
@@ -172,7 +206,8 @@ export function createWebSearchTool(provider: WebSearchProvider, context: RunCon
     },
     {
       name: "web_search",
-      description: "Search the web for current evidence using the configured provider.",
+      description:
+        "Search the web for current evidence using the configured provider.",
       schema: searchSchema,
     },
   );
