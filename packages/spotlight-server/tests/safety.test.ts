@@ -39,6 +39,21 @@ describe("intent safety fence", () => {
     expect(actionToolAllowlist([actionTool], decision)).toEqual([actionTool]);
   });
 
+  it.each(["返回项目主场景", "继续隧洞巡检", "开启人员定位专注模式"])(
+    "recognizes every supported action verb: %s",
+    (question) => {
+      const decision = applyIntentSafetyFence(question, {
+        route: "action",
+        confidence: 0.99,
+        reason: "explicit UI action",
+        requestedToolNames: [actionTool.name],
+        explicitActionEvidence: null,
+      });
+      expect(decision.route).toBe("action");
+      expect(decision.explicitActionEvidence).not.toBeNull();
+    },
+  );
+
   it("fails closed when the model selects action without action evidence", () => {
     const decision = applyIntentSafetyFence("钢筋棚加工区室外监控", {
       route: "action",
