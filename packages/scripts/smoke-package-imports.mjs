@@ -21,7 +21,9 @@ try {
 
   for (const packageName of [
     "spotlight-protocol",
+    "spotlight-memory",
     "spotlight-client",
+    "spotlight-server",
     "spotlight-vue",
   ]) {
     symlinkSync(
@@ -40,6 +42,20 @@ const imports = [
     id: "@inupedia/spotlight-protocol",
     assert(mod) {
       assertExport(mod, "SPOTLIGHT_CORE_TOOL_NAMES", this.id);
+    },
+  },
+  {
+    id: "@inupedia/spotlight-memory",
+    assert(mod) {
+      assertExport(mod, "classifyMemoryKind", this.id);
+    },
+  },
+  {
+    id: "@inupedia/spotlight-server",
+    assert(mod) {
+      assertExport(mod, "runSpotlightGraph", this.id);
+      assertExport(mod, "buildServer", this.id);
+      assertExport(mod, "YuxiKnowledgeProvider", this.id);
     },
   },
   {

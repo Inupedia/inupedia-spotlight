@@ -1,9 +1,7 @@
-import { serializeSkillsForRemote } from "@inupedia/spotlight-client";
 import type {
   HostToolEffect,
   SpotlightMemoryDecision,
 } from "@inupedia/spotlight-protocol";
-import { getSkillsPoolForRun } from "../skills/index.js";
 import { useAgentSessionStore } from "../session/agentSession.js";
 import { useSpotlightMemoryPreferenceStore } from "../store/memoryPreferenceStore.js";
 import { useSpotlightRuntimeStore } from "../store/runtimeStore.js";
@@ -56,7 +54,6 @@ type RemoteRunEvent =
       turnId: string;
       assistantReply: string | null;
       commandName: string | null;
-      usedQueryLoop: boolean;
       stopReason: string;
       failureClass: string | null;
       elapsedMs: number;
@@ -118,11 +115,6 @@ type RemoteRunEvent =
       slug?: string;
       reason?: string;
     };
-
-type RemoteRunCompletedEvent = Extract<
-  RemoteRunEvent,
-  { type: "run_completed" }
->;
 
 function isTelemetryEvent(
   event: RemoteRunEvent,
@@ -510,6 +502,7 @@ async function buildRemotePayload(
     payload: {
       projectId: getSpotlightProjectId(),
       sessionId: session.sessionId,
+      memorySubjectId: getSpotlightConfig().getMemorySubjectId?.() ?? undefined,
       userQuestion,
       memoryRefreshRequested: options?.forceMemoryRefresh === true,
       uiContext: getSpotlightConfig().getUiContext?.() ?? {},
@@ -538,7 +531,6 @@ async function buildRemotePayload(
       clientToolManifest: hostManifest,
       frontendBuildId: hostManifest.frontendBuildId,
       manifestDigest: hostManifest.manifestDigest,
-      skills: serializeSkillsForRemote(getSkillsPoolForRun()),
     },
   };
 }
@@ -593,7 +585,6 @@ export async function runRemoteSpotlightPipeline(
   const reader = eventsResponse.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let completed: RemoteRunCompletedEvent | null = null;
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -624,10 +615,8 @@ export async function runRemoteSpotlightPipeline(
           if (event.sessionPatch) {
             useAgentSessionStore().applySessionPatch(event.sessionPatch);
           }
-          completed = event;
           return {
             command: null,
-            usedLegacyFallback: event.usedQueryLoop,
             memoryReplay: event.memoryReplay ?? null,
             memoryDecision: event.memoryDecision ?? null,
             assistantReply: event.assistantReply,
@@ -641,8 +630,6 @@ export async function runRemoteSpotlightPipeline(
 
   return {
     command: null,
-    usedLegacyFallback:
-      (completed as { usedQueryLoop?: boolean } | null)?.usedQueryLoop ?? true,
   };
 }
 

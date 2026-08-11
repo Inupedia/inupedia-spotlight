@@ -1,0 +1,54 @@
+{
+  "name": "@inupedia/spotlight-server",
+  "version": "0.5.0",
+  "description": "Deployable LangChain and LangGraph runtime for Inupedia Spotlight",
+  "type": "module",
+  "license": "MIT",
+  "author": "inupedia",
+  "bin": {
+    "spotlight-server": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "Dockerfile"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run --root ../.. packages/spotlight-server/tests",
+    "build": "pnpm run clean && tsc -p tsconfig.json && pnpm run verify:exports",
+    "verify:exports": "node ../scripts/verify-package-exports.mjs",
+    "prepack": "pnpm run build"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.1.0",
+    "@inupedia/spotlight-protocol": "workspace:*",
+    "@langchain/core": "^1.2.5",
+    "@langchain/langgraph": "^1.4.9",
+    "@langchain/langgraph-checkpoint-postgres": "^1.0.4",
+    "@langchain/openai": "^1.5.6",
+    "fastify": "^5.6.2",
+    "langchain": "^1.5.5",
+    "yaml": "^2.8.4",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

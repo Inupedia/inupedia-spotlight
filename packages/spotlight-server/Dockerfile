@@ -1,0 +1,20 @@
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/spotlight-client/package.json ./packages/spotlight-client/package.json
+COPY packages/spotlight-memory/package.json ./packages/spotlight-memory/package.json
+COPY packages/spotlight-protocol/package.json ./packages/spotlight-protocol/package.json
+COPY packages/spotlight-server/package.json ./packages/spotlight-server/package.json
+COPY packages/spotlight-vue/package.json ./packages/spotlight-vue/package.json
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store corepack enable && pnpm config set store-dir /pnpm/store && pnpm install --frozen-lockfile
+COPY packages ./packages
+RUN pnpm --filter @inupedia/spotlight-server build
+
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+COPY --from=build /app/packages/spotlight-server ./packages/spotlight-server
+COPY --from=build /app/node_modules ./node_modules
+EXPOSE 8787
+ENTRYPOINT ["node", "packages/spotlight-server/dist/cli.js"]

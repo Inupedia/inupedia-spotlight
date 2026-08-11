@@ -1,5 +1,7 @@
 /** Shared Spotlight protocol types (client ↔ spotlight-server). */
 
+import type { FrontendToolManifestV1 } from "./capabilities.js";
+
 export * from "./capabilities.js";
 export * from "./capabilitySecurity.js";
 
@@ -189,6 +191,8 @@ export interface SpotlightCommandCatalog {
 export interface CreateRunRequest {
   projectId?: string;
   sessionId?: string;
+  /** Stable authenticated subject id for opt-in cross-session memory. */
+  memorySubjectId?: string;
   userQuestion: string;
   /** One-shot override: bypass reusable memory and verify against sources. */
   memoryRefreshRequested?: boolean;
@@ -197,6 +201,8 @@ export interface CreateRunRequest {
   runtimeState?: SpotlightRuntimeState;
   clientTools?: ClientToolDescriptor[];
   clientToolsManifestVersion?: string;
+  /** Build-pinned browser capability manifest used by the LangGraph Action Agent. */
+  clientToolManifest?: FrontendToolManifestV1;
   skills?: SpotlightSkill[];
   commandCatalog?: SpotlightCommandCatalog;
 }

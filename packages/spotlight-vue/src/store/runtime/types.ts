@@ -180,7 +180,6 @@ export type SpotlightExecutionEvent =
       turnId: string;
       assistantReply: string | null;
       commandName: string | null;
-      usedQueryLoop: boolean;
       stopReason: SpotlightTurnStopReason;
       failureClass: SpotlightTurnFailureClass;
       elapsedMs: number;

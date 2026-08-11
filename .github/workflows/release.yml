@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   publish:
@@ -69,15 +70,39 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Publish spotlight-server
+        working-directory: packages/spotlight-server
+        run: pnpm publish --access "$NPM_PUBLISH_ACCESS" --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish spotlight-vue
         working-directory: packages/spotlight-vue
         run: pnpm publish --access "$NPM_PUBLISH_ACCESS" --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish Spotlight Server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/spotlight-server/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/spotlight-server:${{ steps.meta.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/spotlight-server:latest
+
       - name: Summary
         run: |
           echo "Published @inupedia/spotlight-protocol@${{ steps.meta.outputs.version }}"
           echo "Published @inupedia/spotlight-memory@${{ steps.meta.outputs.version }}"
           echo "Published @inupedia/spotlight-client@${{ steps.meta.outputs.version }}"
+          echo "Published @inupedia/spotlight-server@${{ steps.meta.outputs.version }}"
           echo "Published @inupedia/spotlight-vue@${{ steps.meta.outputs.version }}"

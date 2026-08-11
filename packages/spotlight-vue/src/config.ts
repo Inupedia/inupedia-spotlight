@@ -29,6 +29,8 @@ export type SpotlightConfig = SpotlightClientConfig & {
   uiPromptsFallback?: SpotlightUiPrompts;
   /** Per-run UI context reported to server. */
   getUiContext?: () => AgentUiContext;
+  /** Stable authenticated subject id. Omit to disable cross-session memory. */
+  getMemorySubjectId?: () => string | null | undefined;
   /** Optional UI-only quick actions. */
   quickPanelActions?: SpotlightQuickPanelActions;
   /** Override suggested question chips (defaults use server ui-prompts). */

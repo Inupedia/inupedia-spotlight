@@ -34,7 +34,7 @@ export const spotlightTools = [playVideoFullscreen, closeVideo];
 ## 1. 安装
 
 ```bash
-pnpm add @inupedia/spotlight-client@^0.3.0 @inupedia/spotlight-vue@^0.3.0
+pnpm add @inupedia/spotlight-client@^0.5.0 @inupedia/spotlight-vue@^0.5.0
 ```
 
 ## 2. 配置 Vite
@@ -79,6 +79,8 @@ export default defineSpotlightConfig({
   }),
   frontendBuildId: import.meta.env.VITE_BUILD_SHA,
   tools: spotlightTools,
+  // 登录系统有稳定用户 ID 时再配置；不要使用会轮换的 token。
+  getMemorySubjectId: () => authStore.userId,
 });
 ```
 
@@ -95,6 +97,8 @@ createApp(App)
 ```
 
 到这里，普通前端开发者的接入工作已经结束。
+
+`getMemorySubjectId` 是可选项：不配置时仍有当前会话的短期 Memory，但不会保存跨会话长期记忆，避免匿名用户之间串数据。长期记忆只会在用户明确说“记住”或“忘记”时写入或删除。
 
 ## 推导不了复杂类型时
 
@@ -135,7 +139,7 @@ export const switchVideoGroup = defineClientTool(
 
 不要把 GIS、视频播放器或项目 Store 搬到 Server。Server 只知道 Tool 契约，具体页面动作仍由浏览器执行。
 
-## 生产清单与信任边界
+## 生产清单与执行边界
 
 `vite build` 会输出：
 
@@ -143,23 +147,16 @@ export const switchVideoGroup = defineClientTool(
 dist/spotlight-client-manifest.json
 ```
 
-CI 部署时用 Server 提供的脚本发布它：
-
-```bash
-pnpm publish:client-manifest -- \
-  ../dist/spotlight-client-manifest.json \
-  "$SPOTLIGHT_CLIENT_MANIFEST_DIR"
-```
-
-脚本会按清单内容写入：
-
-```text
-${SPOTLIGHT_CLIENT_MANIFEST_DIR}/<projectId>/<frontendBuildId>.json
-```
-
-生产请求携带 `projectId`、`frontendBuildId` 和 `manifestDigest`。Server 会读取已发布清单并校验摘要；浏览器提交的临时 Tool 列表不会成为生产信任来源。开发环境可以直接使用浏览器构建清单，方便本地联调。
+浏览器每轮携带同一份构建清单。Server 只把经过意图门禁筛选的副作用 Tool 暴露给 Action Agent，Knowledge Agent 永远看不到 Client Tool；浏览器端仍会再次检查 Tool 是否由当前构建真实注册。因此不再需要 `SPOTLIGHT_CLIENT_MANIFEST_DIR`，也不会因为容器缺少该目录而启动失败。
 
 Server 读取可信清单后，将 Client Tool 转为真正的 LangChain Tool。模型调用该 Tool 时，执行请求通过现有浏览器 RPC 回到对应页面。LangChain 和 LangGraph 因此属于 Server 实现细节，不增加业务项目的接入成本。
+
+## 从 0.4.x 迁移到 0.5.0
+
+1. 依赖升级到 `0.5.0`。
+2. 删除 `getSkillsForRun` 和每轮 Skills 序列化；Project 知识与搜索改为 Server Provider。
+3. 保留 `tools` 与 `getUiContext`，页面动作函数不用重写。
+4. 将自建 Agent Server 替换为官方镜像和 `spotlight.project.yml`。
 
 ## 从 0.2.x 迁移
 
