@@ -258,6 +258,101 @@ function toolStepLabel(
     : stepId;
 }
 
+export function responseStepLabel(api: HandlerApi): string {
+  const agentStep = api
+    .getSteps()
+    .find((item) => item.id === SPOTLIGHT_PIPELINE_STEP_IDS.agent);
+  if (agentStep?.label === "检索知识") return "知识问答";
+  if (agentStep?.label === "选择工具") return "执行工具与回答";
+  return "生成回答";
+}
+
+function setTransitionStep(
+  api: HandlerApi,
+  id: string,
+  label: string,
+  status: AgentStep["status"],
+  content: string,
+) {
+  ensureStep(api, id, label);
+  api.setStep(id, status, content);
+}
+
+export function applyLangGraphTransition(
+  api: HandlerApi,
+  event: Extract<SpotlightExecutionEvent, { type: "turn_transition" }>,
+) {
+  const summary = event.summary?.trim();
+  switch (event.phase) {
+    case "routing":
+    case "analyzing":
+      setTransitionStep(
+        api,
+        SPOTLIGHT_PIPELINE_STEP_IDS.intent,
+        "分析意图",
+        "active",
+        summary ?? "正在分析用户意图。",
+      );
+      return;
+    case "router_done":
+      setTransitionStep(
+        api,
+        SPOTLIGHT_PIPELINE_STEP_IDS.intent,
+        "分析意图",
+        "done",
+        summary ?? "意图分析已完成。",
+      );
+      return;
+    case "knowledge_agent_start":
+      setTransitionStep(
+        api,
+        SPOTLIGHT_PIPELINE_STEP_IDS.agent,
+        "检索知识",
+        "active",
+        summary ?? "正在检索项目知识。",
+      );
+      return;
+    case "knowledge_agent_done":
+      setTransitionStep(
+        api,
+        SPOTLIGHT_PIPELINE_STEP_IDS.agent,
+        "检索知识",
+        "done",
+        summary ?? "项目知识检索已完成。",
+      );
+      return;
+    case "action_agent_start":
+      setTransitionStep(
+        api,
+        SPOTLIGHT_PIPELINE_STEP_IDS.agent,
+        "选择工具",
+        "active",
+        summary ?? "正在从已注册工具中选择操作。",
+      );
+      return;
+    case "action_agent_done":
+      setTransitionStep(
+        api,
+        SPOTLIGHT_PIPELINE_STEP_IDS.agent,
+        "选择工具",
+        "done",
+        summary ?? "工具选择与调用已完成。",
+      );
+      return;
+    case "memory_replay":
+      setTransitionStep(
+        api,
+        SPOTLIGHT_PIPELINE_STEP_IDS.breakdown,
+        "问题拆解",
+        "done",
+        summary ?? "Memory 缓存命中，跳过 LLM 规划。",
+      );
+      return;
+    default:
+      return;
+  }
+}
+
 async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
   if (event.type === "ping") return;
 
@@ -383,14 +478,7 @@ async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
       `\n[fork ${event.agentId}] 第 ${event.iteration} 轮 · ${event.phase}：${event.summary}\n`,
     );
   } else if (event.type === "turn_transition") {
-    if (event.phase === "memory_replay") {
-      ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.breakdown, "问题拆解");
-      api.setStep(
-        SPOTLIGHT_PIPELINE_STEP_IDS.breakdown,
-        "done",
-        event.summary ?? "Memory 缓存命中，跳过 LLM 规划。",
-      );
-    }
+    applyLangGraphTransition(api, event);
   } else if (event.type === "memory_decision") {
     ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.breakdown, "问题拆解");
     const labels: Record<SpotlightMemoryDecision["action"], string> = {
@@ -405,7 +493,11 @@ async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
       labels[event.decision.action],
     );
   } else if (event.type === "assistant_response") {
-    ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
+    ensureStep(
+      api,
+      SPOTLIGHT_PIPELINE_STEP_IDS.tool,
+      responseStepLabel(api),
+    );
     const step = api
       .getSteps()
       .find((item) => item.id === SPOTLIGHT_PIPELINE_STEP_IDS.tool);
