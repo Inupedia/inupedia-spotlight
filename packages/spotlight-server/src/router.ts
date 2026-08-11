@@ -46,6 +46,16 @@ export class LangChainIntentRouter implements IntentRouter {
         explicitActionEvidence: null,
       };
     }
+    const explicitActionEvidence = extractActionEvidence(question);
+    if (explicitActionEvidence) {
+      return {
+        route: "action",
+        confidence: 1,
+        reason: "Deterministic explicit-action intent fence; the Action Agent selects the registered tool.",
+        requestedToolNames: [],
+        explicitActionEvidence,
+      };
+    }
     const toolCatalog = clientTools.map((item) => ({
       name: item.name,
       description: item.description,

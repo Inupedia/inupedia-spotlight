@@ -41,11 +41,11 @@ export async function buildServer(options: BuildServerOptions) {
   app.get("/health", async () => ({
     ok: true,
     service: "@inupedia/spotlight-server",
-    version: "0.5.2",
+    version: "0.5.3",
     runtime: "langchain-langgraph",
     projectId: options.projectId,
   }));
-  app.get("/v1/meta/host-tools", async () => ({ version: "0.5.2", tools: [] }));
+  app.get("/v1/meta/host-tools", async () => ({ version: "0.5.3", tools: [] }));
   app.get("/v1/meta/ui-prompts", async () => ({
     projectId: options.projectId,
     prompts: options.uiPrompts ?? { capabilityHelpPatterns: [], suggestionChips: { default: ["你能做什么"] } },

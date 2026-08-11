@@ -7,8 +7,8 @@ const INFORMATION_PATTERNS = [
 ];
 
 const ACTION_PATTERNS = [
-  /(?:打开|关闭|播放|暂停|跳转|进入|退出|返回|开始|停止|继续|恢复|开启|切换|定位|显示|隐藏|查看监控|巡检)/u,
-  /(?:open|close|play|pause|navigate|enter|exit|return|start|stop|resume|enable|switch|show|hide)/iu,
+  /(?:打开|关闭|播放|暂停|跳转|进入|退出|返回|开始|停止|继续|恢复|开启|切换|定位|显示|隐藏|查看|巡检)/u,
+  /(?:open|close|play|pause|navigate|enter|exit|return|start|stop|resume|enable|switch|show|hide|view)/iu,
 ];
 
 const MEMORY_CONTROL_PATTERNS = [

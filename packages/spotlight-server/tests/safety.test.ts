@@ -39,7 +39,7 @@ describe("intent safety fence", () => {
     expect(actionToolAllowlist([actionTool], decision)).toEqual([actionTool]);
   });
 
-  it.each(["返回项目主场景", "继续隧洞巡检", "开启人员定位专注模式"])(
+  it.each(["返回项目主场景", "查看水工建筑物中场景", "继续隧洞巡检", "开启人员定位专注模式"])(
     "recognizes every supported action verb: %s",
     (question) => {
       const decision = applyIntentSafetyFence(question, {
