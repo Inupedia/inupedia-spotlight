@@ -8,6 +8,7 @@ export const INTERNAL_KNOWLEDGE_SUBTOOLS = new Set([
   "open_kb_document",
   "find_kb_document",
   "get_mindmap",
+  "ask_user_question",
 ]);
 
 export function normalizeToolName(name: string): string {

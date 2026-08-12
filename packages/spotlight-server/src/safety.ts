@@ -1,4 +1,7 @@
-import type { FrontendToolDescriptorV1 } from "@inupedia/spotlight-protocol";
+import type {
+  CreateRunRequest,
+  FrontendToolDescriptorV1,
+} from "@inupedia/spotlight-protocol";
 import type { IntentDecision } from "./contracts.js";
 
 const INFORMATION_PATTERNS = [
@@ -31,6 +34,19 @@ export function extractActionEvidence(question: string): string | null {
 
 export function hasMemoryControlEvidence(question: string): boolean {
   return MEMORY_CONTROL_PATTERNS.some((pattern) => pattern.test(question));
+}
+
+export function isMemoryReadEnabled(request: CreateRunRequest): boolean {
+  if (request.memoryRefreshRequested === true) return false;
+  const session = request.sessionState as
+    | (CreateRunRequest["sessionState"] & { memoryReadEnabled?: unknown })
+    | undefined;
+  if (!session) return true;
+  if (typeof session.memoryEnabled === "boolean") return session.memoryEnabled;
+  if (typeof session.memoryReadEnabled === "boolean") {
+    return session.memoryReadEnabled;
+  }
+  return true;
 }
 
 export function memoryControlMode(

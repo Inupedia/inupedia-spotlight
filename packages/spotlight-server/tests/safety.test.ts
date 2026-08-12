@@ -2,6 +2,7 @@ import type { FrontendToolDescriptorV1 } from "@inupedia/spotlight-protocol";
 import {
   actionToolAllowlist,
   applyIntentSafetyFence,
+  isMemoryReadEnabled,
   memoryControlMode,
 } from "../src/index.js";
 
@@ -105,5 +106,28 @@ describe("intent safety fence", () => {
     expect(decision.route).toBe("knowledge");
     expect(actionToolAllowlist([actionTool], decision)).toEqual([]);
     expect(memoryControlMode("忘记我的偏好")).toBe("forget");
+  });
+
+  it("honors the Spotlight memory toggle and refresh override", () => {
+    expect(isMemoryReadEnabled({ userQuestion: "介绍项目" })).toBe(true);
+    expect(
+      isMemoryReadEnabled({
+        userQuestion: "介绍项目",
+        sessionState: { memoryEnabled: false },
+      }),
+    ).toBe(false);
+    expect(
+      isMemoryReadEnabled({
+        userQuestion: "介绍项目",
+        sessionState: { memoryReadEnabled: false },
+      }),
+    ).toBe(false);
+    expect(
+      isMemoryReadEnabled({
+        userQuestion: "介绍项目",
+        memoryRefreshRequested: true,
+        sessionState: { memoryEnabled: true },
+      }),
+    ).toBe(false);
   });
 });

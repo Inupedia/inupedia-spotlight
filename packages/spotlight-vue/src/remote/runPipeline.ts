@@ -622,6 +622,7 @@ async function buildRemotePayload(
         lastAssistantReply: session.getLastAssistantContent(),
         invokedSkills: session.invokedSkills,
         skillPermissionGrants: session.skillPermissionGrants,
+        memoryEnabled: memoryPreference.enabled,
         memoryReadEnabled: memoryPreference.enabled,
         memoryWriteEnabled: true,
       },

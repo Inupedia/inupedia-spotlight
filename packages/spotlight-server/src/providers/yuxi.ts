@@ -4,6 +4,14 @@ import {
   collectYuxiStreamChunks,
   type YuxiToolCallState,
 } from "../yuxiStreamTools.js";
+import {
+  buildYuxiResumeInput,
+  isYuxiInterruptStatus,
+  parseYuxiInterrupt,
+  YUXI_MAX_INTERRUPT_RESUMES,
+  YUXI_TOOL_APPROVAL_MODE,
+  type YuxiInterrupt,
+} from "../yuxiInterrupts.js";
 
 export interface YuxiProviderOptions {
   baseUrl: string;
@@ -11,6 +19,17 @@ export interface YuxiProviderOptions {
   username?: string;
   password?: string;
   agentSlug?: string;
+}
+
+interface YuxiRunResponse {
+  run_id?: string;
+  stream_url?: string;
+}
+
+interface YuxiStreamOutcome {
+  content: string;
+  status: string;
+  interrupt: YuxiInterrupt | null;
 }
 
 export class YuxiKnowledgeProvider implements KnowledgeProvider {
@@ -83,79 +102,121 @@ export class YuxiKnowledgeProvider implements KnowledgeProvider {
     return { agentId, threadId };
   }
 
-  async search(input: KnowledgeQuery): Promise<KnowledgeEvidence[]> {
-    const session = await this.session(input.sessionId);
-    const run = await this.json<{ run_id?: string; stream_url?: string }>("/api/agent/runs", {
-      method: "POST",
-      body: JSON.stringify({
-        query: input.query,
-        agent_slug: session.agentId,
-        thread_id: session.threadId,
-        meta: { source: "spotlight-server", projectId: input.projectId },
-      }),
-      signal: input.signal,
-    });
-    if (!run.stream_url) throw new Error("Yuxi run returned no stream URL");
-    const response = await fetch(this.base(run.stream_url), {
+  private async consumeStream(
+    streamUrl: string,
+    input: KnowledgeQuery,
+    toolState: Map<string, YuxiToolCallState>,
+  ): Promise<YuxiStreamOutcome> {
+    const response = await fetch(this.base(streamUrl), {
       headers: { Authorization: await this.auth() },
       signal: input.signal,
     });
     if (!response.ok) throw new Error(`Yuxi stream failed: ${response.status}`);
     const chunks: string[] = [];
-    const toolState = new Map<string, YuxiToolCallState>();
     const reader = response.body?.getReader();
     if (!reader) throw new Error("Yuxi stream has no response body");
     const decoder = new TextDecoder();
     let buffer = "";
     let terminal = false;
-    while (!terminal) {
-      const { done, value } = await reader.read();
-      if (value) {
-        buffer += decoder.decode(value, { stream: !done }).replace(/\r\n/gu, "\n");
-      }
-      if (done) {
-        buffer += decoder.decode().replace(/\r\n/gu, "\n");
-        if (!buffer.trim()) break;
-        buffer += "\n\n";
-      }
-      const frames = buffer.split("\n\n");
-      buffer = frames.pop() ?? "";
-      for (const frame of frames) {
-        let eventType = "message";
-        const dataLines: string[] = [];
-        for (const line of frame.split("\n")) {
-          if (line.startsWith("event:")) eventType = line.slice(6).trim() || "message";
-          if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+    let status = "completed";
+    let interrupt: YuxiInterrupt | null = null;
+    try {
+      while (!terminal) {
+        const { done, value } = await reader.read();
+        if (value) {
+          buffer += decoder.decode(value, { stream: !done }).replace(/\r\n/gu, "\n");
         }
-        if (!dataLines.length) continue;
-        const envelope = JSON.parse(dataLines.join("\n")) as Record<string, unknown>;
-        const payload = envelope.payload as Record<string, unknown> | undefined;
-        for (const item of collectYuxiStreamChunks(envelope)) {
-          const streamEvent = item.stream_event;
-          if (streamEvent?.type === "message_delta" && typeof streamEvent.content === "string") {
-            chunks.push(streamEvent.content);
+        if (done) {
+          buffer += decoder.decode().replace(/\r\n/gu, "\n");
+          if (!buffer.trim()) break;
+          buffer += "\n\n";
+        }
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() ?? "";
+        for (const frame of frames) {
+          let eventType = "message";
+          const dataLines: string[] = [];
+          for (const line of frame.split("\n")) {
+            if (line.startsWith("event:")) eventType = line.slice(6).trim() || "message";
+            if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
           }
-          if (!input.onToolEvent) continue;
-          for (const event of applyYuxiStreamChunk(toolState, item)) {
-            input.onToolEvent(event);
+          if (!dataLines.length) continue;
+          const envelope = JSON.parse(dataLines.join("\n")) as Record<string, unknown>;
+          const payload = envelope.payload as Record<string, unknown> | undefined;
+          for (const item of collectYuxiStreamChunks(envelope)) {
+            const streamEvent = item.stream_event;
+            if (streamEvent?.type === "message_delta" && typeof streamEvent.content === "string") {
+              chunks.push(streamEvent.content);
+            }
+            if (!input.onToolEvent) continue;
+            for (const event of applyYuxiStreamChunk(toolState, item)) {
+              input.onToolEvent(event);
+            }
+          }
+          if (eventType === "interrupt") {
+            interrupt = parseYuxiInterrupt(eventType, envelope) ?? interrupt;
+          }
+          if (eventType === "error") {
+            throw new Error(String(payload?.message ?? envelope.message ?? "Yuxi run failed"));
+          }
+          if (eventType === "end") {
+            status = String(payload?.status ?? "completed");
+            if (!interrupt && isYuxiInterruptStatus(status)) {
+              interrupt = parseYuxiInterrupt(eventType, envelope);
+            }
+            terminal = true;
+            break;
           }
         }
-        if (eventType === "error") {
-          throw new Error(String(payload?.message ?? envelope.message ?? "Yuxi run failed"));
-        }
-        if (eventType === "end") {
-          const status = String(payload?.status ?? "completed");
-          if (status !== "completed") throw new Error(`Yuxi run ended with status ${status}`);
-          terminal = true;
-          break;
-        }
+        if (done) break;
       }
-      if (done) break;
+    } finally {
+      await reader.cancel().catch(() => undefined);
     }
-    await reader.cancel().catch(() => undefined);
     if (!terminal) throw new Error("Yuxi stream ended before a terminal event");
-    const content = chunks.join("").trim();
-    if (!content) throw new Error("Yuxi returned no answer content");
-    return [{ content, title: "Yuxi project knowledge", metadata: { provider: this.id, runId: run.run_id } }];
+    return { content: chunks.join(""), status, interrupt };
+  }
+
+  async search(input: KnowledgeQuery): Promise<KnowledgeEvidence[]> {
+    const session = await this.session(input.sessionId);
+    const toolState = new Map<string, YuxiToolCallState>();
+    const contentParts: string[] = [];
+    let parentRunId: string | undefined;
+    let resume: Record<string, unknown> | undefined;
+
+    for (let attempt = 0; attempt <= YUXI_MAX_INTERRUPT_RESUMES; attempt += 1) {
+      const run = await this.json<YuxiRunResponse>("/api/agent/runs", {
+        method: "POST",
+        body: JSON.stringify({
+          query: resume ? undefined : input.query,
+          agent_slug: session.agentId,
+          thread_id: session.threadId,
+          tool_approval_mode: YUXI_TOOL_APPROVAL_MODE,
+          resume,
+          created_by_run_id: resume ? parentRunId : undefined,
+          meta: { source: "spotlight-server", projectId: input.projectId },
+        }),
+        signal: input.signal,
+      });
+      if (!run.stream_url) throw new Error("Yuxi run returned no stream URL");
+      parentRunId = run.run_id ?? parentRunId;
+      const outcome = await this.consumeStream(run.stream_url, input, toolState);
+      if (outcome.content) contentParts.push(outcome.content);
+      if (outcome.status === "completed") {
+        const content = contentParts.join("").trim();
+        if (!content) throw new Error("Yuxi returned no answer content");
+        return [{
+          content,
+          title: "Yuxi project knowledge",
+          metadata: { provider: this.id, runId: parentRunId },
+        }];
+      }
+      if (!outcome.interrupt || !parentRunId || attempt === YUXI_MAX_INTERRUPT_RESUMES) {
+        throw new Error(`Yuxi run ended with status ${outcome.status}`);
+      }
+      resume = buildYuxiResumeInput(outcome.interrupt);
+    }
+
+    throw new Error("Yuxi run ended with status interrupted");
   }
 }

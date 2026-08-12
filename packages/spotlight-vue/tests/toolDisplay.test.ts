@@ -27,11 +27,17 @@ describe("toolDisplay", () => {
         name: "open_kb_document",
         status: "done",
       },
+      {
+        id: "5",
+        name: "ask_user_question",
+        status: "running",
+      },
     ]);
     expect(visible.map((item) => item.name)).toEqual([
       "project_knowledge_search",
     ]);
     expect(nestedKnowledge.map((item) => item.name).sort()).toEqual([
+      "ask_user_question",
       "list_kbs",
       "open_kb_document",
       "query_kb",

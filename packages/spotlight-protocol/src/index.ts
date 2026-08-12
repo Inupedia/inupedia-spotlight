@@ -91,8 +91,10 @@ export interface SpotlightSessionState {
   lastAssistantReply?: string | null;
   invokedSkills?: SpotlightSessionInvokedSkill[];
   skillPermissionGrants?: string[];
-  /** 是否启用 Gate + 文件记忆；默认 true。 */
+  /** 是否参考长期记忆作答；默认 true。关闭后仍可显式“记住/忘记”。 */
   memoryEnabled?: boolean;
+  /** Vue 0.5.12 发送的读记忆开关，等价于 memoryEnabled。 */
+  memoryReadEnabled?: boolean;
   /** 多租户命名空间（可选）。 */
   tenantId?: string;
 }

@@ -44,13 +44,21 @@ function pack(): ProjectPack {
 function context(
   question: string,
   hostResults: HostToolResultRequest[],
-  options: { sessionId?: string; memorySubjectId?: string } = {},
+  options: {
+    sessionId?: string;
+    memorySubjectId?: string;
+    memoryEnabled?: boolean;
+  } = {},
 ): RunContext {
   return {
     request: {
       projectId: "test-project",
       sessionId: options.sessionId ?? crypto.randomUUID(),
       memorySubjectId: options.memorySubjectId,
+      sessionState:
+        options.memoryEnabled === undefined
+          ? undefined
+          : { memoryEnabled: options.memoryEnabled },
       userQuestion: question,
       clientToolManifest: {
         protocolVersion: "spotlight.capabilities/1" as const,
@@ -456,6 +464,38 @@ describe("LangGraph runtime isolation", () => {
     );
     expect(second.assistantReply).toContain("第一轮问题");
     expect(second.assistantReply).toContain("第二轮问题");
+  });
+
+  it("does not recall long-term memory when the user disables it", async () => {
+    const store = new InMemoryStore();
+    const subjectId = "user-memory-off";
+    const namespace = memoryNamespace("test-project", subjectId);
+    await store.put(namespace, "answer-style", { value: "简洁回答" });
+    const search = store.search.bind(store);
+    let searchCalls = 0;
+    store.search = async (...args) => {
+      searchCalls += 1;
+      return search(...args);
+    };
+    await runSpotlightGraph(
+      context("介绍下引大济岷", [], {
+        memorySubjectId: subjectId,
+        memoryEnabled: false,
+      }),
+      {
+        model: new FakeToolCallingModel(),
+        router: router({
+          route: "knowledge",
+          confidence: 1,
+          reason: "information request",
+          requestedToolNames: [],
+          explicitActionEvidence: null,
+        }),
+        checkpointer: new MemorySaver(),
+        store,
+      },
+    );
+    expect(searchCalls).toBe(0);
   });
 
   it("does not mutate long-term memory during an ordinary knowledge turn", async () => {
