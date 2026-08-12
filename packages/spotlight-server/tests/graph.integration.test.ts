@@ -184,6 +184,7 @@ describe("LangGraph runtime isolation", () => {
       },
     };
     const phases: Array<{ phase: string; summary: string }> = [];
+    const tools: Array<{ type: string; name?: string; status?: string }> = [];
     await runSpotlightGraph(runContext, {
       model: new FakeToolCallingModel({
         toolCalls: [
@@ -208,6 +209,19 @@ describe("LangGraph runtime isolation", () => {
       checkpointer: new MemorySaver(),
       store: new InMemoryStore(),
       onPhase: (phase, summary) => phases.push({ phase, summary }),
+      onTool: (event) => {
+        if (event.type === "tool_start") {
+          tools.push({ type: "tool_start", name: event.call.name });
+          return;
+        }
+        if (event.type === "tool_result") {
+          tools.push({
+            type: "tool_result",
+            name: event.result.call.name,
+            status: event.result.success ? "done" : "error",
+          });
+        }
+      },
     });
 
     expect(phases).toContainEqual(
@@ -225,6 +239,15 @@ describe("LangGraph runtime isolation", () => {
       }),
     );
     expect(phases.some(({ summary }) => summary.includes("yuxi"))).toBe(false);
+    expect(tools).toContainEqual({
+      type: "tool_start",
+      name: "project_knowledge_search",
+    });
+    expect(tools).toContainEqual({
+      type: "tool_result",
+      name: "project_knowledge_search",
+      status: "done",
+    });
     expect(phases).toContainEqual(
       expect.objectContaining({
         phase: "knowledge_agent_done",
@@ -282,6 +305,7 @@ describe("LangGraph runtime isolation", () => {
   it("executes the selected client tool through the host bridge", async () => {
     const hostResults: HostToolResultRequest[] = [];
     const phases: Array<{ phase: string; summary: string }> = [];
+    const tools: string[] = [];
     const runContext = context("打开钢筋棚加工区室外监控", hostResults);
     runContext.request.skills = [
       {
@@ -317,9 +341,13 @@ describe("LangGraph runtime isolation", () => {
       checkpointer: new MemorySaver(),
       store: new InMemoryStore(),
       onPhase: (phase, summary) => phases.push({ phase, summary }),
+      onTool: (event) => {
+        if (event.type === "tool_start") tools.push(event.call.name);
+      },
     });
     expect(result.route).toBe("action");
     expect(result.invokedClientTools).toEqual([descriptor.name]);
+    expect(tools).toContain(descriptor.name);
     expect(hostResults).toHaveLength(1);
     expect(phases).toContainEqual(
       expect.objectContaining({

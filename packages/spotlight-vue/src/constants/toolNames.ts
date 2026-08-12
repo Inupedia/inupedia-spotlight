@@ -4,6 +4,7 @@ export const TOOL_NAMES = {
   },
   knowledge: {
     answer: "knowledge.answer",
+    projectSearch: "project_knowledge_search",
   },
   session: {
     repeatLastAnswer: "session.repeatLastAnswer",

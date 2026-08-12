@@ -5,6 +5,9 @@ export const INTERNAL_KNOWLEDGE_SUBTOOLS = new Set([
   "query_kb",
   "ls",
   "list_directory",
+  "open_kb_document",
+  "find_kb_document",
+  "get_mindmap",
 ]);
 
 export function normalizeToolName(name: string): string {
@@ -24,7 +27,8 @@ export function isUserFacingKnowledgeTool(name: string): boolean {
   const normalized = normalizeToolName(name);
   return (
     normalized === "knowledge.answer" ||
-    normalized === "knowledge.synthesizeanswer"
+    normalized === "knowledge.synthesizeanswer" ||
+    normalized === "project_knowledge_search"
   );
 }
 

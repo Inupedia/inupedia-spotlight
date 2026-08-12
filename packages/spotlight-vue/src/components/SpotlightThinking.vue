@@ -665,9 +665,11 @@ import {
   sanitizeToolStepAnswerText,
   splitToolStepContent,
 } from "../store/pipeline/displayText.js";
-import { partitionToolCalls } from "../store/pipeline/toolDisplay.js";
+import {
+  isUserFacingKnowledgeTool,
+  partitionToolCalls,
+} from "../store/pipeline/toolDisplay.js";
 import { getSpotlightMemoryResultCopy } from "../store/memoryResultCopy.js";
-import { TOOL_NAMES } from "../constants/toolNames.js";
 interface StepAttachment {
   id: string;
   type: "image" | "file" | "html";
@@ -966,11 +968,7 @@ function getNestedKnowledgeToolCalls(step: PipelineStep): StepToolCall[] {
 }
 
 function isKnowledgeAnswerTool(toolCall: StepToolCall): boolean {
-  return normalizeToolName(toolCall.name) === TOOL_NAMES.knowledge.answer;
-}
-
-function normalizeToolName(name: string): string {
-  return name.trim().toLowerCase();
+  return isUserFacingKnowledgeTool(toolCall.name);
 }
 
 function hasExecutionDetails(step: PipelineStep): boolean {

@@ -9,6 +9,7 @@ import type {
   HostActionCall,
   ProjectPack,
   RunContext,
+  SpotlightToolCallInfo,
 } from "./contracts.js";
 import { runSpotlightGraph } from "./graph.js";
 import type { IntentRouter } from "./router.js";
@@ -21,6 +22,32 @@ export type SpotlightServerRunEvent =
       at: number;
       iteration: number;
       request: { correlationId: string; call: HostActionCall };
+    }
+  | {
+      type: "tool_start";
+      at: number;
+      iteration: number;
+      call: SpotlightToolCallInfo;
+    }
+  | {
+      type: "tool_progress";
+      at: number;
+      iteration: number;
+      call: SpotlightToolCallInfo;
+      summary: string;
+    }
+  | {
+      type: "tool_result";
+      at: number;
+      iteration: number;
+      result: {
+        call: SpotlightToolCallInfo;
+        success: boolean;
+        summary: string;
+        output?: unknown;
+        error?: string;
+        trace: [];
+      };
     }
   | {
       type: "run_completed";
@@ -182,6 +209,36 @@ export class RunManager {
               phase,
               summary,
             }),
+          onTool: (event) => {
+            if (event.type === "tool_start") {
+              this.emit(run, {
+                type: "tool_start",
+                at: Date.now(),
+                iteration: 1,
+                call: event.call,
+              });
+              return;
+            }
+            if (event.type === "tool_progress") {
+              this.emit(run, {
+                type: "tool_progress",
+                at: Date.now(),
+                iteration: 1,
+                call: event.call,
+                summary: event.summary,
+              });
+              return;
+            }
+            this.emit(run, {
+              type: "tool_result",
+              at: Date.now(),
+              iteration: 1,
+              result: {
+                ...event.result,
+                trace: [],
+              },
+            });
+          },
         },
       );
       this.emit(run, {

@@ -1,4 +1,9 @@
 import type { KnowledgeEvidence, KnowledgeProvider, KnowledgeQuery } from "../contracts.js";
+import {
+  applyYuxiStreamChunk,
+  collectYuxiStreamChunks,
+  type YuxiToolCallState,
+} from "../yuxiStreamTools.js";
 
 export interface YuxiProviderOptions {
   baseUrl: string;
@@ -97,6 +102,7 @@ export class YuxiKnowledgeProvider implements KnowledgeProvider {
     });
     if (!response.ok) throw new Error(`Yuxi stream failed: ${response.status}`);
     const chunks: string[] = [];
+    const toolState = new Map<string, YuxiToolCallState>();
     const reader = response.body?.getReader();
     if (!reader) throw new Error("Yuxi stream has no response body");
     const decoder = new TextDecoder();
@@ -124,14 +130,14 @@ export class YuxiKnowledgeProvider implements KnowledgeProvider {
         if (!dataLines.length) continue;
         const envelope = JSON.parse(dataLines.join("\n")) as Record<string, unknown>;
         const payload = envelope.payload as Record<string, unknown> | undefined;
-        const items = Array.isArray(payload?.items) ? payload.items : [payload?.chunk];
-        for (const item of items) {
-          if (!item || typeof item !== "object") continue;
-          const streamEvent = (item as Record<string, unknown>).stream_event as
-            | Record<string, unknown>
-            | undefined;
+        for (const item of collectYuxiStreamChunks(envelope)) {
+          const streamEvent = item.stream_event;
           if (streamEvent?.type === "message_delta" && typeof streamEvent.content === "string") {
             chunks.push(streamEvent.content);
+          }
+          if (!input.onToolEvent) continue;
+          for (const event of applyYuxiStreamChunk(toolState, item)) {
+            input.onToolEvent(event);
           }
         }
         if (eventType === "error") {

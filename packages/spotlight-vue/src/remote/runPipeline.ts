@@ -219,28 +219,39 @@ function toolCallFromHostAction(
   };
 }
 
-function isPureHostOperation(callName: string): boolean {
-  return (
-    callName.startsWith("panel.") ||
-    callName.startsWith("navigate.") ||
-    callName.startsWith("session.")
-  );
+export function beginHostToolCall(
+  api: HandlerApi,
+  call: Extract<
+    RemoteRunEvent,
+    { type: "host_action_request" }
+  >["request"]["call"],
+) {
+  ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
+  ensureToolStepActive(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool);
+  api.appendToolCallsToStep(SPOTLIGHT_PIPELINE_STEP_IDS.tool, [
+    {
+      id: call.id,
+      name: call.name,
+      displayName: call.displayName,
+      argsText: JSON.stringify(call.input ?? {}, null, 2),
+      status: "running",
+    },
+  ]);
 }
 
-function settlePureHostOperationStep(
+export function settleHostToolCall(
   api: HandlerApi,
-  event: Extract<RemoteRunEvent, { type: "host_action_request" }>,
+  call: Extract<
+    RemoteRunEvent,
+    { type: "host_action_request" }
+  >["request"]["call"],
   result: Awaited<ReturnType<typeof executeRemoteHostTool>>,
 ) {
-  if (!isPureHostOperation(event.request.call.name)) return;
   ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
-  const toolCall = toolCallFromHostAction(event.request.call, result);
-  api.appendToolCallsToStep(SPOTLIGHT_PIPELINE_STEP_IDS.tool, [toolCall]);
-  api.setStep(
-    SPOTLIGHT_PIPELINE_STEP_IDS.tool,
-    result.success ? "done" : "error",
-    toolCall.resultText,
-  );
+  ensureToolStepActive(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool);
+  api.appendToolCallsToStep(SPOTLIGHT_PIPELINE_STEP_IDS.tool, [
+    toolCallFromHostAction(call, result),
+  ]);
 }
 
 function ensureToolStepActive(api: HandlerApi, stepId: string) {
@@ -355,7 +366,7 @@ export function applyLangGraphTransition(
   }
 }
 
-async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
+export async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
   if (event.type === "ping") return;
 
   if (event.type === "step_sync") {
@@ -689,11 +700,12 @@ export async function runRemoteSpotlightPipeline(
       buffer = parsed.rest;
       for (const event of parsed.events) {
         if (event.type === "host_action_request") {
+          beginHostToolCall(api, event.request.call);
           const result = await executeRemoteHostTool(event.request.call, api, {
             allowedHostNames,
             hostEffect: event.request.hostEffect,
           });
-          settlePureHostOperationStep(api, event, result);
+          settleHostToolCall(api, event.request.call, result);
           await postHostResult({
             runId,
             correlationId: event.request.correlationId,

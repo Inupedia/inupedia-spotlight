@@ -30,6 +30,10 @@ describe("Yuxi knowledge provider", () => {
       }
       if (url.includes("/stream/")) {
         return new Response([
+          'data: {"payload":{"items":[{"stream_event":{"type":"tool_call","name":"query_kb","tool_call_id":"tc-1","args":{"query":"介绍项目"}}}]}}',
+          "",
+          'data: {"payload":{"items":[{"msg":{"type":"tool","name":"query_kb","tool_call_id":"tc-1","content":[{"title":"概况"}]}}]}}',
+          "",
           'data: {"payload":{"items":[{"stream_event":{"type":"message_delta","content":"ok"}}]}}',
           "",
           'event: end\ndata: {"payload":{"status":"completed"}}',
@@ -40,10 +44,14 @@ describe("Yuxi knowledge provider", () => {
     }));
 
     const provider = new YuxiKnowledgeProvider({ baseUrl: "http://yuxi.test", apiKey: "test" });
+    const toolNames: string[] = [];
     const query = (sessionId: string) => provider.search({
       query: "介绍项目",
       projectId: "ydjm",
       sessionId,
+      onToolEvent: (event) => {
+        if (event.type === "start") toolNames.push(event.call.name);
+      },
     });
     await query("session-a");
     await query("session-a");
@@ -54,5 +62,6 @@ describe("Yuxi knowledge provider", () => {
       { id: "thread-2", sessionId: "session-b" },
     ]);
     expect(runThreadIds).toEqual(["thread-1", "thread-1", "thread-2"]);
+    expect(toolNames).toEqual(["query_kb", "query_kb", "query_kb"]);
   });
 });

@@ -6,7 +6,9 @@ import type {
   KnowledgeEvidence,
   KnowledgeProvider,
   RunContext,
+  SpotlightKnowledgeToolStreamEvent,
   SpotlightServerTool,
+  SpotlightToolCallInfo,
   WebSearchProvider,
 } from "./contracts.js";
 import { assertServerToolMetadata } from "./safety.js";
@@ -19,30 +21,58 @@ export function langChainClientToolName(name: string): string {
   return `client_${name.replace(/[^a-zA-Z0-9_-]/gu, "_")}`;
 }
 
+export interface LangChainToolProgress {
+  onStart?: (call: SpotlightToolCallInfo) => void;
+  onComplete?: (
+    call: SpotlightToolCallInfo,
+    result: { success: boolean; output?: unknown; error?: string },
+  ) => void;
+}
+
 export function createClientLangChainTool(
   descriptor: FrontendToolDescriptorV1,
   context: RunContext,
   invoked: string[],
+  progress?: LangChainToolProgress,
 ) {
   let completedOutput: string | undefined;
   return tool(
     async (input: Record<string, unknown>) => {
       if (completedOutput !== undefined) return completedOutput;
-      const call = {
+      const call: SpotlightToolCallInfo = {
         id: crypto.randomUUID(),
         name: descriptor.name,
         input,
         displayName: descriptor.description || descriptor.name,
       };
-      const result = await context.host.request(call);
-      if (!result.success) {
-        throw new Error(
-          result.error || `Client tool failed: ${descriptor.name}`,
-        );
+      progress?.onStart?.(call);
+      let reported = false;
+      try {
+        const result = await context.host.request(call);
+        if (!result.success) {
+          const error =
+            result.error || `Client tool failed: ${descriptor.name}`;
+          progress?.onComplete?.(call, { success: false, error });
+          reported = true;
+          throw new Error(error);
+        }
+        invoked.push(descriptor.name);
+        completedOutput = stringify(result.output ?? { success: true });
+        progress?.onComplete?.(call, {
+          success: true,
+          output: result.output,
+        });
+        reported = true;
+        return completedOutput;
+      } catch (error) {
+        if (!reported) {
+          progress?.onComplete?.(call, {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        throw error;
       }
-      invoked.push(descriptor.name);
-      completedOutput = stringify(result.output ?? { success: true });
-      return completedOutput;
     },
     {
       name: langChainClientToolName(descriptor.name),
@@ -61,9 +91,14 @@ export function createServerLangChainTool(
   return tool(
     async (input: Record<string, unknown>) => {
       progress?.onStart?.(input);
-      const output = await definition.invoke(input, context);
-      progress?.onComplete?.(input, output);
-      return stringify(output);
+      try {
+        const output = await definition.invoke(input, context);
+        progress?.onComplete?.(input, output);
+        return stringify(output);
+      } catch (error) {
+        progress?.onError?.(input, error);
+        throw error;
+      }
     },
     {
       name: definition.name,
@@ -101,11 +136,14 @@ export interface SearchToolProgress {
     input: { query: string; limit?: number },
     evidence: KnowledgeEvidence[],
   ) => void;
+  onError?: (input: { query: string; limit?: number }, error: unknown) => void;
+  onNestedTool?: (event: SpotlightKnowledgeToolStreamEvent) => void;
 }
 
 export interface ServerToolProgress {
   onStart?: (input: Record<string, unknown>) => void;
   onComplete?: (input: Record<string, unknown>, output: unknown) => void;
+  onError?: (input: Record<string, unknown>, error: unknown) => void;
 }
 
 export function memoryNamespace(
@@ -119,17 +157,35 @@ export function createLongTermMemoryTools(
   store: BaseStore,
   namespace: string[],
   mode: "remember" | "forget" | "both",
+  progress?: LangChainToolProgress,
 ) {
   const tools = [];
   if (mode === "remember" || mode === "both") {
     tools.push(
       tool(
         async ({ key, value }) => {
-          await store.put(namespace, key, {
-            value,
-            updatedAt: new Date().toISOString(),
-          });
-          return `Remembered ${key}.`;
+          const call: SpotlightToolCallInfo = {
+            id: crypto.randomUUID(),
+            name: "remember_user_preference",
+            input: { key, value },
+            displayName: "记住用户偏好",
+          };
+          progress?.onStart?.(call);
+          try {
+            await store.put(namespace, key, {
+              value,
+              updatedAt: new Date().toISOString(),
+            });
+            const output = `Remembered ${key}.`;
+            progress?.onComplete?.(call, { success: true, output });
+            return output;
+          } catch (error) {
+            progress?.onComplete?.(call, {
+              success: false,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            throw error;
+          }
         },
         {
           name: "remember_user_preference",
@@ -144,8 +200,25 @@ export function createLongTermMemoryTools(
     tools.push(
       tool(
         async ({ key }) => {
-          await store.delete(namespace, key);
-          return `Forgot ${key}.`;
+          const call: SpotlightToolCallInfo = {
+            id: crypto.randomUUID(),
+            name: "forget_user_preference",
+            input: { key },
+            displayName: "忘记用户偏好",
+          };
+          progress?.onStart?.(call);
+          try {
+            await store.delete(namespace, key);
+            const output = `Forgot ${key}.`;
+            progress?.onComplete?.(call, { success: true, output });
+            return output;
+          } catch (error) {
+            progress?.onComplete?.(call, {
+              success: false,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            throw error;
+          }
         },
         {
           name: "forget_user_preference",
@@ -168,14 +241,20 @@ export function createKnowledgeTool(
     async ({ query, limit }) => {
       const input = { query, ...(limit === undefined ? {} : { limit }) };
       progress?.onStart?.(input);
-      const evidence = await provider.search({
-        ...input,
-        projectId: context.project.projectId,
-        sessionId: context.request.sessionId ?? context.runId,
-        signal: context.signal,
-      });
-      progress?.onComplete?.(input, evidence);
-      return stringify(evidence);
+      try {
+        const evidence = await provider.search({
+          ...input,
+          projectId: context.project.projectId,
+          sessionId: context.request.sessionId ?? context.runId,
+          signal: context.signal,
+          onToolEvent: progress?.onNestedTool,
+        });
+        progress?.onComplete?.(input, evidence);
+        return stringify(evidence);
+      } catch (error) {
+        progress?.onError?.(input, error);
+        throw error;
+      }
     },
     {
       name: "project_knowledge_search",
@@ -195,14 +274,20 @@ export function createWebSearchTool(
     async ({ query, limit }) => {
       const input = { query, ...(limit === undefined ? {} : { limit }) };
       progress?.onStart?.(input);
-      const evidence = await provider.search({
-        ...input,
-        projectId: context.project.projectId,
-        sessionId: context.request.sessionId ?? context.runId,
-        signal: context.signal,
-      });
-      progress?.onComplete?.(input, evidence);
-      return stringify(evidence);
+      try {
+        const evidence = await provider.search({
+          ...input,
+          projectId: context.project.projectId,
+          sessionId: context.request.sessionId ?? context.runId,
+          signal: context.signal,
+          onToolEvent: progress?.onNestedTool,
+        });
+        progress?.onComplete?.(input, evidence);
+        return stringify(evidence);
+      } catch (error) {
+        progress?.onError?.(input, error);
+        throw error;
+      }
     },
     {
       name: "web_search",

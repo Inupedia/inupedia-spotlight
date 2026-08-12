@@ -23,7 +23,9 @@ import type {
   IntentDecision,
   KnowledgeEvidence,
   RunContext,
+  SpotlightKnowledgeToolStreamEvent,
   SpotlightRunResult,
+  SpotlightToolCallInfo,
 } from "./contracts.js";
 import type { IntentRouter } from "./router.js";
 import { actionToolAllowlist, memoryControlMode } from "./safety.js";
@@ -153,12 +155,59 @@ function toolsForMatchedSkills(
   return tools.filter((tool) => allowed.has(tool.name));
 }
 
+export type SpotlightGraphToolEvent =
+  | { type: "tool_start"; call: SpotlightToolCallInfo }
+  | { type: "tool_progress"; call: SpotlightToolCallInfo; summary: string }
+  | {
+      type: "tool_result";
+      result: {
+        call: SpotlightToolCallInfo;
+        success: boolean;
+        summary: string;
+        output?: unknown;
+        error?: string;
+      };
+    };
+
 export interface SpotlightGraphOptions {
   model: BaseChatModel;
   router: IntentRouter;
   checkpointer: BaseCheckpointSaver;
   store: BaseStore;
   onPhase?: (phase: string, summary: string) => void;
+  onTool?: (event: SpotlightGraphToolEvent) => void;
+}
+
+function emitNestedKnowledgeTool(
+  onTool: SpotlightGraphOptions["onTool"],
+  event: SpotlightKnowledgeToolStreamEvent,
+) {
+  if (event.type === "start") {
+    onTool?.({ type: "tool_start", call: event.call });
+    return;
+  }
+  if (event.type === "progress") {
+    onTool?.({
+      type: "tool_progress",
+      call: event.call,
+      summary: event.summary,
+    });
+    return;
+  }
+  onTool?.({
+    type: "tool_result",
+    result: {
+      call: event.call,
+      success: event.success,
+      summary: event.summary,
+      output: event.output,
+      error: event.error,
+    },
+  });
+}
+
+function toolErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export async function runSpotlightGraph(
@@ -247,9 +296,17 @@ export async function runSpotlightGraph(
         .filter((item) => item.metadata.effect === "read")
         .map((item) => {
           const source = `服务端资料工具“${item.name}”`;
+          let activeCall: SpotlightToolCallInfo | null = null;
           return createServerLangChainTool(item, context, {
             onStart: (input) => {
               attemptedSources.add(source);
+              activeCall = {
+                id: crypto.randomUUID(),
+                name: item.name,
+                input,
+                displayName: item.description || item.name,
+              };
+              options.onTool?.({ type: "tool_start", call: activeCall });
               options.onPhase?.(
                 "knowledge_agent_start",
                 `正在调用${source}：${toolInputSummary(input)}。`,
@@ -259,33 +316,107 @@ export async function runSpotlightGraph(
               completedSources.add(source);
               const summary = `${source}已完成（${toolInputSummary(input)}，${toolOutputSummary(output)}）。`;
               completedSearches.push(summary);
+              options.onTool?.({
+                type: "tool_result",
+                result: {
+                  call: activeCall ?? {
+                    id: crypto.randomUUID(),
+                    name: item.name,
+                    input,
+                    displayName: item.description || item.name,
+                  },
+                  success: true,
+                  summary,
+                  output,
+                },
+              });
+              activeCall = null;
               options.onPhase?.(
                 "knowledge_agent_start",
                 `${summary} 正在依据资料组织回答。`,
               );
+            },
+            onError: (input, error) => {
+              options.onTool?.({
+                type: "tool_result",
+                result: {
+                  call: activeCall ?? {
+                    id: crypto.randomUUID(),
+                    name: item.name,
+                    input,
+                    displayName: item.description || item.name,
+                  },
+                  success: false,
+                  summary: `${source}调用失败。`,
+                  error: toolErrorMessage(error),
+                },
+              });
+              activeCall = null;
             },
           });
         });
       if (context.project.knowledgeProvider) {
         const provider = context.project.knowledgeProvider;
         const source = "知识库";
+        let activeCall: SpotlightToolCallInfo | null = null;
         tools.push(
           createKnowledgeTool(provider, context, {
-            onStart: ({ query }) => {
+            onStart: ({ query, limit }) => {
               attemptedSources.add(source);
+              activeCall = {
+                id: crypto.randomUUID(),
+                name: "project_knowledge_search",
+                input: { query, ...(limit === undefined ? {} : { limit }) },
+                displayName: "检索项目知识库",
+              };
+              options.onTool?.({ type: "tool_start", call: activeCall });
               options.onPhase?.(
                 "knowledge_agent_start",
                 `正在检索${source}：“${compactText(query, 64)}”。`,
               );
             },
+            onNestedTool: (event) =>
+              emitNestedKnowledgeTool(options.onTool, event),
             onComplete: ({ query }, evidence) => {
               completedSources.add(source);
               const summary = evidenceProgressSummary(source, query, evidence);
               completedSearches.push(summary);
+              options.onTool?.({
+                type: "tool_result",
+                result: {
+                  call: activeCall ?? {
+                    id: crypto.randomUUID(),
+                    name: "project_knowledge_search",
+                    input: { query },
+                    displayName: "检索项目知识库",
+                  },
+                  success: true,
+                  summary,
+                  output: evidence,
+                },
+              });
+              activeCall = null;
               options.onPhase?.(
                 "knowledge_agent_start",
                 `${summary} 正在依据资料组织回答。`,
               );
+            },
+            onError: ({ query }, error) => {
+              options.onTool?.({
+                type: "tool_result",
+                result: {
+                  call: activeCall ?? {
+                    id: crypto.randomUUID(),
+                    name: "project_knowledge_search",
+                    input: { query },
+                    displayName: "检索项目知识库",
+                  },
+                  success: false,
+                  summary: `${source}检索失败。`,
+                  error: toolErrorMessage(error),
+                },
+              });
+              activeCall = null;
             },
           }),
         );
@@ -293,10 +424,18 @@ export async function runSpotlightGraph(
       if (context.project.webSearchProvider) {
         const provider = context.project.webSearchProvider;
         const source = "联网搜索";
+        let activeCall: SpotlightToolCallInfo | null = null;
         tools.push(
           createWebSearchTool(provider, context, {
-            onStart: ({ query }) => {
+            onStart: ({ query, limit }) => {
               attemptedSources.add(source);
+              activeCall = {
+                id: crypto.randomUUID(),
+                name: "web_search",
+                input: { query, ...(limit === undefined ? {} : { limit }) },
+                displayName: "联网搜索",
+              };
+              options.onTool?.({ type: "tool_start", call: activeCall });
               options.onPhase?.(
                 "knowledge_agent_start",
                 `正在使用${source}搜索：“${compactText(query, 64)}”。`,
@@ -306,10 +445,42 @@ export async function runSpotlightGraph(
               completedSources.add(source);
               const summary = evidenceProgressSummary(source, query, evidence);
               completedSearches.push(summary);
+              options.onTool?.({
+                type: "tool_result",
+                result: {
+                  call: activeCall ?? {
+                    id: crypto.randomUUID(),
+                    name: "web_search",
+                    input: { query },
+                    displayName: "联网搜索",
+                  },
+                  success: true,
+                  summary,
+                  output: evidence,
+                },
+              });
+              activeCall = null;
               options.onPhase?.(
                 "knowledge_agent_start",
                 `${summary} 正在依据资料组织回答。`,
               );
+            },
+            onError: ({ query }, error) => {
+              options.onTool?.({
+                type: "tool_result",
+                result: {
+                  call: activeCall ?? {
+                    id: crypto.randomUUID(),
+                    name: "web_search",
+                    input: { query },
+                    displayName: "联网搜索",
+                  },
+                  success: false,
+                  summary: `${source}失败。`,
+                  error: toolErrorMessage(error),
+                },
+              });
+              activeCall = null;
             },
           }),
         );
@@ -330,7 +501,28 @@ export async function runSpotlightGraph(
       }
       if (controlMode && namespace) {
         tools.push(
-          ...createLongTermMemoryTools(options.store, namespace, controlMode),
+          ...createLongTermMemoryTools(
+            options.store,
+            namespace,
+            controlMode,
+            {
+              onStart: (call) =>
+                options.onTool?.({ type: "tool_start", call }),
+              onComplete: (call, result) =>
+                options.onTool?.({
+                  type: "tool_result",
+                  result: {
+                    call,
+                    success: result.success,
+                    summary: result.success
+                      ? String(result.output ?? `${call.displayName}已完成。`)
+                      : result.error || `${call.displayName}失败。`,
+                    output: result.output,
+                    error: result.error,
+                  },
+                }),
+            },
+          ),
         );
       }
       const storedMemories = namespace
@@ -409,7 +601,22 @@ export async function runSpotlightGraph(
         `${initiallyMatchedSkills.length > 0 ? `使用 Skill：${initiallyMatchedSkills.map((skill) => `${skill.displayName ?? skill.name}（${skill.name}）`).join("、")}；` : ""}正在从 ${allowed.length} 个已注册页面工具中匹配“${compactText(state.question, 56)}”。`,
       );
       const tools = allowed.map((item) =>
-        createClientLangChainTool(item, context, invoked),
+        createClientLangChainTool(item, context, invoked, {
+          onStart: (call) => options.onTool?.({ type: "tool_start", call }),
+          onComplete: (call, result) =>
+            options.onTool?.({
+              type: "tool_result",
+              result: {
+                call,
+                success: result.success,
+                summary: result.success
+                  ? `已完成：${call.displayName}`
+                  : result.error || `${call.displayName}失败。`,
+                output: result.output,
+                error: result.error,
+              },
+            }),
+        }),
       );
       if (
         allowed.length === 1 &&

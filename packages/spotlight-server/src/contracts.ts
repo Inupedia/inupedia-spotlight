@@ -26,12 +26,39 @@ export interface KnowledgeEvidence {
   metadata?: Record<string, unknown>;
 }
 
+export interface SpotlightToolCallInfo {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+  displayName: string;
+}
+
+export type SpotlightKnowledgeToolStreamEvent =
+  | {
+      type: "start";
+      call: SpotlightToolCallInfo;
+    }
+  | {
+      type: "progress";
+      call: SpotlightToolCallInfo;
+      summary: string;
+    }
+  | {
+      type: "result";
+      call: SpotlightToolCallInfo;
+      success: boolean;
+      summary: string;
+      output?: unknown;
+      error?: string;
+    };
+
 export interface KnowledgeQuery {
   query: string;
   projectId: string;
   sessionId: string;
   limit?: number;
   signal?: AbortSignal;
+  onToolEvent?: (event: SpotlightKnowledgeToolStreamEvent) => void;
 }
 
 export interface KnowledgeProvider {
