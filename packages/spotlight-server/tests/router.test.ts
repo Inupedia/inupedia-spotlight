@@ -1,8 +1,38 @@
 import { FakeToolCallingModel } from "langchain";
-import { LangChainIntentRouter } from "../src/index.js";
+import { LangChainIntentRouter } from "../src/router.js";
+
+const readOnlyVideoTool = {
+  name: "getVideoInfo",
+  version: "1.0.0",
+  description: "查询摄像头覆盖场景",
+  inputSchema: { type: "object", properties: {} },
+  sideEffect: "none" as const,
+  replayPolicy: "safe" as const,
+  riskLevel: "low" as const,
+};
+
+const monitoringSkill = {
+  name: "skill.monitoring",
+  displayName: "现场监控",
+  description: "查询摄像头数量、在线状态和覆盖场景，并打开或关闭监控画面。",
+  whenToUse:
+    "用户询问摄像头有哪些、数量、在线状态、覆盖哪些场景或气体监测，或要求打开、播放、关闭监控画面。",
+  allowedTools: ["getVideoInfo", "openVideoMonitoring"],
+  responseStrategy: "tool_answer" as const,
+  capabilityExamples: ["摄像头具体涉及了哪些场景", "目前有哪些摄像头"],
+};
+
+const knowledgeSkill = {
+  name: "skill.knowledge",
+  displayName: "项目知识问答",
+  description: "使用知识库回答项目介绍、概念解释与公开信息问题。",
+  whenToUse:
+    "用户询问项目是什么、工程介绍、模块含义、具体事实、公开资料，且没有要求操作当前页面。",
+  responseStrategy: "direct_answer" as const,
+};
 
 describe("LangChain intent router", () => {
-  it("does not invoke the model for deterministic information intent", async () => {
+  it("routes informational questions to knowledge when no consumer skills are registered", async () => {
     const model = new FakeToolCallingModel({
       structuredResponse: {
         route: "action",
@@ -12,12 +42,9 @@ describe("LangChain intent router", () => {
       },
     });
     const router = new LangChainIntentRouter(model);
-    for (let index = 0; index < 20; index += 1) {
-      const decision = await router.route("介绍下引大济岷", []);
-      expect(decision.route).toBe("knowledge");
-      expect(decision.requestedToolNames).toEqual([]);
-    }
-    expect(model.index).toBe(0);
+    const decision = await router.route("介绍下引大济岷", []);
+    expect(decision.route).toBe("knowledge");
+    expect(decision.requestedToolNames).toEqual([]);
   });
 
   it.each([
@@ -46,93 +73,66 @@ describe("LangChain intent router", () => {
     },
   );
 
-  it("routes an exact consumer Skill capability example without generic action wording", async () => {
+  it("routes monitoring list questions semantically via the skill catalog", async () => {
     const model = new FakeToolCallingModel({
       structuredResponse: {
-        route: "clarify",
-        confidence: 0,
-        reason: "unstable model output",
-        requestedToolNames: [],
+        route: "action",
+        matchedSkillNames: ["skill.monitoring"],
+        requestedToolNames: ["getVideoInfo"],
+        confidence: 0.95,
+        reason: "Monitoring list query matches tool_answer skill.",
       },
     });
     const router = new LangChainIntentRouter(model);
     const decision = await router.route(
-      "到二郎山二号支洞里看看",
-      [],
-      [
-        {
-          name: "skill.tunnel.erlangshan2",
-          description: "二郎山二号支洞巡检",
-          allowedTools: ["enterTunnelPatrol"],
-          capabilityExamples: ["到二郎山二号支洞里看看"],
-        },
-      ],
+      "目前有哪些监控",
+      [readOnlyVideoTool],
+      [monitoringSkill],
     );
 
     expect(decision.route).toBe("action");
-    expect(decision.confidence).toBe(1);
-    expect(decision.explicitActionEvidence).toBe("到二郎山二号支洞里看看");
-    expect(model.index).toBe(0);
+    expect(decision.requestedToolNames).toEqual(["getVideoInfo"]);
+    expect(decision.matchedSkillNames).toEqual(["skill.monitoring"]);
+    expect(decision.explicitActionEvidence).toBe("skill:skill.monitoring");
   });
 
-  it("keeps informational intent ahead of consumer Skill examples", async () => {
-    const model = new FakeToolCallingModel();
+  it("routes project introductions to skill.knowledge instead of action skills", async () => {
+    const model = new FakeToolCallingModel({
+      structuredResponse: {
+        route: "knowledge",
+        matchedSkillNames: ["skill.knowledge"],
+        requestedToolNames: [],
+        confidence: 0.98,
+        reason: "Project introduction belongs to knowledge skill.",
+      },
+    });
     const router = new LangChainIntentRouter(model);
     const decision = await router.route(
       "介绍下引大济岷",
-      [],
+      [readOnlyVideoTool],
       [
+        knowledgeSkill,
         {
-          name: "skill.bad-example",
-          description: "错误示例不应越过知识安全围栏",
-          allowedTools: ["startTunnelPatrol"],
+          ...monitoringSkill,
           capabilityExamples: ["介绍下引大济岷"],
         },
       ],
     );
 
     expect(decision.route).toBe("knowledge");
-    expect(decision.explicitActionEvidence).toBeNull();
-    expect(model.index).toBe(0);
-  });
-
-  it("routes an informational Skill example only to its read-only client tool", async () => {
-    const model = new FakeToolCallingModel();
-    const router = new LangChainIntentRouter(model);
-    const decision = await router.route(
-      "摄像头具体涉及了哪些场景",
-      [
-        {
-          name: "getVideoInfo",
-          version: "1.0.0",
-          description: "查询摄像头覆盖场景",
-          inputSchema: { type: "object", properties: {} },
-          sideEffect: "none",
-          replayPolicy: "safe",
-          riskLevel: "low",
-        },
-      ],
-      [
-        {
-          name: "skill.monitoring",
-          description: "查询摄像头或打开监控",
-          allowedTools: ["getVideoInfo"],
-          capabilityExamples: ["摄像头具体涉及了哪些场景"],
-        },
-      ],
-    );
-
-    expect(decision.route).toBe("action");
-    expect(decision.requestedToolNames).toEqual(["getVideoInfo"]);
-    expect(decision.matchedSkillNames).toEqual(["skill.monitoring"]);
-    expect(model.index).toBe(0);
+    expect(decision.matchedSkillNames).toEqual(["skill.knowledge"]);
+    expect(decision.requestedToolNames).toEqual([]);
   });
 
   it("uses structured output to narrow a multi-tool Skill to one registered tool", async () => {
     const model = new FakeToolCallingModel({
       structuredResponse: {
-        toolName: "selectQualityYear",
+        route: "action",
+        matchedSkillNames: ["skill.progress.filters"],
+        requestedToolNames: ["selectQualityYear"],
         toolInput: { year: "2024" },
+        confidence: 1,
+        reason: "Quality year filter",
       },
     });
     const router = new LangChainIntentRouter(model);
@@ -156,6 +156,7 @@ describe("LangChain intent router", () => {
           name: "skill.progress.filters",
           description: "质量筛选",
           allowedTools: ["selectQualitySegment", "selectQualityYear"],
+          responseStrategy: "tool_answer",
           capabilityExamples: ["查看2024年质量数据"],
         },
       ],
@@ -165,46 +166,26 @@ describe("LangChain intent router", () => {
     expect(decision.requestedToolNames).toEqual(["selectQualityYear"]);
     expect(decision.requestedToolInput).toEqual({ year: "2024" });
     expect(decision.matchedSkillNames).toEqual(["skill.progress.filters"]);
-    expect(model.index).toBe(0);
   });
 
-  it("prefers an exact Skill tool example without asking the model to guess", async () => {
+  it("infers a read-only tool when the skill route omits requestedToolNames", async () => {
     const model = new FakeToolCallingModel({
       structuredResponse: {
-        toolName: "enterTunnelPatrol",
-        toolInput: {},
+        route: "action",
+        matchedSkillNames: ["skill.monitoring"],
+        requestedToolNames: [],
+        confidence: 0.92,
+        reason: "Monitoring list query",
       },
     });
     const router = new LangChainIntentRouter(model);
-    const tool = (name: string, description: string) => ({
-      name,
-      version: "1.0.0",
-      description,
-      inputSchema: { type: "object" as const, properties: {} },
-      sideEffect: "ui" as const,
-      replayPolicy: "never" as const,
-      riskLevel: "low" as const,
-    });
     const decision = await router.route(
-      "开始洞内巡检",
-      [
-        tool("enterTunnelPatrol", "进入巡检视图"),
-        tool("startTunnelPatrol", "开始播放巡检"),
-      ],
-      [
-        {
-          name: "skill.tunnel.erlangshan2",
-          description: "隧洞巡检",
-          allowedTools: ["enterTunnelPatrol", "startTunnelPatrol"],
-          toolExamples: [
-            { example: "开始洞内巡检", toolName: "startTunnelPatrol" },
-          ],
-        },
-      ],
+      "摄像头具体涉及了哪些场景",
+      [readOnlyVideoTool],
+      [monitoringSkill],
     );
 
-    expect(decision.requestedToolNames).toEqual(["startTunnelPatrol"]);
-    expect(decision.requestedToolInput).toEqual({});
-    expect(model.index).toBe(0);
+    expect(decision.route).toBe("action");
+    expect(decision.requestedToolNames).toEqual(["getVideoInfo"]);
   });
 });

@@ -66,6 +66,33 @@ describe("intent safety fence", () => {
     ]);
   });
 
+  it("does not expose every skill tool when router already selected one", () => {
+    const decision = {
+      route: "action" as const,
+      confidence: 1,
+      reason: "matched open Skill",
+      requestedToolNames: ["openBimBuilding"],
+      explicitActionEvidence: "skill:skill.bim",
+      matchedSkillNames: ["skill.bim"],
+    };
+    expect(
+      actionToolAllowlist([readTool, actionTool], decision),
+    ).toEqual([]);
+    expect(
+      actionToolAllowlist(
+        [
+          readTool,
+          {
+            ...actionTool,
+            name: "openBimBuilding",
+            description: "打开BIM",
+          },
+        ],
+        decision,
+      ),
+    ).toEqual([expect.objectContaining({ name: "openBimBuilding" })]);
+  });
+
   it.each([
     "返回项目主场景",
     "查看水工建筑物中场景",

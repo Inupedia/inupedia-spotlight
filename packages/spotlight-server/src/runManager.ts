@@ -11,7 +11,13 @@ import type {
   RunContext,
   SpotlightToolCallInfo,
 } from "./contracts.js";
-import { runSpotlightGraph } from "./graph.js";
+import {
+  compileSpotlightGraph,
+  publicRouteFromLane,
+  workflowRunnableConfig,
+} from "./graph.js";
+import type { SpotlightGraphToolEvent } from "./graph.js";
+import { initialRuntimeState } from "./workflow/state.js";
 import type { IntentRouter } from "./router.js";
 
 export type SpotlightServerRunEvent =
@@ -191,56 +197,73 @@ export class RunManager {
       summary: "正在识别本次请求属于知识问答、页面操作，还是需要补充信息。",
     });
     try {
-      const result = await runSpotlightGraph(
-        {
-          request: run.request,
-          runId: run.id,
-          project: this.options.project,
-          host: this.hostBridge(run),
-          signal: run.controller.signal,
-        },
-        {
-          ...this.options,
-          onPhase: (phase, summary) =>
+      const context = {
+        request: run.request,
+        runId: run.id,
+        project: this.options.project,
+        host: this.hostBridge(run),
+        signal: run.controller.signal,
+      };
+      const graphOptions = {
+        ...this.options,
+        onPhase: (phase: string, summary: string) =>
+          this.emit(run, {
+            type: "turn_transition" as const,
+            at: Date.now(),
+            turnId,
+            phase,
+            summary,
+          }),
+        onTool: (event: SpotlightGraphToolEvent) => {
+          if (event.type === "tool_start") {
             this.emit(run, {
-              type: "turn_transition",
-              at: Date.now(),
-              turnId,
-              phase,
-              summary,
-            }),
-          onTool: (event) => {
-            if (event.type === "tool_start") {
-              this.emit(run, {
-                type: "tool_start",
-                at: Date.now(),
-                iteration: 1,
-                call: event.call,
-              });
-              return;
-            }
-            if (event.type === "tool_progress") {
-              this.emit(run, {
-                type: "tool_progress",
-                at: Date.now(),
-                iteration: 1,
-                call: event.call,
-                summary: event.summary,
-              });
-              return;
-            }
-            this.emit(run, {
-              type: "tool_result",
+              type: "tool_start",
               at: Date.now(),
               iteration: 1,
-              result: {
-                ...event.result,
-                trace: [],
-              },
+              call: event.call,
             });
-          },
+            return;
+          }
+          if (event.type === "tool_progress") {
+            this.emit(run, {
+              type: "tool_progress",
+              at: Date.now(),
+              iteration: 1,
+              call: event.call,
+              summary: event.summary,
+            });
+            return;
+          }
+          this.emit(run, {
+            type: "tool_result",
+            at: Date.now(),
+            iteration: 1,
+            result: {
+              ...event.result,
+              trace: [],
+            },
+          });
         },
+      };
+      const graph = compileSpotlightGraph(context, graphOptions);
+      const runConfig = {
+        ...workflowRunnableConfig(context),
+        streamMode: ["custom"] as ["custom"],
+      };
+      const stream = await graph.stream(
+        initialRuntimeState(context.request.userQuestion),
+        runConfig,
       );
+      for await (const _chunk of stream) {
+        // Custom stream events are also mirrored through onPhase/onTool.
+      }
+      const values = (await graph.getState(runConfig)).values;
+      const result = {
+        route: publicRouteFromLane(values.lane, values.invokedClientTools ?? []),
+        assistantReply: values.assistantReply,
+        decision: values.decision,
+        invokedClientTools: values.invokedClientTools ?? [],
+      };
       this.emit(run, {
         type: "assistant_response",
         at: Date.now(),

@@ -7,9 +7,13 @@ import type { IntentDecision } from "./contracts.js";
 import {
   applyIntentSafetyFence,
   extractActionEvidence,
-  hasInformationEvidence,
   hasMemoryControlEvidence,
 } from "./safety.js";
+import {
+  candidateToolsForSkillRoute,
+  routeViaSkillCatalog,
+  type SkillRouteResult,
+} from "./skillIntentRouter.js";
 
 const intentSchema = z.object({
   route: z.enum(["knowledge", "action", "clarify"]),
@@ -29,31 +33,6 @@ export interface IntentRouter {
     clientTools: FrontendToolDescriptorV1[],
     skills?: SpotlightSkill[],
   ): Promise<IntentDecision>;
-}
-
-function normalizeCapabilityExample(value: string): string {
-  return value.replace(/[\s，。！？、,.!?]/gu, "").toLowerCase();
-}
-
-function matchSkillCapabilityExample(
-  question: string,
-  skills: SpotlightSkill[],
-): { skill: SpotlightSkill; example: string; toolName?: string } | null {
-  const normalizedQuestion = normalizeCapabilityExample(question);
-  for (const skill of skills) {
-    if (!skill.allowedTools?.length) continue;
-    for (const item of skill.toolExamples ?? []) {
-      if (normalizeCapabilityExample(item.example) === normalizedQuestion) {
-        return { skill, example: item.example, toolName: item.toolName };
-      }
-    }
-    for (const example of skill.capabilityExamples ?? []) {
-      if (normalizeCapabilityExample(example) === normalizedQuestion) {
-        return { skill, example };
-      }
-    }
-  }
-  return null;
 }
 
 export class LangChainIntentRouter implements IntentRouter {
@@ -112,6 +91,64 @@ export class LangChainIntentRouter implements IntentRouter {
       : { requestedToolNames: [] };
   }
 
+  private async resolveSkillToolSelection(
+    question: string,
+    skills: SpotlightSkill[],
+    clientTools: FrontendToolDescriptorV1[],
+    route: SkillRouteResult,
+  ): Promise<Pick<
+    IntentDecision,
+    "requestedToolNames" | "requestedToolInput"
+  >> {
+    if (route.requestedToolNames.length > 0) {
+      return {
+        requestedToolNames: route.requestedToolNames,
+        requestedToolInput: route.toolInput,
+      };
+    }
+    if (route.route !== "action") {
+      return { requestedToolNames: [] };
+    }
+    const matchedSkills = skills.filter((skill) =>
+      route.matchedSkillNames.includes(skill.name),
+    );
+    if (matchedSkills.length !== 1) {
+      return { requestedToolNames: [] };
+    }
+    const candidates = candidateToolsForSkillRoute(
+      skills,
+      clientTools,
+      route,
+    );
+    return this.selectSkillTool(question, matchedSkills[0], candidates);
+  }
+
+  private async decisionFromSkillRoute(
+    question: string,
+    skills: SpotlightSkill[],
+    clientTools: FrontendToolDescriptorV1[],
+    route: SkillRouteResult,
+  ): Promise<IntentDecision> {
+    const selected = await this.resolveSkillToolSelection(
+      question,
+      skills,
+      clientTools,
+      route,
+    );
+    return {
+      route: route.route,
+      confidence: route.confidence,
+      reason: route.reason,
+      requestedToolNames: selected.requestedToolNames,
+      requestedToolInput: selected.requestedToolInput,
+      explicitActionEvidence:
+        route.route === "action"
+          ? `skill:${route.matchedSkillNames.join(",")}`
+          : null,
+      matchedSkillNames: route.matchedSkillNames,
+    };
+  }
+
   async route(
     question: string,
     clientTools: FrontendToolDescriptorV1[],
@@ -127,63 +164,25 @@ export class LangChainIntentRouter implements IntentRouter {
         matchedSkillNames: [],
       };
     }
-    const matchedSkillExample = matchSkillCapabilityExample(question, skills);
-    if (matchedSkillExample) {
-      const skillTools = clientTools.filter((tool) =>
-        matchedSkillExample.skill.allowedTools?.includes(tool.name),
+
+    if (skills.length > 0) {
+      const skillRoute = await routeViaSkillCatalog(
+        this.model,
+        question,
+        clientTools,
+        skills,
       );
-      const informationOnly =
-        hasInformationEvidence(question) && !extractActionEvidence(question);
-      const safeReadTools = skillTools.filter(
-        (tool) => tool.sideEffect === "none",
-      );
-      if (informationOnly && safeReadTools.length === 0) {
-        return {
-          route: "knowledge",
-          confidence: 1,
-          reason:
-            "Informational Skill example has no registered read-only client tool.",
-          requestedToolNames: [],
-          explicitActionEvidence: null,
-          matchedSkillNames: [],
-        };
+      if (skillRoute && skillRoute.matchedSkillNames.length > 0) {
+        const decision = await this.decisionFromSkillRoute(
+          question,
+          skills,
+          clientTools,
+          skillRoute,
+        );
+        return applyIntentSafetyFence(question, decision);
       }
-      const candidateTools = informationOnly ? safeReadTools : skillTools;
-      const exactTool = matchedSkillExample.toolName
-        ? candidateTools.find(
-            (tool) => tool.name === matchedSkillExample.toolName,
-          )
-        : undefined;
-      const selectedTool = exactTool
-        ? {
-            requestedToolNames: [exactTool.name],
-            requestedToolInput: {},
-          }
-        : await this.selectSkillTool(
-            question,
-            matchedSkillExample.skill,
-            candidateTools,
-          );
-      return {
-        route: "action",
-        confidence: 1,
-        reason: `Deterministic consumer Skill capability example match: ${matchedSkillExample.skill.name}.`,
-        requestedToolNames: selectedTool.requestedToolNames,
-        requestedToolInput: selectedTool.requestedToolInput,
-        explicitActionEvidence: matchedSkillExample.example,
-        matchedSkillNames: [matchedSkillExample.skill.name],
-      };
     }
-    if (hasInformationEvidence(question) && !extractActionEvidence(question)) {
-      return {
-        route: "knowledge",
-        confidence: 1,
-        reason: "Deterministic information intent fence.",
-        requestedToolNames: [],
-        explicitActionEvidence: null,
-        matchedSkillNames: [],
-      };
-    }
+
     const explicitActionEvidence = extractActionEvidence(question);
     if (explicitActionEvidence) {
       return {
@@ -196,6 +195,7 @@ export class LangChainIntentRouter implements IntentRouter {
         matchedSkillNames: [],
       };
     }
+
     const toolCatalog = clientTools.map((item) => ({
       name: item.name,
       description: item.description,
@@ -205,6 +205,7 @@ export class LangChainIntentRouter implements IntentRouter {
       name: skill.name,
       description: skill.description,
       whenToUse: skill.whenToUse,
+      responseStrategy: skill.responseStrategy,
       capabilityExamples: skill.capabilityExamples,
       allowedTools: skill.allowedTools,
     }));
@@ -219,6 +220,7 @@ export class LangChainIntentRouter implements IntentRouter {
           "action: explicitly asks to change the UI or external state using a listed client tool.",
           "clarify: an action target or operation is missing or ambiguous.",
           "Never infer an action from project vocabulary, previous turns or memory.",
+          "Never invent a cross-lane knowledge-then-action route. Only knowledge, action, or clarify.",
           "For action, requestedToolNames must contain only exact listed names.",
         ].join("\n"),
       ),

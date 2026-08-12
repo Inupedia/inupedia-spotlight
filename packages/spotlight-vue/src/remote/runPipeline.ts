@@ -254,8 +254,26 @@ export function settleHostToolCall(
   ]);
 }
 
+function completeActionToolSelectionStep(api: HandlerApi) {
+  const agentStep = api
+    .getSteps()
+    .find(
+      (item) =>
+        item.id === SPOTLIGHT_PIPELINE_STEP_IDS.agent &&
+        item.label === "选择工具" &&
+        item.status === "active",
+    );
+  if (!agentStep) return;
+  api.setStep(
+    SPOTLIGHT_PIPELINE_STEP_IDS.agent,
+    "done",
+    agentStep.content ?? "工具选择与调用已完成。",
+  );
+}
+
 function ensureToolStepActive(api: HandlerApi, stepId: string) {
   if (stepId !== SPOTLIGHT_PIPELINE_STEP_IDS.tool) return;
+  completeActionToolSelectionStep(api);
   const step = api.getSteps().find((item) => item.id === stepId);
   if (!step || step.status === "active" || step.status === "done") return;
   api.setStep(stepId, "active", step.content);
@@ -719,6 +737,7 @@ export async function runRemoteSpotlightPipeline(
           throw new Error(event.error);
         }
         await applyRemoteEvent(api, event);
+        await paintYield();
         if (event.type === "run_completed") {
           if (event.sessionPatch) {
             useAgentSessionStore().applySessionPatch(event.sessionPatch);

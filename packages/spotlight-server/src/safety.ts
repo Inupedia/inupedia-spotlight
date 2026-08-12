@@ -58,6 +58,14 @@ export function memoryControlMode(
   return null;
 }
 
+function skillMatchedAction(decision: IntentDecision): boolean {
+  return (
+    decision.route === "action" &&
+    Array.isArray(decision.matchedSkillNames) &&
+    decision.matchedSkillNames.length > 0
+  );
+}
+
 export function applyIntentSafetyFence(
   question: string,
   decision: IntentDecision,
@@ -70,9 +78,20 @@ export function applyIntentSafetyFence(
       reason: "The latest user message explicitly controls personal memory.",
       requestedToolNames: [],
       explicitActionEvidence: null,
+      matchedSkillNames: decision.matchedSkillNames,
     };
   }
-  if (hasInformationEvidence(question) && !actionEvidence) {
+  const skillAction = skillMatchedAction(decision);
+  const skillKnowledge =
+    decision.route === "knowledge" &&
+    Array.isArray(decision.matchedSkillNames) &&
+    decision.matchedSkillNames.length > 0;
+  if (
+    hasInformationEvidence(question) &&
+    !actionEvidence &&
+    !skillAction &&
+    !skillKnowledge
+  ) {
     return {
       route: "knowledge",
       confidence: Math.max(decision.confidence, 0.99),
@@ -80,10 +99,12 @@ export function applyIntentSafetyFence(
         "The user explicitly requested information and supplied no action verb.",
       requestedToolNames: [],
       explicitActionEvidence: null,
+      matchedSkillNames: [],
     };
   }
   if (
     decision.route === "action" &&
+    !skillAction &&
     (!actionEvidence || decision.confidence < 0.9)
   ) {
     return {
@@ -94,22 +115,34 @@ export function applyIntentSafetyFence(
         : "No explicit action evidence was found in the latest user message.",
       requestedToolNames: [],
       explicitActionEvidence: actionEvidence,
+      matchedSkillNames: decision.matchedSkillNames,
     };
   }
-  return { ...decision, explicitActionEvidence: actionEvidence };
+  const resolvedEvidence =
+    actionEvidence ??
+    decision.explicitActionEvidence ??
+    (skillAction ? `skill:${decision.matchedSkillNames!.join(",")}` : null);
+  return { ...decision, explicitActionEvidence: resolvedEvidence };
 }
 
 export function actionToolAllowlist(
   tools: FrontendToolDescriptorV1[],
   decision: IntentDecision,
 ): FrontendToolDescriptorV1[] {
-  if (decision.route !== "action" || !decision.explicitActionEvidence)
-    return [];
+  if (decision.route !== "action") return [];
+  const hasSkillMatch =
+    Array.isArray(decision.matchedSkillNames) &&
+    decision.matchedSkillNames.length > 0;
+  const hasActionEvidence = decision.explicitActionEvidence != null;
+  if (!hasSkillMatch && !hasActionEvidence) return [];
   const requested = new Set(decision.requestedToolNames);
-  return tools.filter((tool) => {
+  const filterTool = (tool: FrontendToolDescriptorV1) => {
     if (tool.requiresConfirmation && tool.riskLevel === "high") return false;
-    return requested.size === 0 || requested.has(tool.name);
-  });
+    if (requested.size > 0) return requested.has(tool.name);
+    if (hasSkillMatch) return false;
+    return true;
+  };
+  return tools.filter(filterTool);
 }
 
 export function assertServerToolMetadata(tool: {

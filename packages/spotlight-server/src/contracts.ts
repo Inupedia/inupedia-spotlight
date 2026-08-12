@@ -6,6 +6,15 @@ import type {
 
 export type AgentRoute = "knowledge" | "action" | "clarify";
 
+export type WorkflowLane =
+  | "knowledge"
+  | "action"
+  | "clarify"
+  | "memory_mutate"
+  | "knowledge_then_action";
+
+export type EvidenceSufficiency = "enough" | "partial" | "none";
+
 export interface IntentDecision {
   route: AgentRoute;
   confidence: number;
@@ -24,6 +33,16 @@ export interface KnowledgeEvidence {
   url?: string;
   score?: number;
   metadata?: Record<string, unknown>;
+}
+
+export interface EvidenceBundle {
+  items: KnowledgeEvidence[];
+  citations: string[];
+  sufficiency: EvidenceSufficiency;
+  rawSummary?: string;
+  sourceSummaries: string[];
+  attemptedSources: string[];
+  completedSources: string[];
 }
 
 export interface SpotlightToolCallInfo {

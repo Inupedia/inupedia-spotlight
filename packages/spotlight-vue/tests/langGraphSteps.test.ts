@@ -107,6 +107,39 @@ describe("LangGraph progress steps", () => {
     ]);
   });
 
+  it("closes the action selection step when tool execution starts", async () => {
+    const { api, getSteps } = createApi();
+    applyLangGraphTransition(
+      api,
+      transition("action_agent_start", "已选定工具：openBimBuilding。"),
+    );
+    await applyRemoteEvent(api, {
+      type: "tool_start",
+      at: Date.now(),
+      iteration: 1,
+      call: {
+        id: "bim-1",
+        name: "openBimBuilding",
+        input: { target: "泸定取水口" },
+        displayName: "打开 BIM 建筑",
+      },
+    });
+
+    const steps = getSteps();
+    expect(steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "选择工具", status: "done" }),
+        expect.objectContaining({
+          label: "执行工具与回答",
+          status: "active",
+        }),
+      ]),
+    );
+    expect(
+      steps.filter((step) => step.status === "active").map((step) => step.label),
+    ).toEqual(["执行工具与回答"]);
+  });
+
   it("renders expandable tool calls from tool_start and tool_result events", async () => {
     const { api, getSteps } = createApi();
     await applyRemoteEvent(api, {

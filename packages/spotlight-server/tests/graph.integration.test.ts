@@ -183,7 +183,7 @@ describe("LangGraph runtime isolation", () => {
       knowledgeProvider: {
         id: "yuxi",
         async search({ query }) {
-          expect(query).toBe("引大济岷 工程介绍");
+          expect(query).toBe("介绍下引大济岷");
           return [
             { title: "引大济岷工程概况", content: "工程概况正文" },
             { title: "工程线路与规模", content: "线路资料" },
@@ -194,19 +194,7 @@ describe("LangGraph runtime isolation", () => {
     const phases: Array<{ phase: string; summary: string }> = [];
     const tools: Array<{ type: string; name?: string; status?: string }> = [];
     await runSpotlightGraph(runContext, {
-      model: new FakeToolCallingModel({
-        toolCalls: [
-          [
-            {
-              id: "knowledge-call-1",
-              name: "project_knowledge_search",
-              args: { query: "引大济岷 工程介绍" },
-              type: "tool_call",
-            },
-          ],
-          [],
-        ],
-      }),
+      model: new FakeToolCallingModel(),
       router: router({
         route: "knowledge",
         confidence: 1,
@@ -235,7 +223,7 @@ describe("LangGraph runtime isolation", () => {
     expect(phases).toContainEqual(
       expect.objectContaining({
         phase: "knowledge_agent_start",
-        summary: "正在检索知识库：“引大济岷 工程介绍”。",
+        summary: "正在检索知识库：“介绍下引大济岷”。",
       }),
     );
     expect(phases).toContainEqual(
@@ -279,19 +267,7 @@ describe("LangGraph runtime isolation", () => {
     };
     const phases: Array<{ phase: string; summary: string }> = [];
     await runSpotlightGraph(runContext, {
-      model: new FakeToolCallingModel({
-        toolCalls: [
-          [
-            {
-              id: "failed-knowledge-call",
-              name: "project_knowledge_search",
-              args: { query: "引大济岷" },
-              type: "tool_call",
-            },
-          ],
-          [],
-        ],
-      }),
+      model: new FakeToolCallingModel(),
       router: router({
         route: "knowledge",
         confidence: 1,
