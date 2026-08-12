@@ -27,11 +27,18 @@ const skillToolSelectionSchema = z.object({
   toolInput: z.record(z.string(), z.unknown()).default({}),
 });
 
+export interface RouteContext {
+  isReferential?: boolean;
+  lastAssistantReply?: string | null;
+  conversationContext?: string;
+}
+
 export interface IntentRouter {
   route(
     question: string,
     clientTools: FrontendToolDescriptorV1[],
     skills?: SpotlightSkill[],
+    context?: RouteContext,
   ): Promise<IntentDecision>;
 }
 
@@ -153,6 +160,7 @@ export class LangChainIntentRouter implements IntentRouter {
     question: string,
     clientTools: FrontendToolDescriptorV1[],
     skills: SpotlightSkill[] = [],
+    context?: RouteContext,
   ): Promise<IntentDecision> {
     if (hasMemoryControlEvidence(question)) {
       return {
@@ -171,6 +179,7 @@ export class LangChainIntentRouter implements IntentRouter {
         question,
         clientTools,
         skills,
+        context,
       );
       if (skillRoute && skillRoute.matchedSkillNames.length > 0) {
         const decision = await this.decisionFromSkillRoute(
@@ -229,6 +238,9 @@ export class LangChainIntentRouter implements IntentRouter {
           latestUserMessage: question,
           clientTools: toolCatalog,
           consumerSkills: skillCatalog,
+          conversationContext: context?.conversationContext,
+          isReferential: context?.isReferential ?? false,
+          lastAssistantReply: context?.lastAssistantReply ?? null,
         }),
       ),
     ]);

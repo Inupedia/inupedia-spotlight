@@ -40,6 +40,12 @@ import {
   memoryNamespace,
 } from "../tools.js";
 import { emitPhase, emitTool } from "./emit.js";
+import { conversationMemoryMiddleware } from "./agentMiddleware.js";
+import {
+  buildRouterContextPayload,
+  buildSessionContext,
+  sessionContextPromptBlock,
+} from "./sessionContext.js";
 import {
   emptyEvidenceBundle,
   evidenceFromSource,
@@ -323,6 +329,8 @@ export function compileSpotlightWorkflow(
     ? memoryNamespace(context.project.projectId, memorySubjectId)
     : null;
   const gather = buildGatherSubgraph(context, options, runSkills);
+  const sessionContext = buildSessionContext(context.request);
+  const sessionPrompt = sessionContextPromptBlock(sessionContext);
 
   return new StateGraph(RuntimeState)
     .addNode("route", async (state, config) => {
@@ -347,6 +355,7 @@ export function compileSpotlightWorkflow(
         state.question,
         clientTools,
         runSkills,
+        buildRouterContextPayload(sessionContext),
       );
       const chain = matchedSkillDeclaresChain(
         runSkills,
@@ -451,9 +460,13 @@ export function compileSpotlightWorkflow(
             ? memoryContext
             : "The user disabled memory recall for this turn. Do not use long-term memory.",
           evidenceContext,
+          sessionPrompt,
           context.project.systemPrompt ?? "",
         ].join("\n"),
-        middleware: [...skillRuntime.middleware],
+        middleware: [
+          ...skillRuntime.middleware,
+          ...conversationMemoryMiddleware(options.model),
+        ],
       });
       const result = await synthesizer.invoke(
         { messages: state.messages, files: skillRuntime.files },
@@ -639,10 +652,12 @@ export function compileSpotlightWorkflow(
           state.decision.requestedToolInput
             ? `The router extracted these schema-shaped arguments from the user message: ${JSON.stringify(state.decision.requestedToolInput)}. Use them for the selected tool unless they conflict with the Skill or tool schema.`
             : "",
+          sessionPrompt,
           context.project.systemPrompt ?? "",
         ].join("\n"),
         middleware: [
           ...skillRuntime.middleware,
+          ...conversationMemoryMiddleware(options.model),
           toolCallLimitMiddleware({ runLimit: 6 }),
         ],
       });

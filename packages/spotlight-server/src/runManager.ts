@@ -3,7 +3,10 @@ import type { BaseCheckpointSaver, BaseStore } from "@langchain/langgraph";
 import type {
   CreateRunRequest,
   HostToolResultRequest,
+  SpotlightMemoryDecision,
+  SpotlightMemoryReplayMeta,
 } from "@inupedia/spotlight-protocol";
+import type { MemoryGate } from "@inupedia/spotlight-memory/node";
 import type {
   HostActionBridge,
   HostActionCall,
@@ -17,12 +20,35 @@ import {
   workflowRunnableConfig,
 } from "./graph.js";
 import type { SpotlightGraphToolEvent } from "./graph.js";
+import {
+  buildMemoryDecision,
+  lookupProjectMemory,
+  replayMetaFromHit,
+  writeProjectMemory,
+} from "./memory/runMemory.js";
+import { memoryControlMode } from "./safety.js";
+import {
+  buildSessionContext,
+  initialMessagesForRun,
+} from "./workflow/sessionContext.js";
 import { initialRuntimeState } from "./workflow/state.js";
 import type { IntentRouter } from "./router.js";
 
 export type SpotlightServerRunEvent =
-  | { type: "turn_transition"; at: number; turnId: string; phase: string; summary?: string }
+  | {
+      type: "turn_transition";
+      at: number;
+      turnId: string;
+      phase: string;
+      summary?: string;
+    }
   | { type: "assistant_response"; at: number; iteration: number; content: string }
+  | {
+      type: "memory_decision";
+      at: number;
+      turnId: string;
+      decision: SpotlightMemoryDecision;
+    }
   | {
       type: "host_action_request";
       at: number;
@@ -65,11 +91,14 @@ export type SpotlightServerRunEvent =
       stopReason: string;
       failureClass: null;
       elapsedMs: number;
+      memoryReplay?: SpotlightMemoryReplayMeta;
+      memoryDecision?: SpotlightMemoryDecision;
     }
   | { type: "run_error"; at: number; runId: string; error: string };
 
 type RunRequest = CreateRunRequest & {
   clientToolManifest?: RunContext["request"]["clientToolManifest"];
+  frontendBuildId?: string;
 };
 
 interface RunState {
@@ -95,6 +124,7 @@ export interface RunManagerOptions {
   router: IntentRouter;
   checkpointer: BaseCheckpointSaver;
   store: BaseStore;
+  memoryGate?: MemoryGate;
   hostActionTimeoutMs?: number;
   runTtlMs?: number;
 }
@@ -124,7 +154,10 @@ export class RunManager {
     return this.runs.get(id);
   }
 
-  subscribe(id: string, listener: (event: SpotlightServerRunEvent) => void): (() => void) | null {
+  subscribe(
+    id: string,
+    listener: (event: SpotlightServerRunEvent) => void,
+  ): (() => void) | null {
     const run = this.runs.get(id);
     if (!run) return null;
     for (const event of run.events) listener(event);
@@ -141,7 +174,10 @@ export class RunManager {
   private finish(run: RunState, event: SpotlightServerRunEvent): void {
     run.terminal = true;
     this.emit(run, event);
-    const timer = setTimeout(() => this.runs.delete(run.id), this.options.runTtlMs ?? 10 * 60_000);
+    const timer = setTimeout(
+      () => this.runs.delete(run.id),
+      this.options.runTtlMs ?? 10 * 60_000,
+    );
     timer.unref();
   }
 
@@ -250,8 +286,81 @@ export class RunManager {
         ...workflowRunnableConfig(context),
         streamMode: ["custom"] as ["custom"],
       };
+
+      let memoryLookup:
+        | Awaited<ReturnType<typeof lookupProjectMemory>>
+        | null = null;
+      let memoryDecision: SpotlightMemoryDecision | null = null;
+      let memoryReplay: SpotlightMemoryReplayMeta | null = null;
+
+      if (
+        this.options.memoryGate &&
+        !memoryControlMode(run.request.userQuestion)
+      ) {
+        memoryLookup = await lookupProjectMemory(
+          this.options.memoryGate,
+          run.request,
+          this.options.project.projectId,
+        );
+        memoryDecision = buildMemoryDecision(
+          memoryLookup,
+          run.request.memoryRefreshRequested === true,
+        );
+        this.emit(run, {
+          type: "memory_decision",
+          at: Date.now(),
+          turnId,
+          decision: memoryDecision,
+        });
+
+        if (
+          memoryDecision.action === "reuse" &&
+          memoryLookup.hit &&
+          memoryLookup.result.entry.answer?.trim()
+        ) {
+          memoryReplay = replayMetaFromHit(memoryLookup);
+          const assistantReply = memoryLookup.result.entry.answer!.trim();
+          this.emit(run, {
+            type: "turn_transition",
+            at: Date.now(),
+            turnId,
+            phase: "memory_replay",
+            summary: "已复用项目记忆，跳过本轮 LLM 规划。",
+          });
+          this.emit(run, {
+            type: "assistant_response",
+            at: Date.now(),
+            iteration: 1,
+            content: assistantReply,
+          });
+          this.finish(run, {
+            type: "run_completed",
+            at: Date.now(),
+            runId: run.id,
+            turnId,
+            assistantReply,
+            commandName: null,
+            stopReason: "knowledge",
+            failureClass: null,
+            elapsedMs: Date.now() - startedAt,
+            memoryReplay,
+            memoryDecision,
+          });
+          return;
+        }
+      }
+
+      const sessionContext = buildSessionContext(run.request);
+      const priorState = await graph.getState(runConfig);
+      const checkpointMessageCount = priorState?.values?.messages?.length ?? 0;
+      const messages = initialMessagesForRun(
+        run.request.userQuestion,
+        sessionContext,
+        checkpointMessageCount,
+      );
+
       const stream = await graph.stream(
-        initialRuntimeState(context.request.userQuestion),
+        initialRuntimeState(run.request.userQuestion, messages),
         runConfig,
       );
       for await (const _chunk of stream) {
@@ -259,11 +368,31 @@ export class RunManager {
       }
       const values = (await graph.getState(runConfig)).values;
       const result = {
-        route: publicRouteFromLane(values.lane, values.invokedClientTools ?? []),
+        route: publicRouteFromLane(
+          values.lane,
+          values.invokedClientTools ?? [],
+        ),
         assistantReply: values.assistantReply,
         decision: values.decision,
         invokedClientTools: values.invokedClientTools ?? [],
       };
+
+      if (
+        this.options.memoryGate &&
+        memoryDecision?.action !== "refresh" &&
+        result.assistantReply?.trim()
+      ) {
+        await writeProjectMemory(this.options.memoryGate, {
+          request: run.request,
+          projectId: this.options.project.projectId,
+          runId: run.id,
+          route: result.route,
+          assistantReply: result.assistantReply,
+          confidence: result.decision?.confidence ?? 0.85,
+          invokedTools: result.invokedClientTools,
+        });
+      }
+
       this.emit(run, {
         type: "assistant_response",
         at: Date.now(),
@@ -280,6 +409,8 @@ export class RunManager {
         stopReason: result.route,
         failureClass: null,
         elapsedMs: Date.now() - startedAt,
+        memoryReplay: memoryReplay ?? undefined,
+        memoryDecision: memoryDecision ?? undefined,
       });
     } catch (error) {
       this.finish(run, {

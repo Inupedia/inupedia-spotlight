@@ -59,10 +59,11 @@ export function compactText(value: string, maxLength = 72): string {
 
 export function initialRuntimeState(
   question: string,
+  messages?: BaseMessage[],
 ): Partial<RuntimeStateType> {
   return {
     question,
-    messages: [new HumanMessage(question)],
+    messages: messages ?? [new HumanMessage(question)],
     invokedClientTools: [],
     assistantReply: "",
     skipGather: false,

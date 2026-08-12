@@ -251,6 +251,11 @@ export async function routeViaSkillCatalog(
   question: string,
   clientTools: FrontendToolDescriptorV1[],
   skills: SpotlightSkill[],
+  context?: {
+    isReferential?: boolean;
+    lastAssistantReply?: string | null;
+    conversationContext?: string;
+  },
 ): Promise<SkillRouteResult | null> {
   if (skills.length === 0) return null;
   const structured = model.withStructuredOutput(skillRouteSchema, {
@@ -278,12 +283,16 @@ export async function routeViaSkillCatalog(
           "",
           "requestedToolNames must contain only exact names from the matched skill's allowedTools.",
           "matchedSkillNames must come from the provided catalog. Return an empty array when no skill fits.",
+          "When conversationContext or lastAssistantReply is provided, use it to resolve referential follow-ups (刚才/那个/继续).",
         ].join("\n"),
       ),
       new HumanMessage(
         JSON.stringify({
           latestUserMessage: question,
           skills: buildSkillCatalog(skills, clientTools),
+          conversationContext: context?.conversationContext,
+          isReferential: context?.isReferential ?? false,
+          lastAssistantReply: context?.lastAssistantReply ?? null,
         }),
       ),
     ]),

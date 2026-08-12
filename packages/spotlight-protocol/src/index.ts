@@ -209,6 +209,8 @@ export interface CreateRunRequest {
   clientToolManifest?: FrontendToolManifestV1;
   skills?: SpotlightSkill[];
   commandCatalog?: SpotlightCommandCatalog;
+  /** Browser build id for memory invalidation (from client manifest). */
+  frontendBuildId?: string;
 }
 
 export interface CreateRunResponse {
