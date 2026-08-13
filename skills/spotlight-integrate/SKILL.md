@@ -1,6 +1,6 @@
 ---
 name: spotlight-integrate
-description: Agentizes an existing Vue frontend with Inupedia Spotlight by discovering real host capabilities, classifying readiness/risk, wrapping verified capabilities as Client Tools, generating Agent Skills, wiring the runtime, and leaving measurable acceptance tests. Use when the user asks to 接入 Spotlight, install Spotlight, integrate Spotlight SDK, generate Spotlight tools/skills from an existing app, or convert a finished frontend into an Agent-ready Spotlight project.
+description: Agentizes an existing frontend with Inupedia Spotlight by discovering real host capabilities, classifying readiness/risk, wrapping verified capabilities as Client Tools, generating Agent Skills, wiring the framework-neutral Spotlight core and an available UI adapter when supported, and leaving measurable acceptance tests. Use when the user asks to 接入 Spotlight, install Spotlight, integrate Spotlight SDK, generate Spotlight tools/skills from an existing app, or convert a finished frontend into an Agent-ready Spotlight project.
 ---
 
 # Spotlight Integrate
@@ -30,7 +30,7 @@ Resume from `.spotlight-integrate/PIPELINE_STATE.md` if present. Template: [meth
 | 2 | [methodology/04-stage2-tools.md](methodology/04-stage2-tools.md) | `src/spotlight/tools.ts` |
 | 3 | [methodology/05-stage3-skills.md](methodology/05-stage3-skills.md) | `.inupedia/skills/**/SKILL.md` |
 | 4 | [methodology/06-stage4-pressure-test.md](methodology/06-stage4-pressure-test.md) | `gold-questions.md`, benchmark plan/results |
-| 5 | [methodology/07-stage5-wire.md](methodology/07-stage5-wire.md) | config, Vite, project pack — paths per [standard.md](standard.md) |
+| 5 | [methodology/07-stage5-wire.md](methodology/07-stage5-wire.md) | core config, Vite, project pack, optional UI adapter — paths per [standard.md](standard.md) |
 | 6 | [methodology/08-stage6-report.md](methodology/08-stage6-report.md) | `INTEGRATION_REPORT.md` |
 
 Extractors: [extractors/](extractors/). File snippets: [templates.md](templates.md). Shape-only example: [examples.md](examples.md). Human install + paste-to-LLM: [README.md](README.md) / [prompt.sh](prompt.sh).
@@ -39,24 +39,31 @@ Extractors: [extractors/](extractors/). File snippets: [templates.md](templates.
 
 1. **Host is the source of truth.** Client Tools call existing Store / Service / Router / page-engine capabilities; wrappers do not reimplement business logic.
 2. **No invented behavior.** Do not create new players, maps, checkout APIs, calculations, or HTTP endpoints just to satisfy a spoken request.
-3. **Page engines stay in the browser** (maps, video, canvas, Pinia, Vue Router). Server gets providers via `spotlight-project/` only.
+3. **Page engines stay in the browser** (maps, video, canvas, framework stores/routers). Server gets providers via `spotlight-project/` only.
 4. **No custom Agent** in the host app.
 5. **Skills do not grant capabilities.** `allowed-tools` ⊆ exported Client Tool names.
 6. **Generic Server, product-specific Skills.** Never require a Server hardcode for a host Skill id, catalog, or tool name.
 7. **Intent families must be explicit.** Distinguish list/read, named open/view, mutation, close, knowledge, and clarify behavior when those families exist.
 8. **Gated actions default-deny.** Delete, pay, transfer, submit-order, logout, reset/wipe, or irreversible external commits are not auto-exposed.
-9. **Vite plugin:** JSDoc immediately above `defineClientTool`; inferable types or explicit `schema`.
+9. **Vite Tool compiler:** JSDoc immediately above `defineClientTool`; inferable types or explicit `schema`. This core Tool path is framework-neutral.
 10. **Always** emit `skill.knowledge` (`direct_answer`, no client tools).
 11. **Layout** must match [standard.md](standard.md). Do not invent a second `projectId` or tools entrypoint.
 12. **Do not claim runtime accuracy without a live run.** Static/dry checks are readiness only.
+13. **Do not confuse Core Agentization with the visual shell.** `@inupedia/spotlight-client` + protocol + Server/Skills/Tools are the core path. `@inupedia/spotlight-vue` is the currently shipped Vue UI/runtime adapter, not a requirement for Server benchmarking of a non-Vue host.
 
 ## Compatibility behavior
 
-- Vue 3 + Vite + compatible Spotlight peers → continue automatically.
-- Vue 3 + Vite with incompatible Vue/Pinia/Node peers → write `COMPATIBILITY.md`; do not force-upgrade unless the user requested dependency upgrades.
-- Vue 3 without Vite → analyze/classify capabilities, then stop before build-system migration unless explicitly requested.
-- Vue 2 / non-Vue → produce the readiness report; do not pretend the current automated wiring path supports it.
+Compatibility is two-axis: **Core Agentization** and **UI Adapter**.
+
+- Vite + TypeScript/JavaScript host that can compile `defineClientTool` wrappers → core path may continue even when the UI framework is not Vue.
+- Vue 3 + Vite + compatible Spotlight Vue peers → `core=READY`, `uiAdapter=VUE_READY`; continue automatically.
+- Vue 3 + Vite with incompatible Vue/Pinia/Node peers → core analysis may continue; `uiAdapter=UPGRADE_REQUIRED`; do not force-upgrade unless requested.
+- React/other Vite host → `core=READY` when the framework-neutral client/tool path is compatible; `uiAdapter=ADAPTER_REQUIRED` unless a supported adapter exists. Continue Tool/Skill/Spotlight Server benchmarks headlessly instead of declaring the whole app unsupported.
+- Host without Vite → analyze/classify capabilities and determine whether a framework-neutral build hook exists; otherwise `core=BUILD_MIGRATION_REQUIRED`. Do not migrate the build without approval.
+- Legacy/non-JS host with no viable browser Tool integration → `core=UNSUPPORTED_AUTOMATION`; still produce the readiness report.
 - Zero verified tools → knowledge-only integration is valid; report all leftovers.
+
+A missing visual adapter blocks embedding the Spotlight command UI, **not** the validity of a Server + Skill + Tool benchmark.
 
 ## Refactor behavior
 
@@ -66,10 +73,12 @@ A real user-facing capability trapped in component-local code is `REFACTOR`, not
 
 If the user said “integrate fully”, “agentize this app”, or equivalent, run the safe pipeline end-to-end without pausing after each stage. Pause only for:
 
-- build-system/framework migration;
+- build-system migration;
 - dependency upgrades outside declared compatible ranges;
 - exposing a `GATED` capability;
 - an ambiguity that would materially change product behavior.
+
+A missing UI adapter alone is not a reason to stop Core Agentization or a headless Spotlight Server benchmark.
 
 Otherwise report intermediate WRAP / REFACTOR / GATED / REJECT classifications briefly before wiring.
 
@@ -77,11 +86,11 @@ Otherwise report intermediate WRAP / REFACTOR / GATED / REJECT classifications b
 
 Do not finish with only a file list. Report:
 
-- compatibility status;
+- core compatibility status + UI adapter status separately;
 - capability coverage by `DIRECT / REFACTOR / GATED / REJECT`;
 - wrapped Tool + Skill count;
 - static integrity status;
 - live benchmark metrics if actually run;
 - unverified runtime items and exact blockers;
 - env keys + boot order;
-- remaining refactors/gated actions.
+- remaining refactors/gated actions/UI-adapter work.
