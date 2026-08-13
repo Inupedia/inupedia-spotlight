@@ -167,9 +167,14 @@ Every generated Tool must:
 - preserve the host application's authorization checks and backend permission enforcement;
 - have JSDoc immediately above `defineClientTool`;
 - expose the narrowest input schema needed by the host capability;
+- preserve the actual callable boundary's field names, types, enums, requiredness, and identity semantics unless an explicit adapter performs a documented transform;
 - declare correct `sideEffect`, `replayPolicy`, `riskLevel`, and confirmation requirements supported by the runtime;
 - avoid returning entire stores or arbitrary internal objects when a small result is enough;
 - never provide a generic `invokeStoreMethod(name, args)` or DOM selector escape hatch.
+
+**Schema fidelity rule:** derive Tool schemas from the actual Store/Service/API/function boundary, not from a convenient benchmark shape. Do not casually widen `Long`/numeric ids to `string | number`, and do not narrow a real host union merely to improve model scoring. If the Tool intentionally adapts the host contract, the adapter must contain the explicit conversion and the generated report/gold set must test the Tool's real adapter contract. Never add generic Server-side coercion just to compensate for an inaccurate Tool schema.
+
+**Behavior fidelity rule:** a user-visible action is not `DIRECT` merely because its final step is an HTTP call. Follow the real behavior through component state, session data, route/query state, validation, chained calls, and all writes. If the UI behavior depends on component-local state or performs multiple/transitive writes, classify it `REFACTOR` (and `GATED` when risk requires it) until the complete behavior is extracted into a stable host capability shared by UI and Agent. Do not fabricate a simplified Tool that skips those invariants.
 
 **Authorization rule:** static Skill/Tool declarations describe capability; they never grant permission. If availability depends on the current role, tenant, record ownership, workflow state, feature flag, or another live host condition, keep that guard in the host and include the capability in the live Tool set only when it is currently available. The Tool handler/backend must re-check authorization at execution time. Never duplicate or weaken product-specific RBAC/ABAC rules inside the generic Spotlight Server.
 
@@ -223,6 +228,8 @@ Integration is done only when all applicable gates hold:
 - Core compatibility and UI-adapter compatibility are reported separately;
 - every discovered user-facing capability is classified `DIRECT / REFACTOR / GATED / REJECT`;
 - every `DIRECT` capability selected for exposure is wrapped;
+- every generated Tool schema is traceable to a real host boundary or an explicit adapter transform;
+- component-local multi-step behavior is not mislabeled as a simple DIRECT Tool;
 - `skill.knowledge` exists;
 - every Skill `allowed-tools` name is an exported registered Client Tool;
 - projectId is identical across Tool compiler/config/project/env;
@@ -240,6 +247,7 @@ A project may be Core-Agentized and benchmarked successfully while its visual ad
 - copied product-specific Skill ids/tool names from the integration pack
 - a second `projectId`
 - Client Tools that do not reach an existing host capability
+- simplified Tools that bypass real validation, session state, chained writes, or state-machine invariants
 - forced peer-dependency installation
 - framework-specific package installation into an incompatible host
 - DOM-click automation where a stable Store/Service/Router capability exists
