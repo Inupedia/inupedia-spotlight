@@ -20,6 +20,26 @@ const MEMORY_CONTROL_PATTERNS = [
   /(?:remember|forget|delete.*memory)/iu,
 ];
 
+const UNRESOLVED_TOOL_INPUT_PLACEHOLDERS = new Set([
+  "?",
+  "？",
+  "unknown",
+  "undefined",
+  "null",
+  "n/a",
+  "na",
+  "tbd",
+  "todo",
+  "placeholder",
+  "<unknown>",
+  "<required>",
+  "待定",
+  "待确认",
+  "未知",
+  "未提供",
+  "不详",
+]);
+
 export function hasInformationEvidence(question: string): boolean {
   return INFORMATION_PATTERNS.some((pattern) => pattern.test(question));
 }
@@ -58,6 +78,23 @@ export function memoryControlMode(
   return null;
 }
 
+function hasUnresolvedToolInputPlaceholder(value: unknown): boolean {
+  if (typeof value === "string") {
+    return UNRESOLVED_TOOL_INPUT_PLACEHOLDERS.has(
+      value.trim().toLocaleLowerCase(),
+    );
+  }
+  if (Array.isArray(value)) {
+    return value.some((item) => hasUnresolvedToolInputPlaceholder(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).some((item) =>
+      hasUnresolvedToolInputPlaceholder(item),
+    );
+  }
+  return false;
+}
+
 function skillMatchedAction(decision: IntentDecision): boolean {
   return (
     decision.route === "action" &&
@@ -79,6 +116,21 @@ export function applyIntentSafetyFence(
       requestedToolNames: [],
       explicitActionEvidence: null,
       matchedSkillNames: decision.matchedSkillNames,
+    };
+  }
+  if (
+    decision.route === "action" &&
+    hasUnresolvedToolInputPlaceholder(decision.requestedToolInput)
+  ) {
+    return {
+      ...decision,
+      route: "clarify",
+      reason:
+        "The selected client tool contains an unresolved placeholder instead of a concrete argument.",
+      requestedToolNames: [],
+      requestedToolInput: undefined,
+      explicitActionEvidence:
+        actionEvidence ?? decision.explicitActionEvidence ?? null,
     };
   }
   const skillAction = skillMatchedAction(decision);
