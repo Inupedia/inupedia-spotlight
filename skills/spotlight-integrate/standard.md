@@ -23,16 +23,29 @@ Or use `./prompt.sh --copy` and paste the generated pack into an LLM that alread
 
 ## 2. Compatibility preflight (before coding)
 
-Read `package.json`, lockfiles, Node engine, and existing Spotlight dependencies. Write `.spotlight-integrate/COMPATIBILITY.md`.
+Read `package.json`, lockfiles, Node engine, build system, frontend framework, and existing Spotlight dependencies. Write `.spotlight-integrate/COMPATIBILITY.md`.
 
-### Host classification
+Compatibility is **two-axis**: Core Agentization and visual UI adapter.
+
+### Core classification
 
 | Status | Condition | Action |
 |---|---|---|
-| `READY` | Vue 3 + Vite + compatible Spotlight peer ranges | continue |
-| `UPGRADE_REQUIRED` | Vue 3 + Vite but target Spotlight peer ranges do not include host Vue/Pinia/Node | report exact mismatch; do not force upgrade |
-| `BUILD_MIGRATION_REQUIRED` | Vue 3 but no Vite | analyze capabilities; stop before build migration unless requested |
-| `UNSUPPORTED_AUTOMATION` | Vue 2 or non-Vue | readiness report only for current skill |
+| `READY` | Browser JS/TS host can compile/register framework-neutral Client Tools and reach Spotlight Server | continue core pipeline |
+| `UPGRADE_REQUIRED` | Core package/build/Node ranges are incompatible | report exact mismatch; do not force upgrade |
+| `BUILD_MIGRATION_REQUIRED` | Current build cannot support the Tool compiler/runtime path without migration | analyze capabilities; stop before build migration unless requested |
+| `UNSUPPORTED_AUTOMATION` | No viable browser Tool integration path exists | readiness report only |
+
+### UI adapter classification
+
+| Status | Condition | Action |
+|---|---|---|
+| `VUE_READY` | Vue 3 host satisfies `@inupedia/spotlight-vue` peer ranges | embed Vue command UI/runtime |
+| `UPGRADE_REQUIRED` | Vue host exists but Vue/Pinia/Node peers are incompatible | continue core when possible; do not force upgrade |
+| `ADAPTER_REQUIRED` | React/other framework host has no shipped visual adapter | continue core + headless Server benchmark; report visual-shell gap |
+| `HEADLESS_ONLY` | Product intentionally does not embed a visual command shell | continue core/runtime benchmark only |
+
+A missing visual adapter is **not** the same as unsupported Core Agentization.
 
 ### Registry version check
 
@@ -40,7 +53,7 @@ Use the registry as the install source of truth:
 
 ```bash
 npm view @inupedia/spotlight-vue version peerDependencies --json
-npm view @inupedia/spotlight-client version --json
+npm view @inupedia/spotlight-client version peerDependencies --json
 npm view @inupedia/spotlight-protocol version --json
 ```
 
@@ -62,14 +75,14 @@ Do not add a second lockfile.
 ```text
 <app>/
 ├── package.json
-├── vite.config.*
+├── <build config>
 ├── .env.example
 ├── .inupedia/
 │   └── skills/
 │       ├── skill.knowledge/SKILL.md
 │       └── skill.<domain>/SKILL.md
 ├── src/
-│   ├── main.*
+│   ├── <app entry>
 │   └── spotlight/
 │       ├── config.ts
 │       ├── tools.ts
@@ -93,13 +106,13 @@ Do not add a second lockfile.
     └── INTEGRATION_REPORT.md
 ```
 
-If the host already has tools or `defineSpotlightConfig` elsewhere, reuse those paths and point the Vite plugin at the existing tools module. Never create a second tools entrypoint or `projectId`.
+If the host already has tools or `defineSpotlightConfig` elsewhere, reuse those paths and point the Tool compiler at the existing tools module. Never create a second tools entrypoint or `projectId`.
 
 ## 4. Naming
 
 | Thing | Rule | Shape-only example |
 |---|---|---|
-| `projectId` | kebab-case; identical in Vite plugin, config, yml, env | `media-console` |
+| `projectId` | kebab-case; identical in Tool compiler, config, yml, env | `media-console` |
 | Client Tool | camelCase, verb-first export | `getItemList`, `openItem`, `addItem` |
 | Skill id | `skill.` + dotted domain | `skill.items` |
 | Skill folder | equals id | `.inupedia/skills/skill.items/SKILL.md` |
@@ -109,27 +122,42 @@ Read names, route titles, and button labels from **this** host repo.
 
 ## 5. Install SDK into a compatible host (stage 5)
 
+### Core packages
+
 Use the host package manager and exact verified version `<ver>`.
 
 ```bash
 # pnpm
-pnpm add @inupedia/spotlight-client@<ver> @inupedia/spotlight-protocol@<ver> @inupedia/spotlight-vue@<ver>
+pnpm add @inupedia/spotlight-client@<ver> @inupedia/spotlight-protocol@<ver>
 
 # npm
-npm install @inupedia/spotlight-client@<ver> @inupedia/spotlight-protocol@<ver> @inupedia/spotlight-vue@<ver>
+npm install @inupedia/spotlight-client@<ver> @inupedia/spotlight-protocol@<ver>
 
 # yarn
-yarn add @inupedia/spotlight-client@<ver> @inupedia/spotlight-protocol@<ver> @inupedia/spotlight-vue@<ver>
+yarn add @inupedia/spotlight-client@<ver> @inupedia/spotlight-protocol@<ver>
 ```
 
-Before installing, verify `@inupedia/spotlight-vue@<ver>` peer dependencies include the host versions. Never use `--force` or `--legacy-peer-deps` to hide a mismatch.
+For a Vite host, wire the framework-neutral `spotlightClientTools({ projectId, frontendBuildId, include })` plugin.
 
-Required wiring:
+### Vue visual adapter
 
-1. Vite plugin `spotlightClientTools({ projectId, frontendBuildId, include })`
+Only when `ui adapter = VUE_READY`, install the same version of `@inupedia/spotlight-vue`:
+
+```bash
+pnpm add @inupedia/spotlight-vue@<ver>
+# or equivalent npm/yarn command
+```
+
+Verify its Vue/Pinia peers first. Never use `--force` or `--legacy-peer-deps` to hide a mismatch.
+
+Vue visual wiring:
+
+1. Tool compiler `spotlightClientTools({ projectId, frontendBuildId, include })`
 2. `src/spotlight/config.ts` + `loadBundledSkillsFromGlob('.inupedia/skills/**/SKILL.md')`
 3. `main.*`: Spotlight CSS + `app.use(SpotlightVue, { config, enabled: true })`
 4. Dev proxy: frontend `VITE_SPOTLIGHT_SERVER_URL` -> Spotlight Server `:8787`
+
+For React/other frameworks with `ui adapter = ADAPTER_REQUIRED`, do **not** install `@inupedia/spotlight-vue`. Continue Client Tool/Skill/Server wiring and headless live benchmarks. Report visual embedding as remaining adapter work.
 
 ## 6. Client Tool contract
 
@@ -176,25 +204,31 @@ Never copy host secrets into Skills. Never put LLM/provider keys in `VITE_*`.
 
 ## 8. Boot order
 
+Core/headless benchmark:
+
 1. `cd spotlight-project && docker compose up -d`
 2. `curl -sfS http://127.0.0.1:8787/health`
-3. Start the host Vite app with its existing package manager/script
-4. Open the Spotlight command UI and run [testing.md](testing.md)
+3. Start the host app/backend as required by its own stack
+4. Run the Spotlight Server gold benchmark through registered Client Tools
+
+Vue visual integration adds opening the embedded Spotlight command UI after the host frontend starts.
 
 ## 9. Definition of done
 
 Integration is done only when all applicable gates hold:
 
-- compatibility is `READY`, or blockers are explicitly documented and wiring was not falsely claimed complete;
+- Core compatibility and UI-adapter compatibility are reported separately;
 - every discovered user-facing capability is classified `DIRECT / REFACTOR / GATED / REJECT`;
 - every `DIRECT` capability selected for exposure is wrapped;
 - `skill.knowledge` exists;
 - every Skill `allowed-tools` name is an exported registered Client Tool;
-- projectId is identical across Vite/config/project/env;
+- projectId is identical across Tool compiler/config/project/env;
 - smoke gold rows cover all actionable Skills;
 - static checks pass;
-- `INTEGRATION_REPORT.md` distinguishes static readiness from live accuracy;
+- `INTEGRATION_REPORT.md` distinguishes static readiness, Core Agentization, UI embedding, and live accuracy;
 - live metrics are reported only if the Server + target LLM actually ran.
+
+A project may be Core-Agentized and benchmarked successfully while its visual adapter remains `ADAPTER_REQUIRED`; that state must be reported explicitly rather than mislabeled as a complete embedded UI integration.
 
 ## 10. What must not appear in the host app
 
@@ -203,5 +237,6 @@ Integration is done only when all applicable gates hold:
 - a second `projectId`
 - Client Tools that do not reach an existing host capability
 - forced peer-dependency installation
+- framework-specific package installation into an incompatible host
 - DOM-click automation where a stable Store/Service/Router capability exists
 - claims such as “95% accuracy” derived only from grep/static checks
