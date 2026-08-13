@@ -122,6 +122,43 @@ describe("intent safety fence", () => {
     expect(actionToolAllowlist([actionTool], decision)).toEqual([]);
   });
 
+  it.each(["?", "？", "unknown", "待确认", "<required>"])(
+    "fails closed when a Skill-selected tool contains a fabricated placeholder: %s",
+    (placeholder) => {
+      const decision = applyIntentSafetyFence("确认那个采购单", {
+        route: "action",
+        confidence: 0.99,
+        reason: "skill matched but target was unresolved",
+        requestedToolNames: ["confirmPurchaseOrder"],
+        requestedToolInput: { id: placeholder },
+        explicitActionEvidence: "skill:skill.erp.purchase",
+        matchedSkillNames: ["skill.erp.purchase"],
+      });
+
+      expect(decision.route).toBe("clarify");
+      expect(decision.requestedToolNames).toEqual([]);
+      expect(decision.requestedToolInput).toBeUndefined();
+    },
+  );
+
+  it("fails closed on unresolved placeholders nested inside arrays or objects", () => {
+    const decision = applyIntentSafetyFence("把采购单退回上一节点", {
+      route: "action",
+      confidence: 0.99,
+      reason: "nested input",
+      requestedToolNames: ["returnPurchaseOrder"],
+      requestedToolInput: {
+        id: "PO-100",
+        target: { activityIds: ["待定"] },
+      },
+      explicitActionEvidence: "skill:skill.oa.workflow",
+      matchedSkillNames: ["skill.oa.workflow"],
+    });
+
+    expect(decision.route).toBe("clarify");
+    expect(decision.requestedToolNames).toEqual([]);
+  });
+
   it("keeps explicit memory control out of the client action route", () => {
     const decision = applyIntentSafetyFence("记住我喜欢简洁回答", {
       route: "action",
