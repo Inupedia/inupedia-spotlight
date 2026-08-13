@@ -6,25 +6,33 @@ Goal: determine **whether the host can be wired safely** and map what the runnin
 
 Read:
 
-1. `package.json` — Vue/Vite/Pinia/Router/Node engines/packageManager; existing `@inupedia/spotlight-*`
+1. `package.json` — framework/build tool/state/router/Node engines/packageManager; existing `@inupedia/spotlight-*`
 2. lockfile — preserve the existing package manager
 3. published Spotlight version + peer dependencies per [standard.md](../standard.md)
 
-Write `.spotlight-integrate/COMPATIBILITY.md`:
+Write `.spotlight-integrate/COMPATIBILITY.md` with **Core Agentization** and **UI Adapter** reported separately:
 
 ```md
 # Compatibility
 - host: <app name>
 - package manager: <pnpm/npm/yarn>
-- vue: <version/range>
-- vite: <version/range or none>
-- pinia: <version/range or none>
+- framework: <Vue/React/other + version/range>
+- build: <Vite/version or other>
+- state/router: <Pinia/Redux/Router/etc or none>
 - target spotlight: <published version or BLOCKED>
-- spotlight peers: <vue/pinia/etc>
-- status: READY | UPGRADE_REQUIRED | BUILD_MIGRATION_REQUIRED | UNSUPPORTED_AUTOMATION
+- core status: READY | UPGRADE_REQUIRED | BUILD_MIGRATION_REQUIRED | UNSUPPORTED_AUTOMATION
+- ui adapter: VUE_READY | UPGRADE_REQUIRED | ADAPTER_REQUIRED | HEADLESS_ONLY
+- spotlight peers: <relevant adapter peers>
 - blockers: <exact mismatch or none>
-- action: <continue / report only / migration requires approval>
+- action: <continue core / continue full / report only / migration requires approval>
 ```
+
+Interpretation:
+
+- `core=READY` means the host can expose framework-neutral Client Tools and participate in the Spotlight Server/Skill/Tool runtime path.
+- `uiAdapter=VUE_READY` means the shipped `@inupedia/spotlight-vue` shell can be embedded safely.
+- `uiAdapter=ADAPTER_REQUIRED` means Core Agentization and headless Server benchmarking may continue, but the host does not yet have a supported visual shell adapter.
+- A missing UI adapter is **not** equivalent to `UNSUPPORTED_AUTOMATION`.
 
 Do not force dependency upgrades or create a second lockfile.
 
@@ -32,10 +40,10 @@ Do not force dependency upgrades or create a second lockfile.
 
 In parallel, gather:
 
-1. Router (`src/router/**`, routes, route meta titles)
-2. Pinia/Vuex stores and exported composables — public actions/getters only
+1. Router/navigation (`src/router/**`, route tables, framework routers, route meta titles)
+2. State stores and exported composables/hooks — public actions/selectors only
 3. Services/API adapters — stable business methods
-4. Top-level pages/shells (`App.vue`, layouts, tabs, menus)
+4. Top-level pages/shells (`App.vue`, React roots/layouts, menus, route shells)
 5. Existing `src/spotlight/**` or older agent/tool folders
 6. i18n/hard-coded button labels (future capability examples)
 7. Data catalogs: JSON/list modules/objects with stable id + name/label **or runtime-backed list/search APIs**
@@ -48,7 +56,7 @@ Write `.spotlight-integrate/FRONTEND_OVERVIEW.md`:
 ```md
 # Frontend overview
 - app: <name>
-- stack: <Vue/Vite/Pinia/Router/...>
+- stack: <framework/build/state/router/...>
 - projectId proposal: <kebab-case>
 - existing Spotlight: none | partial | complete
 
@@ -92,4 +100,4 @@ A domain is a set of user jobs that share vocabulary, data/catalog, and business
 
 ## Proceed behavior
 
-If status is `READY`, continue automatically when the user requested full integration. If not `READY`, capability analysis may continue, but stop before dependency/build-system migration unless explicitly requested.
+If `core status` is `READY`, continue Core Agentization automatically when the user requested full integration. If the UI adapter is unavailable, continue through Tool/Skill/Server benchmark stages and stop only the visual-shell wiring. If core is not `READY`, capability analysis may continue, but stop before dependency/build-system migration unless explicitly requested.
