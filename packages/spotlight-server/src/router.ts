@@ -37,6 +37,16 @@ const UNRESOLVED_CHINESE_DEICTIC_TARGET =
   /^(?:这个|那个|刚才那个|刚才的|上一个|前一个|这位|那位)[\p{Script=Han}]{1,8}$/u;
 const UNRESOLVED_ENGLISH_DEICTIC_TARGET =
   /^(?:this|that|the previous|the last)\s+[a-z][a-z -]{0,32}$/iu;
+const GENERATED_MISSING_VALUE =
+  /^(?:请(?:提供|指定|填写|选择)|需要(?:用户|你|您)?(?:提供|指定|填写|选择)|未(?:提供|指定|填写|选择)|待(?:提供|指定|填写|选择)|please\s+(?:provide|specify|enter|select)|missing(?:\s+value)?|not\s+(?:provided|specified))/iu;
+
+type InputSchemaShape = {
+  type?: unknown;
+  enum?: unknown;
+  items?: unknown;
+  properties?: unknown;
+  required?: unknown;
+};
 
 export interface RouteContext {
   isReferential?: boolean;
@@ -91,6 +101,75 @@ function hasUsableRequiredValue(value: unknown): boolean {
   return true;
 }
 
+function isGeneratedMissingValue(value: unknown): boolean {
+  return typeof value === "string" && GENERATED_MISSING_VALUE.test(value.trim());
+}
+
+function schemaTypeList(schema: InputSchemaShape): string[] {
+  if (typeof schema.type === "string") return [schema.type];
+  if (!Array.isArray(schema.type)) return [];
+  return schema.type.filter((item): item is string => typeof item === "string");
+}
+
+function valueMatchesSchema(value: unknown, rawSchema: unknown): boolean {
+  if (!rawSchema || typeof rawSchema !== "object") return true;
+  const schema = rawSchema as InputSchemaShape;
+
+  if (Array.isArray(schema.enum) && !schema.enum.some((item) => Object.is(item, value))) {
+    return false;
+  }
+
+  const types = schemaTypeList(schema);
+  if (types.length > 0) {
+    const typeMatches = types.some((type) => {
+      switch (type) {
+        case "string":
+          return typeof value === "string";
+        case "integer":
+          return typeof value === "number" && Number.isInteger(value);
+        case "number":
+          return typeof value === "number" && Number.isFinite(value);
+        case "boolean":
+          return typeof value === "boolean";
+        case "array":
+          return Array.isArray(value);
+        case "object":
+          return Boolean(value && typeof value === "object" && !Array.isArray(value));
+        case "null":
+          return value === null;
+        default:
+          return true;
+      }
+    });
+    if (!typeMatches) return false;
+  }
+
+  if (Array.isArray(value) && schema.items) {
+    return value.every((item) => valueMatchesSchema(item, schema.items));
+  }
+
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const properties =
+      schema.properties && typeof schema.properties === "object"
+        ? (schema.properties as Record<string, unknown>)
+        : {};
+    const required = Array.isArray(schema.required)
+      ? schema.required.filter(
+          (field): field is string => typeof field === "string",
+        )
+      : [];
+    const record = value as Record<string, unknown>;
+    if (required.some((field) => !hasUsableRequiredValue(record[field]))) {
+      return false;
+    }
+    return Object.entries(record).every(([key, item]) =>
+      properties[key] ? valueMatchesSchema(item, properties[key]) : true,
+    );
+  }
+
+  return true;
+}
+
 function toolSchemaHasInputProperties(tool?: FrontendToolDescriptorV1): boolean {
   if (!tool?.inputSchema || typeof tool.inputSchema !== "object") return false;
   const properties = (tool.inputSchema as { properties?: unknown }).properties;
@@ -101,24 +180,54 @@ function toolSchemaHasInputProperties(tool?: FrontendToolDescriptorV1): boolean 
   );
 }
 
+function selectedToolAndRequired(
+  decision: IntentDecision,
+  clientTools: FrontendToolDescriptorV1[],
+): {
+  tool?: FrontendToolDescriptorV1;
+  required: string[];
+  properties: Record<string, unknown>;
+} {
+  if (decision.route !== "action" || decision.requestedToolNames.length !== 1) {
+    return { required: [], properties: {} };
+  }
+  const tool = clientTools.find(
+    (item) => item.name === decision.requestedToolNames[0],
+  );
+  if (!tool) return { required: [], properties: {} };
+  const required = Array.isArray(tool.inputSchema?.required)
+    ? tool.inputSchema.required.filter(
+        (field): field is string => typeof field === "string",
+      )
+    : [];
+  const properties =
+    tool.inputSchema?.properties && typeof tool.inputSchema.properties === "object"
+      ? (tool.inputSchema.properties as Record<string, unknown>)
+      : {};
+  return { tool, required, properties };
+}
+
 export function missingRequiredToolInputKeys(
   decision: IntentDecision,
   clientTools: FrontendToolDescriptorV1[],
 ): string[] {
-  if (decision.route !== "action" || decision.requestedToolNames.length !== 1) {
-    return [];
-  }
-  const selectedTool = clientTools.find(
-    (tool) => tool.name === decision.requestedToolNames[0],
-  );
-  if (!selectedTool) return [];
-  const required = Array.isArray(selectedTool.inputSchema?.required)
-    ? selectedTool.inputSchema.required.filter(
-        (field): field is string => typeof field === "string",
-      )
-    : [];
+  const { required } = selectedToolAndRequired(decision, clientTools);
   const input = decision.requestedToolInput ?? {};
   return required.filter((field) => !hasUsableRequiredValue(input[field]));
+}
+
+export function invalidRequiredToolInputKeys(
+  decision: IntentDecision,
+  clientTools: FrontendToolDescriptorV1[],
+): string[] {
+  const { required, properties } = selectedToolAndRequired(decision, clientTools);
+  const input = decision.requestedToolInput ?? {};
+  return required.filter((field) => {
+    const value = input[field];
+    if (!hasUsableRequiredValue(value)) return false;
+    if (isGeneratedMissingValue(value)) return true;
+    return !valueMatchesSchema(value, properties[field]);
+  });
 }
 
 export function applyToolInputCompletenessFence(
@@ -133,14 +242,26 @@ export function applyToolInputCompletenessFence(
     };
   }
   const missing = missingRequiredToolInputKeys(decision, clientTools);
-  if (missing.length === 0) return decision;
-  return {
-    ...decision,
-    route: "clarify",
-    reason: `The selected client tool is missing required input: ${missing.join(", ")}.`,
-    requestedToolNames: [],
-    requestedToolInput: undefined,
-  };
+  if (missing.length > 0) {
+    return {
+      ...decision,
+      route: "clarify",
+      reason: `The selected client tool is missing required input: ${missing.join(", ")}.`,
+      requestedToolNames: [],
+      requestedToolInput: undefined,
+    };
+  }
+  const invalid = invalidRequiredToolInputKeys(decision, clientTools);
+  if (invalid.length > 0) {
+    return {
+      ...decision,
+      route: "clarify",
+      reason: `The selected client tool has invalid or fabricated required input: ${invalid.join(", ")}.`,
+      requestedToolNames: [],
+      requestedToolInput: undefined,
+    };
+  }
+  return decision;
 }
 
 export interface IntentRouter {
@@ -185,7 +306,7 @@ export class LangChainIntentRouter implements IntentRouter {
           "Select exactly one registered client tool for the latest user request.",
           "Use the matched Skill instructions, tool descriptions, and input schemas.",
           "Return only a toolName from the provided candidates. Never invent a name.",
-          "Extract only arguments explicitly present or unambiguously resolved from context; never fabricate required values.",
+          "Extract only arguments explicitly present or unambiguously resolved from context; never fabricate required values or placeholder strings.",
         ].join("\n"),
       ),
       new HumanMessage(
