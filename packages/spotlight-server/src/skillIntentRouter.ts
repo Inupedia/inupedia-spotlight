@@ -141,7 +141,7 @@ export function enrichSkillToolRoute(
       return {
         ...route,
         requestedToolNames: [readTool],
-        toolInput: {},
+        toolInput: route.toolInput ?? {},
         reason: `${route.reason} Generic list intent → ${readTool}.`,
       };
     }
