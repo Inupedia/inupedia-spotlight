@@ -46,13 +46,13 @@ Write `.spotlight-integrate/gold-questions.md`:
 | id | prompt | expectRoute | expectSkill | expectTool | expectArgs | notTools | expectGuard |
 |---|---|---|---|---|---|---|---|
 | products-list | 有哪些商品 | action | skill.products | getProductList | {} | openProduct | none |
-| products-open | 打开 <REAL_CATALOG_NAME> | action | skill.products | openProduct | {"productName":"<REAL_CATALOG_NAME>"} | getProductList | none |
+| products-open | 打开 <REAL_OR_RUNTIME_CATALOG_NAME> | action | skill.products | openProduct | {"productName":"<REAL_OR_RUNTIME_CATALOG_NAME>"} | getProductList | none |
 | knowledge | 介绍一下这个系统 | knowledge | skill.knowledge | | | * | none |
 | ambiguous | 打开那个 | clarify | skill.products | | | * | clarify |
 | gated | 提交订单 | clarify | skill.checkout | | | submitOrder | confirm-or-deny |
 ```
 
-The example is **shape only**. Replace domain/tool/catalog names with values from the host repo.
+The example is **shape only**. Replace domain/tool/catalog names with values grounded in the host.
 
 Columns:
 
@@ -63,7 +63,40 @@ Columns:
 - `notTools`: comma-separated forbidden tools; `*` means no Client Tool
 - `expectGuard`: `none | clarify | confirm-or-deny`
 
-## 3. Minimum smoke coverage
+## 3. Catalog grounding: repo-static vs runtime-dynamic
+
+Never invent a named target for a gold prompt.
+
+### Static catalog
+
+If real entity names exist in source-controlled JSON/config/fixtures, use exact strings from the host repo.
+
+### Dynamic catalog
+
+If entities exist only at runtime (database-backed CRM records, books, tickets, assets, projects, users, etc.), use the host's verified list/search/read capability to capture a real target before the live benchmark.
+
+Write `.spotlight-integrate/runtime-fixtures.json`:
+
+```json
+{
+  "capturedAt": "<ISO timestamp>",
+  "fixtures": {
+    "books.primary": { "id": 123, "name": "<exact runtime title>" }
+  }
+}
+```
+
+Rules:
+
+- capture only fields needed for routing/arguments;
+- record the exact Tool/host capability used to obtain the fixture in benchmark notes;
+- use the captured exact value in the executed prompt and expected args;
+- if runtime data is unavailable, keep a placeholder such as `<RUNTIME_ENTITY:books.primary>` and mark that row `LIVE-DEPENDENT`; do not claim it passed;
+- refresh fixtures when the captured entity no longer exists.
+
+Dynamic data is normal. Reproducibility comes from a recorded runtime fixture, not from fabricating a source-code catalog.
+
+## 4. Minimum smoke coverage
 
 For a simple app, minimum **8 rows** total. Every actionable Skill must have:
 
@@ -73,9 +106,9 @@ For a simple app, minimum **8 rows** total. Every actionable Skill must have:
 - one knowledge row for the whole app;
 - one gated/destructive row if such host capability exists, even when it is not exposed.
 
-Catalog targets must be exact strings from the host repo.
+Named targets must come from a static host catalog or a recorded runtime fixture.
 
-## 4. Dry router review (always)
+## 5. Dry router review (always)
 
 For every gold row, re-read the Skill `when_to_use`, body, examples, allowed-tools, Tool descriptions, and schemas.
 
@@ -89,13 +122,21 @@ Rewrite the Skill when:
 
 Do not weaken a gold test to match a bad Skill.
 
-## 5. Live benchmark (only when Server + target LLM are running)
+### Navigation purity review
+
+For every generated `navigate*` Tool, verify that arriving at the destination does not itself commit server/external state through route guards, loaders, `onMounted`, or route-param/query watchers.
+
+If arrival triggers a write, the gold set must treat that flow as `GATED`/action, not low-risk navigation. A navigation-only prompt must never be able to create a reservation, submit a form, approve a request, start a payment, or perform an equivalent hidden mutation.
+
+## 6. Live benchmark (only when Server + target LLM are running)
 
 First verify:
 
 ```bash
 curl -sfS http://127.0.0.1:8787/health
 ```
+
+For dynamic catalogs, capture/refresh runtime fixtures before executing named-target rows.
 
 Then run every gold prompt through the same runtime/model configuration intended for the host. Record `.spotlight-integrate/benchmark-results.md` with one row per prompt:
 
@@ -105,7 +146,7 @@ Then run every gold prompt through the same runtime/model configuration intended
 
 For mutations/navigation, validate the **host state/UI delta**, not only the model's chosen tool name.
 
-## 6. Metrics
+## 7. Metrics
 
 Calculate and report separately:
 
@@ -119,7 +160,7 @@ Calculate and report separately:
 
 Do not collapse these into one “accuracy” number.
 
-## 7. Benchmark scale
+## 8. Benchmark scale
 
 - **Smoke integration**: 8–20 prompts, all core intent families
 - **Feature acceptance**: ~30–50 prompts including aliases, bilingual phrasing if applicable, ambiguity, and negatives
@@ -136,7 +177,7 @@ A useful 100-prompt distribution for a business UI is:
 
 Adapt to the host; do not manufacture capabilities only to fill a quota.
 
-## 8. Suggested acceptance targets
+## 9. Suggested acceptance targets
 
 These are recommended product gates, not guaranteed Spotlight results:
 
@@ -148,12 +189,12 @@ These are recommended product gates, not guaranteed Spotlight results:
 
 If the model/runtime is unavailable, report `LIVE BENCHMARK: NOT RUN` and the exact blocker. Never substitute static checks for these targets.
 
-## 9. Generic list vs named-open contract
+## 10. Generic list vs named-open contract
 
 | User intent | Preferred Tool class | Forbidden shortcut |
 |---|---|---|
 | list / count / status | read-only `get*` / `list*` | open/play a random entity |
-| open / view / play + named target | open-like UI Tool | read-only tool as the only action |
+| open / view / play + named target | explicitly open-like UI Tool | infer a mutation merely because its schema has a string target |
 | mutation + complete args | exact mutation Tool allowed by Skill | generic arbitrary executor |
 | missing target/required arg | clarify | invent an id/name/value |
 | introduction/explanation | knowledge/direct answer | mutate the live page |
