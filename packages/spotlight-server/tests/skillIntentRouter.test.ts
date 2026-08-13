@@ -35,6 +35,13 @@ const reservationSkill = {
   responseStrategy: "tool_answer" as const,
 };
 
+const inventorySkill = {
+  name: "skill.inventory",
+  description: "库存查询",
+  allowedTools: ["listInventory"],
+  responseStrategy: "tool_answer" as const,
+};
+
 const clientTools = [
   {
     name: "getProductList",
@@ -132,6 +139,18 @@ const clientTools = [
     riskLevel: "high" as const,
     requiresConfirmation: true,
   },
+  {
+    name: "listInventory",
+    version: "1.0.0",
+    description: "查询库存，可按最大库存量筛选",
+    inputSchema: {
+      type: "object",
+      properties: { maxQty: { type: "number" } },
+    },
+    sideEffect: "none" as const,
+    replayPolicy: "safe" as const,
+    riskLevel: "low" as const,
+  },
 ];
 
 describe("skill tool route enrichment", () => {
@@ -192,6 +211,25 @@ describe("skill tool route enrichment", () => {
     );
     expect(enriched.requestedToolNames).toEqual(["getProductList"]);
     expect(isSkillListQuery("目前有哪些商品")).toBe(true);
+  });
+
+  it("preserves optional list filters extracted from the user request", () => {
+    const route: SkillRouteResult = {
+      route: "action",
+      matchedSkillNames: ["skill.inventory"],
+      requestedToolNames: ["listInventory"],
+      toolInput: { maxQty: 10 },
+      confidence: 0.93,
+      reason: "filtered inventory list",
+    };
+    const enriched = enrichSkillToolRoute(
+      "查看库存低于10的物料有哪些",
+      route,
+      [inventorySkill],
+      clientTools,
+    );
+    expect(enriched.requestedToolNames).toEqual(["listInventory"]);
+    expect(enriched.toolInput).toEqual({ maxQty: 10 });
   });
 
   it("does not rewrite non-open mutations from another action family", () => {
