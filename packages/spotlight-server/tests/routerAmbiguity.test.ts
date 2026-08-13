@@ -99,12 +99,23 @@ describe("referential action routing", () => {
     expect(hasUnresolvedExplicitActionTarget("打开", "打开")).toBe(true);
     expect(hasUnresolvedExplicitActionTarget("查看那个医生", "查看")).toBe(true);
     expect(hasUnresolvedExplicitActionTarget("删除那个医生", "删除")).toBe(true);
+    expect(hasUnresolvedExplicitActionTarget("退回上一节点", "退回")).toBe(true);
+    expect(hasUnresolvedExplicitActionTarget("转派给前一个处理人", "转派")).toBe(true);
 
     const router = new LangChainIntentRouter(new FakeToolCallingModel());
     const decision = await router.route("打开那个", [], []);
 
     expect(decision.route).toBe("clarify");
     expect(decision.requestedToolNames).toEqual([]);
+  });
+
+  it("clarifies an unresolved workflow target before any model routing", async () => {
+    const router = new LangChainIntentRouter(new FakeToolCallingModel());
+    const decision = await router.route("把任务 T-91 退回上一节点", [], []);
+
+    expect(decision.route).toBe("clarify");
+    expect(decision.requestedToolNames).toEqual([]);
+    expect(decision.explicitActionEvidence).toBe("退回");
   });
 
   it("clarifies an unresolved view before a domain Skill can downgrade it to a list action", async () => {
@@ -123,6 +134,12 @@ describe("referential action routing", () => {
   it("does not classify a concrete named target as unresolved", () => {
     expect(hasUnresolvedExplicitActionTarget("查看医生 张三", "查看")).toBe(false);
     expect(hasUnresolvedExplicitActionTarget("删除医生ID 42", "删除")).toBe(false);
+    expect(
+      hasUnresolvedExplicitActionTarget(
+        "把任务 T-91 退回到 activity-review",
+        "退回",
+      ),
+    ).toBe(false);
   });
 
   it("does not force clarification when conversational context can resolve the reference", () => {
