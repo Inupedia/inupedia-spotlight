@@ -28,13 +28,13 @@ const skillToolSelectionSchema = z.object({
 });
 
 const TARGET_REQUIRED_ACTION_EVIDENCE =
-  /^(?:打开|播放|进入|定位|显示|查看|删除|移除|修改|编辑|取消|open|play|enter|locate|show|view|delete|remove|update|edit|cancel)$/iu;
+  /^(?:打开|播放|进入|定位|显示|查看|删除|移除|修改|编辑|取消|退回|转派|撤回|open|play|enter|locate|show|view|delete|remove|update|edit|cancel|return|transfer|withdraw)$/iu;
 const TARGET_REQUIRED_ACTION_SCAN =
-  /(?:打开|播放|进入|定位|显示|查看|删除|移除|修改|编辑|取消|open|play|enter|locate|show|view|delete|remove|update|edit|cancel)/iu;
+  /(?:打开|播放|进入|定位|显示|查看|删除|移除|修改|编辑|取消|退回|转派|撤回|open|play|enter|locate|show|view|delete|remove|update|edit|cancel|return|transfer|withdraw)/iu;
 const UNRESOLVED_REFERENTIAL_TARGET =
-  /^(?:这个|那个|它|这个东西|那个东西|刚才那个|刚才的|上一个|前一个|这位|那位|this|this one|that|that one|it|the one)$/iu;
+  /^(?:这个|那个|它|这个东西|那个东西|刚才那个|刚才的|上一个|上一项|上一节点|前一个|前一项|前一节点|之前的|之前节点|这位|那位|this|this one|that|that one|it|the one)$/iu;
 const UNRESOLVED_CHINESE_DEICTIC_TARGET =
-  /^(?:这个|那个|刚才那个|刚才的|上一个|前一个|这位|那位)[\p{Script=Han}]{1,8}$/u;
+  /^(?:这个|那个|刚才那个|刚才的|上一个|上一|前一个|前一|之前的?|这位|那位)[\p{Script=Han}]{1,8}$/u;
 const UNRESOLVED_ENGLISH_DEICTIC_TARGET =
   /^(?:this|that|the previous|the last)\s+[a-z][a-z -]{0,32}$/iu;
 const GENERATED_MISSING_VALUE =
