@@ -1,24 +1,30 @@
-# Stage 5 — Wire SDK, Vue, Project Pack
+# Stage 5 — Wire Core SDK, optional UI Adapter, Project Pack
 
-Only after verified Tools + Skills + gold questions exist, and only when compatibility status permits wiring. Layout/packages/env/boot: [standard.md](../standard.md). Snippets: [templates.md](../templates.md). Checks: [testing.md](../testing.md).
+Only after verified Tools + Skills + gold questions exist, and only when the relevant compatibility axis permits wiring. Layout/packages/env/boot: [standard.md](../standard.md). Snippets: [templates.md](../templates.md). Checks: [testing.md](../testing.md).
 
 ## Packages
 
 Use the **existing host package manager** and the exact published `<ver>` verified in stage 0. Do not create a second lockfile and do not use force/legacy-peer-deps to hide peer mismatches.
 
+Core packages are `@inupedia/spotlight-client` + `@inupedia/spotlight-protocol`. Install `@inupedia/spotlight-vue` only when the Vue adapter is compatible.
+
 Examples are in [standard.md](../standard.md) §5.
 
-All published `@inupedia/spotlight-*` packages must use the same compatible `<ver>`. Treat the Server image tag as independently verifiable deployment input; if the matching image cannot be verified, report it instead of claiming runtime readiness.
+All published `@inupedia/spotlight-*` packages used by the host must use the same compatible `<ver>`. Treat the Server image tag as independently verifiable deployment input; if the matching image cannot be verified, report it instead of claiming runtime readiness.
 
-## Vite
+## Tool compiler / build integration
 
-Add `spotlightClientTools`; `include` must match the actual tools file path (`/src/spotlight/tools.ts` or the existing tools entrypoint).
+For Vite hosts, add `spotlightClientTools`; `include` must match the actual tools file path (`/src/spotlight/tools.ts` or the existing tools entrypoint). The compiler accepts TS/JS/TSX/JSX and is not itself Vue-specific.
 
 Set one `projectId` and `frontendBuildId`. If the app has a custom base/proxy setup, preserve it and make `VITE_SPOTLIGHT_SERVER_URL` consistent.
 
 Do not migrate a non-Vite host here unless build migration was explicitly approved.
 
-## Vue
+## Visual UI adapter
+
+### Vue adapter
+
+Only when `ui adapter = VUE_READY`:
 
 - import `@inupedia/spotlight-vue/styles/spotlight-vue.css`
 - `defineSpotlightConfig` in the canonical or existing config file
@@ -26,6 +32,10 @@ Do not migrate a non-Vite host here unless build migration was explicitly approv
 - `app.use(SpotlightVue, { config, enabled: true })`
 - `getUiContext`: expose only useful already-available state such as current route, selected entity, active tab/scene; do not invent a duplicate global store
 - `getMemorySubjectId`: stable user id when available; never a rotating access token
+
+### React / other frameworks
+
+If `ui adapter = ADAPTER_REQUIRED`, do not install or emulate `@inupedia/spotlight-vue`. Continue the framework-neutral Client Tool + Skill + Server path and run headless/live benchmarks. Record the missing embedded command UI as adapter work rather than declaring Core Agentization unsupported.
 
 Referential prompts require enough `uiContext`/conversation context to resolve “那个 / this / continue”. If not resolvable, the gold expectation is clarify.
 
@@ -48,9 +58,10 @@ Run:
 1. static checks from [testing.md](../testing.md)
 2. host typecheck/build/tests that cover changed files
 3. live health + gold benchmark only if Server/model credentials/runtime are available
+4. for `ADAPTER_REQUIRED`, explicitly verify Core Agentization separately from visual embedding
 
 A package-registry, Docker, provider-key, or network blocker is `BLOCKED`, not `PASS`.
 
 ## Handoff to stage 6
 
-Do not produce the final user wrap-up here. Collect exact files, counts, env keys, boot order, static results, benchmark status, and leftovers, then write [08-stage6-report.md](08-stage6-report.md).
+Do not produce the final user wrap-up here. Collect exact files, counts, env keys, boot order, static results, benchmark status, Core/UI-adapter status, and leftovers, then write [08-stage6-report.md](08-stage6-report.md).
