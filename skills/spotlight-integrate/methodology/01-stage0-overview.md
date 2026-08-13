@@ -38,7 +38,7 @@ In parallel, gather:
 4. Top-level pages/shells (`App.vue`, layouts, tabs, menus)
 5. Existing `src/spotlight/**` or older agent/tool folders
 6. i18n/hard-coded button labels (future capability examples)
-7. Data catalogs: JSON/list modules/objects with stable id + name/label
+7. Data catalogs: JSON/list modules/objects with stable id + name/label **or runtime-backed list/search APIs**
 8. Component-local handlers that represent real user jobs but are not reusable exports
 
 For huge stores/components, search public API/handlers first; do not ingest the entire monorepo blindly.
@@ -60,7 +60,7 @@ Write `.spotlight-integrate/FRONTEND_OVERVIEW.md`:
 <route/scene flow>
 
 ## Catalogs
-- <domain>: <2–3 exact repo strings> (source: <file>)
+- <domain>: source=repo | runtime; <repo strings OR list/search symbol>; identity=<name/id fields>
 
 ## Identity/context
 - login/session store: <path or none>
@@ -70,6 +70,19 @@ Write `.spotlight-integrate/FRONTEND_OVERVIEW.md`:
 ## Out of scope internals
 - token refresh, telemetry, render ticks, workers, arbitrary DOM selectors
 ```
+
+### Dynamic catalogs
+
+Many business systems (CRM, ERP, library, ticketing, asset management) do not contain real entity names in source control. Their named targets live in a database and arrive through an existing list/search API.
+
+For these domains:
+
+- mark the catalog `source=runtime`;
+- record the exact host list/search capability and stable identity fields (`id`, `name`, `title`, etc.);
+- do not invent a sample entity just to satisfy examples/tests;
+- when a live host is available, capture real entities into the runtime fixture process defined in [testing.md](../testing.md).
+
+A dynamic catalog is not a reason to reject Agentization; it changes how gold targets are grounded.
 
 Every named capability must have a code location or be marked unresolved. Do not invent a symbol because a UI label exists.
 
