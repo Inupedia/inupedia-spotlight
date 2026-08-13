@@ -1,33 +1,24 @@
 #!/usr/bin/env bash
-# Dump the spotlight-integrate skill pack as one prompt you can paste into any LLM.
-# The model then distills the host Vue app that is open in that conversation.
-#
-#   ./prompt.sh
-#   ./prompt.sh --copy
-#   ./prompt.sh -o /tmp/spotlight-integrate.prompt.md
-#   bash skills/spotlight-integrate/prompt.sh --copy
-
+# Dump the spotlight-integrate skill pack as one prompt for an LLM with the host repo open.
 set -euo pipefail
 
 usage() {
-  cat <<'EOF'
-Usage: prompt.sh [--copy] [-o FILE] [--check]
+  cat <<'USAGE'
+Usage: prompt.sh [--copy] [-o FILE] [--quiet] [--check]
 
   (default)  print the full LLM prompt to stdout
   --copy     also copy to clipboard (pbcopy / wl-copy / xclip)
-  -o FILE    write to FILE (still prints unless --quiet)
-  --quiet    no stdout (use with -o and/or --copy)
+  -o FILE    write to FILE
+  --quiet    no stdout
   --check    verify pack files exist, then exit
   -h         help
-
-Paste the output into a chat that already has the host Vue 3 + Vite repo open.
-EOF
+USAGE
 }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 FILES=(
   SKILL.md
+  architecture.md
   standard.md
   testing.md
   methodology/00-pipeline-state.md
@@ -38,6 +29,7 @@ FILES=(
   methodology/05-stage3-skills.md
   methodology/06-stage4-pressure-test.md
   methodology/07-stage5-wire.md
+  methodology/08-stage6-report.md
   extractors/navigation.md
   extractors/panels.md
   extractors/catalogs.md
@@ -52,7 +44,6 @@ COPY=0
 QUIET=0
 CHECK_ONLY=0
 OUT=""
-
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --copy) COPY=1; shift ;;
@@ -60,35 +51,19 @@ while [[ $# -gt 0 ]]; do
     --check) CHECK_ONLY=1; shift ;;
     -o|--output)
       OUT="${2:-}"
-      if [[ -z "$OUT" ]]; then
-        echo "prompt.sh: -o requires a path" >&2
-        exit 2
-      fi
+      [[ -n "$OUT" ]] || { echo "prompt.sh: -o requires a path" >&2; exit 2; }
       shift 2
       ;;
     -h|--help) usage; exit 0 ;;
-    *)
-      echo "prompt.sh: unknown argument: $1" >&2
-      usage >&2
-      exit 2
-      ;;
+    *) echo "prompt.sh: unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
 missing=0
 for rel in "${FILES[@]}"; do
-  if [[ ! -f "$ROOT/$rel" ]]; then
-    echo "prompt.sh: missing $rel" >&2
-    missing=1
-  fi
+  [[ -f "$ROOT/$rel" ]] || { echo "prompt.sh: missing $rel" >&2; missing=1; }
 done
-if [[ ! -f "$ROOT/SKILL.md" ]]; then
-  echo "prompt.sh: this script must live next to SKILL.md" >&2
-  missing=1
-fi
-if [[ "$missing" -ne 0 ]]; then
-  exit 1
-fi
+[[ "$missing" -eq 0 ]] || exit 1
 
 if [[ "$CHECK_ONLY" -eq 1 ]]; then
   echo "spotlight-integrate pack ok (${#FILES[@]} files) at $ROOT"
@@ -97,31 +72,24 @@ fi
 
 emit() {
   cat <<'PREAMBLE'
-# Spotlight Integrate — skill pack (follow this, then inspect the host repo)
+# Spotlight Integrate — complete skill pack
 
-You are distilling **the Vue 3 + Vite app in this conversation** into an Inupedia Spotlight integration.
+Agentize the frontend repository open in this conversation with Inupedia Spotlight.
 
-This message is the `spotlight-integrate` Agent Skill. Treat it as binding. Do not search the web for a different Spotlight API. Do not copy tool names, catalog strings, or domains from the example files below — those are shapes only. Read **this host repo** for real symbols.
+Treat this pack as binding. The host application remains the source of truth: discover existing Store/Service/Router/page-engine capabilities, classify them, wrap only verified behavior, and measure the result. Do not copy product names or Tool names from shape-only examples.
 
-## Mandatory order
+Mandatory reading order:
+1. `architecture.md`
+2. `standard.md`
+3. `testing.md`
+4. `SKILL.md`
+5. methodology/extractors/templates as referenced by the pipeline
 
-1. File `standard.md` — layout, naming, env, boot. Do not invent a second `projectId` or a second tools file.
-2. File `testing.md` — gold questions, static grep, list-vs-open contract.
-3. File `SKILL.md` — pipeline stages 0 → 5.
-4. Then methodology / extractors / templates as the pipeline requires.
-
-## Hard rules
-
-- Client Tools wrap **existing** host exports only. No new players, maps, HTTP APIs, or page-engine code.
-- If this repo already has Spotlight (`defineClientTool`, `defineSpotlightConfig`, `.inupedia/skills`), **extend in place**. Do not move files to `src/spotlight/` just to match the canonical tree.
-- `allowed-tools` ⊆ exported Client Tool names. Always emit `skill.knowledge` (`direct_answer`).
-- List phrasing → `get*` / `list*`. Named open phrasing → `open*` / `play*`. Never invent catalog names.
-- Pin `@inupedia/spotlight-*` and `ghcr.io/inupedia/spotlight-server:<ver>` to `npm view @inupedia/spotlight-vue version` unless the user pinned a version.
-- Optional SDK fields (`videoChannels`, `quickPanelActions`, `catalogOverlay`, avatar) only if this host already has matching UI.
-
-If the app is not Vue 3 + Vite, stop and say so.
-
-After the pack: start stage 0. Confirm domains with the user before wrapping tools.
+Important:
+- Static checks are not runtime/LLM accuracy.
+- Generic Spotlight Server code must not require host-specific Skill ids or Tool names.
+- Preserve the host package manager and verify published package peer dependencies before installation.
+- If the user asked for full safe integration, continue end-to-end without stage-by-stage confirmation; stop only for migration, incompatible dependency upgrades, or gated capability exposure.
 
 ---
 PREAMBLE
@@ -136,10 +104,8 @@ PREAMBLE
   cat <<'POSTAMBLE'
 
 ---
-
-End of skill pack. The files above are instructions, not the host app.
-
-Now work in the **host frontend repository** that is open in this chat. Create `.spotlight-integrate/PIPELINE_STATE.md` and begin stage 0.
+End of skill pack. These files are instructions, not host source.
+Create `.spotlight-integrate/PIPELINE_STATE.md` and start stage 0 in the host repository.
 POSTAMBLE
 }
 
@@ -167,6 +133,4 @@ if [[ "$COPY" -eq 1 ]]; then
   echo "prompt.sh: copied to clipboard ($(wc -c < "$TMP" | tr -d ' ') bytes)" >&2
 fi
 
-if [[ "$QUIET" -eq 0 ]]; then
-  cat "$TMP"
-fi
+[[ "$QUIET" -eq 1 ]] || cat "$TMP"

@@ -6,23 +6,40 @@ Copy into `.spotlight-integrate/PIPELINE_STATE.md` at the start.
 # Pipeline state
 - stage: 0
 - projectId:
+- compatibilityStatus:
 - spotlightVersion:
+- liveBenchmark: NOT RUN
 
 ## Stages
-- [ ] 0 overview
+- [ ] 0 compatibility + overview
 - [ ] 1 extract
-- [ ] 1.5 verify
+- [ ] 1.5 verify/classify
 - [ ] 2 tools
 - [ ] 3 skills
-- [ ] 4 gold questions
+- [ ] 4 gold/benchmark
 - [ ] 5 wire
+- [ ] 6 integration report
 
-## Counts
-- candidates:
-- verified:
-- rejected:
+## Capability counts
+- discovered:
+- DIRECT:
+- REFACTOR:
+- GATED:
+- REJECT:
+- wrapped:
+
+## Adapter counts
 - tools:
 - skills:
 
-## Notes
+## Verification
+- staticIntegrity:
+- buildTypecheck:
+- liveRouteAccuracy:
+- liveToolAccuracy:
+- liveArgumentAccuracy:
+- liveE2ESuccess:
+- unsafeExecutionRate:
+
+## Blockers / notes
 ```

@@ -1,80 +1,80 @@
 # Stage 3 — Distill Skills
 
-Skills tell the **Spotlight Server router** when to pick which Client Tools. They are not documentation for humans.
+Skills tell the **generic Spotlight Server router** which host capabilities apply to a user intent. Skills carry product semantics; the Server must not need product-specific Skill ids or tool names.
 
 ## Clustering
 
-From `verified.md` + tools export list, group by **domain** from stage 0.
+Group verified Tools by domain from stage 0.
 
 | Cluster rule | Skill |
 |---|---|
-| Same catalog + list + open + close | one `skill.<domain>` |
-| Pure navigation (scene/tab/mode) | `skill.navigate` or `skill.scene.mode` |
-| Filters on one panel | same skill as that panel’s data tools |
-| Cross-cutting knowledge, no tools | `skill.knowledge` (always) |
+| same catalog + read/open/update jobs | one `skill.<domain>` |
+| pure navigation across scenes/tabs | `skill.navigate` or a coherent navigation subdomain |
+| filters tightly coupled to one panel/domain | same Skill as that panel |
+| cross-cutting explanation/knowledge | `skill.knowledge` |
 
 Do not make one Skill per Tool. Do not make one mega-Skill for the whole app.
-
-Target: 2–5 Skills for a simple console; 4–15 for a large dashboard.
 
 ## File
 
 `.inupedia/skills/<id>/SKILL.md`
 
-`id` is dotted: `skill.items`, `skill.navigate.scene`.
-
-Frontmatter (required keys):
+Required frontmatter shape:
 
 ```yaml
 id: skill.items
-name: <short UI-language label>
-description: <what it does, including list AND open if both exist>
-when_to_use: <user intents, not implementation>
-allowed-tools: getItemList, openItem, closeItem
-spotlight-response-strategy: tool_answer   # or direct_answer for knowledge
-capability-examples: <list phrasing>, <open phrasing + exact catalog name>, <close phrasing>
+name: <short host-language label>
+description: <what user jobs this domain supports>
+when_to_use: <user intents and exclusions, not implementation detail>
+allowed-tools: getItemList, openItem, addItem
+spotlight-response-strategy: tool_answer
+capability-examples: <host-grounded examples>
 ```
 
-`allowed-tools` is a comma-separated list of **exact** export names. After writing, grep the tools file and fail stage 3 if any name is missing.
+`allowed-tools` must exactly match registered Client Tool exports.
 
-`capability-examples` must use strings from **this** host (UI copy + catalog). Do not copy example names from this skill pack.
+## Body: intent-to-tool contract
 
-## Body (the router actually uses this)
+Write only the intent families the host actually supports. A domain with read + named-open + mutation should say, in the host UI language:
 
-Must be operational, not marketing.
-
-For any Skill that has both read and open tools, include **all** of the list-vs-open contract in [testing.md](../testing.md):
-
-```
-- 有哪些 / 多少 / 清单 / 列表 / 数量 → <readTool>，不要打开
-- 看看 / 查看 / 打开 / 播放 + 具体名称 → <openTool>，参数用用户原词，不要改写
-- 关闭 / 退出 → <closeTool>
-- 只问介绍、含义、新闻 → 不调用本 Skill 的 Client Tool
+```text
+- list/count/status phrasing -> <readTool>; do not open or mutate
+- open/view/play + exact named target -> <openTool>; preserve the user's target string
+- add/update/remove phrasing + complete required args -> the exact mutation Tool
+- missing target/quantity/required arg -> clarify; do not guess
+- introduction/explanation/news -> do not call this Skill's Client Tools; use knowledge
+- do not use this Skill for <nearest colliding domain>
 ```
 
-Adapt the Chinese/English keywords to the host UI language. Keep the four branches.
+For high-risk/gated host behavior that was not exposed, state the limitation when it helps prevent a near-match from selecting a safer-but-wrong Tool.
+
+## Tool descriptions and schemas matter
+
+The router receives Tool descriptions, `sideEffect`, risk metadata, and input schema. Make Tool names/descriptions semantic and schemas narrow enough that a generic router can distinguish:
+
+- read-only Tool
+- open-like UI Tool
+- mutation Tool
+- required arguments
+
+Do not depend on a Server patch that recognizes this product by name.
+
+## Knowledge Skill
 
 `skill.knowledge`:
 
 - `spotlight-response-strategy: direct_answer`
-- no `allowed-tools`
-- body: 走知识库/联网；出现业务名词也不得因此打开页面
+- no Client Tools
+- body: use knowledge/web/project sources; business nouns alone must not manipulate the live page
 
-## Examples
+## Collision review
 
-`capability-examples` must include:
+If two Skills could match the same utterance:
 
-- at least one **list** phrasing (if a read tool exists)
-- at least one **named-target open** phrasing using a real catalog string from the repo
-- at least one **close** or **negative** if those tools exist
+- identify catalog/domain boundaries in `when_to_use`;
+- add a “do not use when ...” sentence to both;
+- add a bait/negative row in [testing.md](../testing.md).
 
-Do not invent placeholder names like “item-1” when the catalog already has real names.
+## Required examples
 
-## Collision
-
-If two Skills could match “查看 X”:
-
-- names come from different catalogs — say so in `when_to_use`
-- open-panel vs read-numbers — say which tool each phrasing maps to
-
-Write one sentence of “do not use this skill when …” in the body.
+Use exact strings from the host repo. Include at least one example per supported intent family and one ambiguity/negative example when the domain can collide or lacks required parameters.

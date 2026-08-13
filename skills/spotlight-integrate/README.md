@@ -1,150 +1,194 @@
 # Spotlight Integrate
 
-把**已经写完的 Vue 3 + Vite 前端**蒸馏成 Spotlight 接入：Client Tools、业务 Skills、Vite 插件、Vue 插件、Project Pack。
+把现有 Vue 前端升级成 **Agent-ready Spotlight 应用**：编码 Agent 读取本 Skill Pack，分析宿主真实业务能力，把它们包装成 Client Tools + Agent Skills，再完成 Vue/Vite/Project Pack 接线与可量化验收。
 
-业务仓库只声明「页面能做什么」。路由、知识检索、Action、Memory、SSE 全部在 Spotlight Server。不要在宿主里再写一套 Agent。
+核心原则：**宿主业务代码是唯一事实源，Spotlight 是 Agent 化适配层，不是第二套业务系统，也不是 DOM 点击机器人。**
 
-当前 SDK 以 npm 上的 `@inupedia/spotlight-vue` 版本为准（`npm view @inupedia/spotlight-vue version`）。Client / Vue / Protocol / Server 镜像必须同一 semver。
+完整架构先看 [architecture.md](architecture.md)。
 
-## 两种用法（二选一）
-
-| | 给谁 | 做什么 |
-|---|---|---|
-| **A. Agent Skill** | Cursor / Codex / Claude Code | 把本目录拷进 skills 路径，在宿主仓库里说一句即可 |
-| **B. 粘贴给任意 LLM** | ChatGPT、Claude、未装 skill 的 Cursor… | 跑下面的 bash，把输出整段贴进对话 |
-
-人只需要确认三件事：`projectId`、Server 地址 / API key、稳定的登录用户 id（`getMemorySubjectId`）。不要用会轮换的 access token。
-
-### A. 安装为 Agent Skill
-
-把**整个目录**拷过去（不能只拷 `SKILL.md`）：
+## 它到底做什么
 
 ```text
-~/.cursor/skills/spotlight-integrate/          # 本机 Cursor
-<app>/.cursor/skills/spotlight-integrate/      # 只给这个仓库
+现有 Vue 应用
+Store / Service / Router / 页面引擎
+        ↓
+spotlight-integrate（开发阶段 Coding Agent）
+        ↓
+Client Tools + Skills + uiContext + Project Pack
+        ↓
+Spotlight Server + LLM（运行阶段 Runtime Agent）
+        ↓
+用户自然语言调用原有业务能力
+```
+
+因此，“只靠这个 Skill”指的是：**开发 Agent 可以按本目录说明完成 Agent 化改造**；最终运行仍需要 Spotlight SDK、Spotlight Server 和目标 LLM。
+
+## 两种使用方式
+
+### A. 安装成 Agent Skill
+
+复制整个目录：
+
+```text
+~/.cursor/skills/spotlight-integrate/
+<app>/.cursor/skills/spotlight-integrate/
 <app>/.codex/skills/spotlight-integrate/
 <app>/.claude/skills/spotlight-integrate/
 ```
 
-然后在**宿主前端仓库**对 agent 说：
+然后在宿主仓库中说：
 
+```text
+Use spotlight-integrate. Agentize this app with Spotlight. Follow architecture.md and standard.md.
 ```
-Use spotlight-integrate. Follow standard.md. Distill this app into Spotlight.
-```
 
-### B. Bash → 粘贴给大模型（推荐给没有 Skill 目录的环境）
-
-在本目录执行：
+### B. 粘贴给任意 LLM
 
 ```bash
-./prompt.sh              # 打印完整提示词
-./prompt.sh --copy       # 打印并复制到剪贴板（macOS / wl-clipboard / xclip）
+./prompt.sh
+./prompt.sh --copy
 ./prompt.sh -o /tmp/spotlight-integrate.prompt.md
+./prompt.sh --check
 ```
 
-从 SDK 仓库根也可以：
+`prompt.sh` 会把完整 pack 按固定顺序展开；缺文件会直接失败。
 
-```bash
-bash skills/spotlight-integrate/prompt.sh --copy
-```
+## 新的 Agentization 流程
 
-把输出**原样**贴进正在打开宿主前端的 LLM 对话，并补一句：
+| Stage | 目的 | 主要输出 |
+|---|---|---|
+| 0 | 兼容性预检 + 前端能力地图 | `COMPATIBILITY.md`, `FRONTEND_OVERVIEW.md` |
+| 1 | 从 Router/Store/Service/UI 中抽取候选能力 | `candidates/*` |
+| 1.5 | 验证并分类 | `DIRECT / REFACTOR / GATED / REJECT` |
+| 2 | 生成薄 Client Tool 适配器 | `src/spotlight/tools.ts` |
+| 3 | 按业务域生成 Skills | `.inupedia/skills/**/SKILL.md` |
+| 4 | Gold prompts + 压测设计 | `gold-questions.md` / benchmark |
+| 5 | Vue/Vite/Server Project Pack 接线 | config / env / project pack |
+| 6 | 输出可验收结果 | `INTEGRATION_REPORT.md` |
 
-```
-上面是 spotlight-integrate skill pack。按 SKILL.md 流水线蒸馏当前这个 Vue 仓库。
-先读 STANDARD 和 TESTING。不要抄例子里的工具名和目录以外的业务名词。
-```
+## 四类能力
 
-脚本会按固定顺序打出 `SKILL.md`、`standard.md`、`testing.md`、流水线、抽取器、模板。缺文件会直接失败，避免贴一份残包。
+- `DIRECT`：已有稳定导出、可说、可安全暴露 → 直接包 Tool。
+- `REFACTOR`：真实能力存在，但逻辑困在组件内部 → 允许时先做行为不变的抽取。
+- `GATED`：删除、支付、提交订单、转账、wipe 等高风险动作 → 默认不自动暴露。
+- `REJECT`：虚构能力、渲染内部函数、任意方法/DOM/脚本执行器 → 永不暴露。
 
-## 宿主会得到什么（新项目标准布局）
+这样最终“没做成 Tool”的能力也有明确原因，不再简单算作完成度不足。
+
+## 兼容性
+
+当前自动接线路径以 **Vue 3 + Vite** 为目标，但 Skill 不会对其他项目直接失明：
+
+- Vue 3 + Vite + peer compatible → `READY`
+- Vue 3 + Vite 但 Vue/Pinia/Node 与发布包 peer 不匹配 → `UPGRADE_REQUIRED`
+- Vue 3 非 Vite → `BUILD_MIGRATION_REQUIRED`
+- Vue 2 / 非 Vue → `UNSUPPORTED_AUTOMATION`
+
+非 `READY` 状态仍会完成能力分析，但不会擅自改构建系统或强装依赖。
+
+Spotlight npm 包版本必须从 **registry** 验证；不要假设 GitHub `main` 与 npm 已发布版本一致。
+
+## 宿主生成结构
 
 ```text
 <app>/
-├── src/spotlight/config.ts              # defineSpotlightConfig
-├── src/spotlight/tools.ts               # defineClientTool + spotlightTools
-├── src/main.ts                          # app.use(SpotlightVue)
-├── vite.config.ts                       # spotlightClientTools 插件
-├── .env.example                         # 仅 VITE_SPOTLIGHT_*
+├── src/spotlight/
+│   ├── config.ts
+│   └── tools.ts
 ├── .inupedia/skills/
-│   ├── skill.knowledge/SKILL.md         # 必有，不调 Client Tool
+│   ├── skill.knowledge/SKILL.md
 │   └── skill.<domain>/SKILL.md
-├── spotlight-project/                   # Server Project Pack
+├── spotlight-project/
 │   ├── spotlight.project.yml
 │   ├── system-prompt.md
 │   ├── ui-prompts.json
-│   ├── .env.example
-│   └── docker-compose.yml
-└── .spotlight-integrate/                # 蒸馏过程（可 gitignore）
+│   └── .env.example
+└── .spotlight-integrate/
+    ├── COMPATIBILITY.md
+    ├── FRONTEND_OVERVIEW.md
+    ├── verified.md
+    ├── leftovers.md
+    ├── gold-questions.md
+    ├── benchmark-results.md       # live benchmark 才有
+    └── INTEGRATION_REPORT.md
 ```
 
-完整约定：[standard.md](standard.md)。测试：[testing.md](testing.md)。代码片段：[templates.md](templates.md)。形状示例（禁止照抄名字）：[examples.md](examples.md)。
+旧项目已有 Spotlight 路径时，**原地扩展，不为了对齐模板搬家**。
 
-### 已经接过 Spotlight 的仓库
+## 为什么不做 DOM 自动化
 
-不要为了「对齐标准路径」搬家。
+Spotlight 推荐：
 
-- Tools 已在别的文件（例如 `src/project/agent/tools.ts`）→ **继续用那个文件**，Vite `include` 指向它。
-- Config 已在 `src/service/spotlight.ts` / 仓库根 `spotlight.config.ts` → **继续用**，不要再生成第二份 `src/spotlight/config.ts`。
-- `projectId` 已存在 → 四处保持同一个，不要另起一个。
-- `videoChannels`、`quickPanelActions`、`catalogOverlay`、数字人 avatar 是**可选产品能力**，宿主没有对应 UI 就不要生成。
+```text
+自然语言 → Skill → Client Tool → 原 Store/Service/Router
+```
 
-新项目用标准路径；旧项目只补缺的 Skills / 黄金问句 / Pack，不重构目录。
+而不是：
 
-## 分工（不要写反）
+```text
+自然语言 → CSS Selector → 模拟鼠标点击
+```
 
-| 放宿主 | 放 Server |
-|---|---|
-| `defineClientTool` 包装**已有**页面函数 | LangGraph 路由、Knowledge / Action |
-| `.inupedia/skills/**/SKILL.md`（何时用哪个 Tool） | 知识库、联网搜索 Provider |
-| `getUiContext`、稳定 `getMemorySubjectId` | Checkpointer / Store / Memory Gate |
-| 地图、播放器、Pinia、Vue Router | `spotlight.project.yml` 里的 Provider |
+前者复用原业务约束、类型、状态和测试，稳定性更高；只有没有稳定业务入口时才把组件逻辑列为 `REFACTOR`。
 
-硬规则：没有宿主导出函数就不是 Client Tool；Skill 的 `allowed-tools` 必须是已注册导出；「有哪些」走 `get*`，「查看 + 具体名称」走 `open*`/`play*`。
+## Router 边界
 
-## 人要填的环境
+通用 Spotlight Server **不能写死产品语义**。业务 Skill id、商品名、BIM 名称、监控工具名等都应留在宿主 Skill / Tool description / schema / uiContext 中。
 
-前端 `<app>/.env`：
+Server 只处理通用语义：read/list、named open/view、mutation、clarify 等。
 
-```bash
-VITE_SPOTLIGHT_PROJECT_ID=<kebab-case>
+## 测试不是一件事
+
+静态检查只能证明“接线一致”，不能证明 LLM 准确率。最终报告分别给出：
+
+- Route Accuracy
+- Skill Accuracy
+- Tool Accuracy
+- Argument Accuracy
+- E2E Success Rate
+- Clarification Accuracy
+- Unsafe Execution Rate
+
+没有真实 Spotlight Server + 目标模型运行时，必须写：`LIVE BENCHMARK: NOT RUN`。
+
+生产级建议使用 **100+ Gold Prompts**；简单接入先做 8–20 条 smoke set。详见 [testing.md](testing.md)。
+
+## 环境与启动
+
+前端：
+
+```env
+VITE_SPOTLIGHT_PROJECT_ID=<projectId>
 VITE_SPOTLIGHT_SERVER_URL=/spotlight-api
 VITE_SPOTLIGHT_API_KEY=local-dev-key
 ```
 
-Vite 把 `/spotlight-api` 代理到 `http://127.0.0.1:8787`。
+Server Provider key 不得放进 `VITE_*`。
 
-Server `spotlight-project/.env`：`SPOTLIGHT_API_KEYS`、Postgres、LLM、知识库、搜索。LLM key **不要**放进 `VITE_*`。
-
-## 启动与验收
+标准启动：
 
 ```bash
 cd spotlight-project && docker compose up -d
 curl -sfS http://127.0.0.1:8787/health
-# 再启动 Vite，用 .spotlight-integrate/gold-questions.md 里的问句试命令栏
+# 再启动宿主 Vite 应用，运行 gold prompts
 ```
 
-镜像 tag = npm 版本：`ghcr.io/inupedia/spotlight-server:<ver>`。
+完整约定：[standard.md](standard.md)。Skill 入口：[SKILL.md](SKILL.md)。测试：[testing.md](testing.md)。
 
-静态检查命令在 [testing.md](testing.md)：Skill 工具名 ⊆ 导出、`projectId` 四处一致、每个 list+open 域都有黄金问句。
-
-## 本目录（给拷贝 / bash 打包用）
+## 本目录
 
 ```text
 spotlight-integrate/
-├── prompt.sh                 # 打出可粘贴提示词
-├── README.md                 # 本文件
-├── SKILL.md                  # agent 入口与流水线
-├── standard.md               # 安装、目录、命名、env、启动
-├── testing.md                # 黄金问句与静态/live 检查
+├── README.md
+├── SKILL.md
+├── architecture.md
+├── standard.md
+├── testing.md
+├── prompt.sh
 ├── templates.md
 ├── examples.md
-├── methodology/              # stage 0 → 5
+├── methodology/              # stage 0 -> 6
 └── extractors/
 ```
 
-Agent 内部顺序：`standard.md` → `testing.md` → `SKILL.md` 流水线。`examples.md` 只说明形状。
-
-## 手工接入（不跑蒸馏时）
-
-仍可自己写 Tool / Skill，见仓库 [docs/client-tools.md](../../docs/client-tools.md) 与 [docs/server-deployment.md](../../docs/server-deployment.md)。本 skill 是「从现成前端生成那套文件」的自动化，不是另一套 API。
+手工接入仍可参考仓库 `docs/client-tools.md` 与 `docs/server-deployment.md`。本 Skill 只是把“从现有前端蒸馏出这套适配层”的方法标准化、自动化和可验收化。

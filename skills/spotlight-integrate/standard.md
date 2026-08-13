@@ -1,12 +1,10 @@
 # Spotlight host-app standard
 
-This file is the **only** contract for install, directory layout, naming, env, and boot. Do not copy another product’s folders, tool names, or catalog strings.
+This file is the **single contract** for compatibility, install, directory layout, naming, env, and boot. Do not copy another product's folders, tool names, or catalog strings.
 
 ## 1. Install this Agent Skill (human, once)
 
-Two ways. Details and host leftovers: [README.md](README.md).
-
-**A. Copy the entire directory** (not only `SKILL.md`):
+Copy the **entire** `spotlight-integrate/` directory, not only `SKILL.md`.
 
 | Agent | Path |
 |---|---|
@@ -15,116 +13,152 @@ Two ways. Details and host leftovers: [README.md](README.md).
 | Codex | `<app>/.codex/skills/spotlight-integrate/` |
 | Claude Code | `<app>/.claude/skills/spotlight-integrate/` |
 
-Then in the **host frontend** chat:
+Then in the host frontend chat:
 
 ```
-Use spotlight-integrate. Follow standard.md. Distill this app into Spotlight.
+Use spotlight-integrate. Follow architecture.md and standard.md. Agentize this app with Spotlight.
 ```
 
-**B. Paste into any LLM** that already has the host repo open:
+Or use `./prompt.sh --copy` and paste the generated pack into an LLM that already has the host repo open.
+
+## 2. Compatibility preflight (before coding)
+
+Read `package.json`, lockfiles, Node engine, and existing Spotlight dependencies. Write `.spotlight-integrate/COMPATIBILITY.md`.
+
+### Host classification
+
+| Status | Condition | Action |
+|---|---|---|
+| `READY` | Vue 3 + Vite + compatible Spotlight peer ranges | continue |
+| `UPGRADE_REQUIRED` | Vue 3 + Vite but target Spotlight peer ranges do not include host Vue/Pinia/Node | report exact mismatch; do not force upgrade |
+| `BUILD_MIGRATION_REQUIRED` | Vue 3 but no Vite | analyze capabilities; stop before build migration unless requested |
+| `UNSUPPORTED_AUTOMATION` | Vue 2 or non-Vue | readiness report only for current skill |
+
+### Registry version check
+
+Use the registry as the install source of truth:
 
 ```bash
-./prompt.sh --copy
+npm view @inupedia/spotlight-vue version peerDependencies --json
+npm view @inupedia/spotlight-client version --json
+npm view @inupedia/spotlight-protocol version --json
 ```
 
-Paste the clipboard, then: follow `SKILL.md`; do not copy example names.
+All installed `@inupedia/spotlight-*` packages must resolve to one compatible version. Do not assume GitHub `main` equals the latest published npm version. If registry lookup is unavailable, mark version verification `BLOCKED` instead of guessing.
 
-This skill’s own tree must stay intact:
+### Package manager
 
-```
-spotlight-integrate/
-├── prompt.sh                # dump pack for any LLM
-├── SKILL.md                 # agent entry
-├── README.md                # human entry
-├── standard.md              # this file
-├── testing.md               # gold questions + static/live checks
-├── templates.md             # copy-paste file snippets (generic names)
-├── examples.md              # shape only — never copy names into the host
-├── methodology/             # stages 0–5
-└── extractors/              # candidate finders
-```
+Preserve the host package manager:
 
-Do not start coding until `methodology/` and `extractors/` sit next to `SKILL.md` (or the pasted prompt includes them).
+- `pnpm-lock.yaml` -> pnpm
+- `yarn.lock` -> yarn
+- `package-lock.json` -> npm
+- no lockfile -> use the package manager declared by `packageManager`, otherwise ask only if installation is required
 
-## 2. Host app directory structure (generated)
+Do not add a second lockfile.
 
-```
+## 3. Host app directory structure (generated)
+
+```text
 <app>/
 ├── package.json
-├── vite.config.ts
-├── .env.example                         # frontend VITE_SPOTLIGHT_* only
+├── vite.config.*
+├── .env.example
 ├── .inupedia/
 │   └── skills/
-│       ├── skill.knowledge/SKILL.md     # required
-│       └── skill.<domain>/SKILL.md      # one folder per domain
+│       ├── skill.knowledge/SKILL.md
+│       └── skill.<domain>/SKILL.md
 ├── src/
-│   ├── main.ts                          # app.use(SpotlightVue)
+│   ├── main.*
 │   └── spotlight/
-│       ├── config.ts                    # defineSpotlightConfig
-│       ├── tools.ts                     # defineClientTool exports + spotlightTools
-│       └── actions/                     # OPTIONAL: extracted handlers (<40 lines)
-├── spotlight-project/                   # Server Project Pack (not the SDK)
+│       ├── config.ts
+│       ├── tools.ts
+│       └── actions/                    # optional behavior-preserving extractions
+├── spotlight-project/
 │   ├── spotlight.project.yml
 │   ├── system-prompt.md
 │   ├── ui-prompts.json
 │   ├── .env.example
 │   └── docker-compose.yml
-└── .spotlight-integrate/                # distillation working dir
+└── .spotlight-integrate/
     ├── PIPELINE_STATE.md
+    ├── COMPATIBILITY.md
     ├── FRONTEND_OVERVIEW.md
     ├── candidates/
     ├── rejected/
     ├── verified.md
+    ├── leftovers.md
     ├── gold-questions.md
-    └── leftovers.md
+    ├── benchmark-results.md            # only when live benchmark ran
+    └── INTEGRATION_REPORT.md
 ```
 
-If the host already has tools or `defineSpotlightConfig` elsewhere, keep those paths and set Vite `include` to the existing tools file. Do not create a second tools file or a second `projectId`. Do not generate `videoChannels` / `quickPanelActions` / avatar unless this host already has that UI.
+If the host already has tools or `defineSpotlightConfig` elsewhere, reuse those paths and point the Vite plugin at the existing tools module. Never create a second tools entrypoint or `projectId`.
 
-## 3. Naming
+## 4. Naming
 
-| Thing | Rule | Example (shape only) |
+| Thing | Rule | Shape-only example |
 |---|---|---|
-| `projectId` | kebab-case; identical in Vite plugin, config, `spotlight.project.yml`, `VITE_SPOTLIGHT_PROJECT_ID` | `media-console` |
-| Client Tool | camelCase, verb-first export | `getItemList`, `openItem`, `closeItem` |
-| Skill id | `skill.` + dotted domain | `skill.knowledge`, `skill.items` |
+| `projectId` | kebab-case; identical in Vite plugin, config, yml, env | `media-console` |
+| Client Tool | camelCase, verb-first export | `getItemList`, `openItem`, `addItem` |
+| Skill id | `skill.` + dotted domain | `skill.items` |
 | Skill folder | equals id | `.inupedia/skills/skill.items/SKILL.md` |
-| npm + image | one semver for all `@inupedia/spotlight-*` and `ghcr.io/inupedia/spotlight-server:<ver>` | output of `npm view @inupedia/spotlight-vue version` |
+| npm packages | exact same published version | `0.x.y` |
 
-Read catalog strings, route titles, and button labels from **this** host repo. Never reuse names from [examples.md](examples.md) or [templates.md](templates.md).
+Read names, route titles, and button labels from **this** host repo.
 
-## 4. Install SDK into the host (agent, stage 5)
+## 5. Install SDK into a compatible host (stage 5)
+
+Use the host package manager and exact verified version `<ver>`.
 
 ```bash
-pnpm add @inupedia/spotlight-client@<ver> \
-         @inupedia/spotlight-protocol@<ver> \
-         @inupedia/spotlight-vue@<ver>
+# pnpm
+pnpm add @inupedia/spotlight-client@<ver> @inupedia/spotlight-protocol@<ver> @inupedia/spotlight-vue@<ver>
+
+# npm
+npm install @inupedia/spotlight-client@<ver> @inupedia/spotlight-protocol@<ver> @inupedia/spotlight-vue@<ver>
+
+# yarn
+yarn add @inupedia/spotlight-client@<ver> @inupedia/spotlight-protocol@<ver> @inupedia/spotlight-vue@<ver>
 ```
 
-`<ver>` = `npm view @inupedia/spotlight-vue version` unless the user pinned it.
+Before installing, verify `@inupedia/spotlight-vue@<ver>` peer dependencies include the host versions. Never use `--force` or `--legacy-peer-deps` to hide a mismatch.
 
-Required wiring (snippets in [templates.md](templates.md)):
+Required wiring:
 
 1. Vite plugin `spotlightClientTools({ projectId, frontendBuildId, include })`
 2. `src/spotlight/config.ts` + `loadBundledSkillsFromGlob('.inupedia/skills/**/SKILL.md')`
-3. `main.ts`: css import + `app.use(SpotlightVue, { config, enabled: true })`
-4. Dev proxy: frontend `VITE_SPOTLIGHT_SERVER_URL` → Spotlight Server `:8787`
+3. `main.*`: Spotlight CSS + `app.use(SpotlightVue, { config, enabled: true })`
+4. Dev proxy: frontend `VITE_SPOTLIGHT_SERVER_URL` -> Spotlight Server `:8787`
 
-## 5. Environment
+## 6. Client Tool contract
 
-**Frontend** `<app>/.env.example`:
+Every generated Tool must:
 
-```
+- call an existing host function/export;
+- have JSDoc immediately above `defineClientTool`;
+- expose the narrowest input schema needed by the host capability;
+- declare correct `sideEffect`, `replayPolicy`, `riskLevel`, and confirmation requirements supported by the runtime;
+- avoid returning entire stores or arbitrary internal objects when a small result is enough;
+- never provide a generic `invokeStoreMethod(name, args)` or DOM selector escape hatch.
+
+`DIRECT` capabilities become Tools. `REFACTOR` capabilities become Tools only after an approved behavior-preserving extraction. `GATED` capabilities are not auto-exposed.
+
+## 7. Environment
+
+Frontend `<app>/.env.example`:
+
+```env
 VITE_SPOTLIGHT_PROJECT_ID=<projectId>
 VITE_SPOTLIGHT_SERVER_URL=/spotlight-api
 VITE_SPOTLIGHT_API_KEY=local-dev-key
 ```
 
-Vite proxy `/spotlight-api` → `http://127.0.0.1:8787`.
+Vite proxy `/spotlight-api` -> `http://127.0.0.1:8787`.
 
-**Server** `spotlight-project/.env.example`:
+Server `spotlight-project/.env.example`:
 
-```
+```env
 SPOTLIGHT_API_KEYS=local-dev-key
 SPOTLIGHT_POSTGRES_PASSWORD=spotlight
 CORS_ORIGIN=http://localhost:5173
@@ -138,30 +172,36 @@ TAVILY_API_BASE=
 TAVILY_API_KEY=
 ```
 
-Never copy host secrets into Skills. Never put LLM keys in `VITE_*`.
+Never copy host secrets into Skills. Never put LLM/provider keys in `VITE_*`.
 
-## 6. Boot order
+## 8. Boot order
 
 1. `cd spotlight-project && docker compose up -d`
 2. `curl -sfS http://127.0.0.1:8787/health`
-3. Start the Vite app
-4. Open the Spotlight command UI and run [testing.md](testing.md) gold prompts
+3. Start the host Vite app with its existing package manager/script
+4. Open the Spotlight command UI and run [testing.md](testing.md)
 
-## 7. Definition of done
+## 9. Definition of done
 
-Integration is done only when **all** of these hold:
+Integration is done only when all applicable gates hold:
 
-- Layout matches §2 (or an existing tools path is reused, not duplicated)
-- `skill.knowledge` exists
-- every Skill `allowed-tools` name is an export in the tools module
-- gold file uses the table in [testing.md](testing.md)
-- list+open domains have both gold rows
-- wrap-up lists env keys, boot order, and leftovers
+- compatibility is `READY`, or blockers are explicitly documented and wiring was not falsely claimed complete;
+- every discovered user-facing capability is classified `DIRECT / REFACTOR / GATED / REJECT`;
+- every `DIRECT` capability selected for exposure is wrapped;
+- `skill.knowledge` exists;
+- every Skill `allowed-tools` name is an exported registered Client Tool;
+- projectId is identical across Vite/config/project/env;
+- smoke gold rows cover all actionable Skills;
+- static checks pass;
+- `INTEGRATION_REPORT.md` distinguishes static readiness from live accuracy;
+- live metrics are reported only if the Server + target LLM actually ran.
 
-## 8. What must not appear in the host app
+## 10. What must not appear in the host app
 
-- LangGraph / custom planner
-- Copied `SKILL.md` onto the Server image (browser sends Skills per run)
-- A second `projectId`
-- Client Tools that do not call an existing host function
-- Catalog names, tool names, or domains copied from this skill’s examples
+- LangGraph/custom planner added solely for Spotlight integration
+- copied product-specific Skill ids/tool names from the integration pack
+- a second `projectId`
+- Client Tools that do not reach an existing host capability
+- forced peer-dependency installation
+- DOM-click automation where a stable Store/Service/Router capability exists
+- claims such as “95% accuracy” derived only from grep/static checks
