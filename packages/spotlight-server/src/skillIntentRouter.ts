@@ -72,13 +72,7 @@ function inferOpenTool(
   const explicitlyOpen = tools.filter((tool) =>
     OPEN_TOOL_NAME_PATTERN.test(tool.name),
   );
-  if (explicitlyOpen.length === 1) return explicitlyOpen[0];
-
-  const singleStringTarget = tools.filter(
-    (tool) => requiredStringInputKeys(tool).length === 1,
-  );
-  if (singleStringTarget.length === 1) return singleStringTarget[0];
-  return null;
+  return explicitlyOpen.length === 1 ? explicitlyOpen[0] : null;
 }
 
 function registeredToolMap(clientTools: FrontendToolDescriptorV1[]) {
