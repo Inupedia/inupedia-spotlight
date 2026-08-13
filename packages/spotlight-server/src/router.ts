@@ -27,10 +27,42 @@ const skillToolSelectionSchema = z.object({
   toolInput: z.record(z.string(), z.unknown()).default({}),
 });
 
+const TARGET_REQUIRED_ACTION_EVIDENCE =
+  /^(?:打开|播放|进入|定位|显示|查看|open|play|enter|locate|show|view)$/iu;
+const UNRESOLVED_REFERENTIAL_TARGET =
+  /^(?:这个|那个|它|这个东西|那个东西|刚才那个|刚才的|上一个|前一个|this|this one|that|that one|it|the one)$/iu;
+
 export interface RouteContext {
   isReferential?: boolean;
   lastAssistantReply?: string | null;
   conversationContext?: string;
+}
+
+function hasUsableReferentialContext(context?: RouteContext): boolean {
+  return Boolean(
+    context?.lastAssistantReply?.trim() || context?.conversationContext?.trim(),
+  );
+}
+
+export function hasUnresolvedExplicitActionTarget(
+  question: string,
+  actionEvidence: string,
+  context?: RouteContext,
+): boolean {
+  if (!TARGET_REQUIRED_ACTION_EVIDENCE.test(actionEvidence)) return false;
+  if (hasUsableReferentialContext(context)) return false;
+  const lowerQuestion = question.toLocaleLowerCase();
+  const lowerEvidence = actionEvidence.toLocaleLowerCase();
+  const evidenceIndex = lowerQuestion.indexOf(lowerEvidence);
+  if (evidenceIndex < 0) return false;
+  const target = question
+    .slice(evidenceIndex + actionEvidence.length)
+    .trim()
+    .replace(/^[，,：:\s]+|[。.!！?？]+$/gu, "")
+    .trim();
+  if (!target) return true;
+  if (context?.isReferential === true) return true;
+  return UNRESOLVED_REFERENTIAL_TARGET.test(target);
 }
 
 export interface IntentRouter {
@@ -194,6 +226,23 @@ export class LangChainIntentRouter implements IntentRouter {
 
     const explicitActionEvidence = extractActionEvidence(question);
     if (explicitActionEvidence) {
+      if (
+        hasUnresolvedExplicitActionTarget(
+          question,
+          explicitActionEvidence,
+          context,
+        )
+      ) {
+        return {
+          route: "clarify",
+          confidence: 1,
+          reason:
+            "The action verb requires a target, but the latest message contains only an unresolved or missing reference.",
+          requestedToolNames: [],
+          explicitActionEvidence,
+          matchedSkillNames: [],
+        };
+      }
       return {
         route: "action",
         confidence: 1,
