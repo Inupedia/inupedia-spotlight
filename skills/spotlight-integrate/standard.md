@@ -164,11 +164,14 @@ For React/other frameworks with `ui adapter = ADAPTER_REQUIRED`, do **not** inst
 Every generated Tool must:
 
 - call an existing host function/export;
+- preserve the host application's authorization checks and backend permission enforcement;
 - have JSDoc immediately above `defineClientTool`;
 - expose the narrowest input schema needed by the host capability;
 - declare correct `sideEffect`, `replayPolicy`, `riskLevel`, and confirmation requirements supported by the runtime;
 - avoid returning entire stores or arbitrary internal objects when a small result is enough;
 - never provide a generic `invokeStoreMethod(name, args)` or DOM selector escape hatch.
+
+**Authorization rule:** static Skill/Tool declarations describe capability; they never grant permission. If availability depends on the current role, tenant, record ownership, workflow state, feature flag, or another live host condition, keep that guard in the host and include the capability in the live Tool set only when it is currently available. The Tool handler/backend must re-check authorization at execution time. Never duplicate or weaken product-specific RBAC/ABAC rules inside the generic Spotlight Server.
 
 `DIRECT` capabilities become Tools. `REFACTOR` capabilities become Tools only after an approved behavior-preserving extraction. `GATED` capabilities are not auto-exposed.
 
@@ -223,6 +226,7 @@ Integration is done only when all applicable gates hold:
 - `skill.knowledge` exists;
 - every Skill `allowed-tools` name is an exported registered Client Tool;
 - projectId is identical across Tool compiler/config/project/env;
+- host authorization, record-ownership, and workflow-state guards still protect every exposed capability, and Tool registration is never treated as permission;
 - smoke gold rows cover all actionable Skills;
 - static checks pass;
 - `INTEGRATION_REPORT.md` distinguishes static readiness, Core Agentization, UI embedding, and live accuracy;
@@ -239,4 +243,5 @@ A project may be Core-Agentized and benchmarked successfully while its visual ad
 - forced peer-dependency installation
 - framework-specific package installation into an incompatible host
 - DOM-click automation where a stable Store/Service/Router capability exists
+- authorization bypasses or generic Server copies of product-specific RBAC/ABAC rules
 - claims such as “95% accuracy” derived only from grep/static checks
