@@ -28,9 +28,15 @@ const skillToolSelectionSchema = z.object({
 });
 
 const TARGET_REQUIRED_ACTION_EVIDENCE =
-  /^(?:打开|播放|进入|定位|显示|查看|open|play|enter|locate|show|view)$/iu;
+  /^(?:打开|播放|进入|定位|显示|查看|删除|移除|修改|编辑|取消|open|play|enter|locate|show|view|delete|remove|update|edit|cancel)$/iu;
+const TARGET_REQUIRED_ACTION_SCAN =
+  /(?:打开|播放|进入|定位|显示|查看|删除|移除|修改|编辑|取消|open|play|enter|locate|show|view|delete|remove|update|edit|cancel)/iu;
 const UNRESOLVED_REFERENTIAL_TARGET =
-  /^(?:这个|那个|它|这个东西|那个东西|刚才那个|刚才的|上一个|前一个|this|this one|that|that one|it|the one)$/iu;
+  /^(?:这个|那个|它|这个东西|那个东西|刚才那个|刚才的|上一个|前一个|这位|那位|this|this one|that|that one|it|the one)$/iu;
+const UNRESOLVED_CHINESE_DEICTIC_TARGET =
+  /^(?:这个|那个|刚才那个|刚才的|上一个|前一个|这位|那位)[\p{Script=Han}]{1,8}$/u;
+const UNRESOLVED_ENGLISH_DEICTIC_TARGET =
+  /^(?:this|that|the previous|the last)\s+[a-z][a-z -]{0,32}$/iu;
 
 export interface RouteContext {
   isReferential?: boolean;
@@ -41,6 +47,19 @@ export interface RouteContext {
 function hasUsableReferentialContext(context?: RouteContext): boolean {
   return Boolean(
     context?.lastAssistantReply?.trim() || context?.conversationContext?.trim(),
+  );
+}
+
+function extractTargetRequiredActionEvidence(question: string): string | null {
+  const match = question.match(TARGET_REQUIRED_ACTION_SCAN);
+  return match?.[0] ?? null;
+}
+
+function isUnresolvedReferentialTarget(target: string): boolean {
+  return (
+    UNRESOLVED_REFERENTIAL_TARGET.test(target) ||
+    UNRESOLVED_CHINESE_DEICTIC_TARGET.test(target) ||
+    UNRESOLVED_ENGLISH_DEICTIC_TARGET.test(target)
   );
 }
 
@@ -62,7 +81,56 @@ export function hasUnresolvedExplicitActionTarget(
     .trim();
   if (!target) return true;
   if (context?.isReferential === true) return true;
-  return UNRESOLVED_REFERENTIAL_TARGET.test(target);
+  return isUnresolvedReferentialTarget(target);
+}
+
+function hasUsableRequiredValue(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+export function missingRequiredToolInputKeys(
+  decision: IntentDecision,
+  clientTools: FrontendToolDescriptorV1[],
+): string[] {
+  if (decision.route !== "action" || decision.requestedToolNames.length !== 1) {
+    return [];
+  }
+  const selectedTool = clientTools.find(
+    (tool) => tool.name === decision.requestedToolNames[0],
+  );
+  if (!selectedTool) return [];
+  const required = Array.isArray(selectedTool.inputSchema?.required)
+    ? selectedTool.inputSchema.required.filter(
+        (field): field is string => typeof field === "string",
+      )
+    : [];
+  const input = decision.requestedToolInput ?? {};
+  return required.filter((field) => !hasUsableRequiredValue(input[field]));
+}
+
+export function applyToolInputCompletenessFence(
+  decision: IntentDecision,
+  clientTools: FrontendToolDescriptorV1[],
+): IntentDecision {
+  if (decision.route === "clarify") {
+    return {
+      ...decision,
+      requestedToolNames: [],
+      requestedToolInput: undefined,
+    };
+  }
+  const missing = missingRequiredToolInputKeys(decision, clientTools);
+  if (missing.length === 0) return decision;
+  return {
+    ...decision,
+    route: "clarify",
+    reason: `The selected client tool is missing required input: ${missing.join(", ")}.`,
+    requestedToolNames: [],
+    requestedToolInput: undefined,
+  };
 }
 
 export interface IntentRouter {
@@ -103,6 +171,7 @@ export class LangChainIntentRouter implements IntentRouter {
           "Select exactly one registered client tool for the latest user request.",
           "Use the matched Skill instructions, tool descriptions, and input schemas.",
           "Return only a toolName from the provided candidates. Never invent a name.",
+          "Extract only arguments explicitly present or unambiguously resolved from context; never fabricate required values.",
         ].join("\n"),
       ),
       new HumanMessage(
@@ -139,14 +208,14 @@ export class LangChainIntentRouter implements IntentRouter {
     IntentDecision,
     "requestedToolNames" | "requestedToolInput"
   >> {
+    if (route.route !== "action") {
+      return { requestedToolNames: [] };
+    }
     if (route.requestedToolNames.length > 0) {
       return {
         requestedToolNames: route.requestedToolNames,
         requestedToolInput: route.toolInput,
       };
-    }
-    if (route.route !== "action") {
-      return { requestedToolNames: [] };
     }
     const matchedSkills = skills.filter((skill) =>
       route.matchedSkillNames.includes(skill.name),
@@ -205,6 +274,28 @@ export class LangChainIntentRouter implements IntentRouter {
       };
     }
 
+    const explicitActionEvidence = extractActionEvidence(question);
+    const targetRequiredEvidence =
+      explicitActionEvidence ?? extractTargetRequiredActionEvidence(question);
+    if (
+      targetRequiredEvidence &&
+      hasUnresolvedExplicitActionTarget(
+        question,
+        targetRequiredEvidence,
+        context,
+      )
+    ) {
+      return {
+        route: "clarify",
+        confidence: 1,
+        reason:
+          "The action verb requires a target, but the latest message contains only an unresolved or missing reference.",
+        requestedToolNames: [],
+        explicitActionEvidence: targetRequiredEvidence,
+        matchedSkillNames: [],
+      };
+    }
+
     if (skills.length > 0) {
       const skillRoute = await routeViaSkillCatalog(
         this.model,
@@ -220,29 +311,14 @@ export class LangChainIntentRouter implements IntentRouter {
           clientTools,
           skillRoute,
         );
-        return applyIntentSafetyFence(question, decision);
+        return applyIntentSafetyFence(
+          question,
+          applyToolInputCompletenessFence(decision, clientTools),
+        );
       }
     }
 
-    const explicitActionEvidence = extractActionEvidence(question);
     if (explicitActionEvidence) {
-      if (
-        hasUnresolvedExplicitActionTarget(
-          question,
-          explicitActionEvidence,
-          context,
-        )
-      ) {
-        return {
-          route: "clarify",
-          confidence: 1,
-          reason:
-            "The action verb requires a target, but the latest message contains only an unresolved or missing reference.",
-          requestedToolNames: [],
-          explicitActionEvidence,
-          matchedSkillNames: [],
-        };
-      }
       return {
         route: "action",
         confidence: 1,
