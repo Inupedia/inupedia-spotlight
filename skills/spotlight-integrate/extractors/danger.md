@@ -11,12 +11,16 @@ Classify as `GATED` when the host really exposes the behavior but autonomous exe
 - grant/revoke privileged access
 - logout/revoke token/session invalidation
 - production POST/PUT/PATCH action with irreversible consequences or an existing confirmation ceremony
+- **transitive route writes**: navigation/route params/query that cause a target page, guard, loader, `onMounted`, or watcher to commit server state
+
+For transitive route writes, do not treat `router.push()` as the real capability. Trace the arrival path to the actual write (`createReservation`, `submitApplication`, `approveRequest`, etc.). Prefer an explicit action Tool only after the underlying host behavior has a safe callable boundary and Spotlight confirmation policy. Never use navigation itself to bypass the original confirmation ceremony.
 
 Record:
 
 - exact host symbol and UI entry
 - risk level (`high` unless evidence says otherwise)
 - whether the original UI already asks for confirmation
+- whether the write is direct or transitive through route/lifecycle behavior
 - what explicit user approval/runtime confirmation design would be required before exposure
 
 Do not auto-add these to `verified.md`.
@@ -37,5 +41,6 @@ Keep as ordinary candidates with accurate risk metadata when the product already
 - stop/close a viewer that can immediately be reopened
 - exit focus/fullscreen mode
 - change a local filter/tab/selection
+- navigate to a route that has been verified not to trigger external/server writes on arrival
 
 Do not mark simple UI state changes as dangerous merely because they mutate Pinia/router state.
