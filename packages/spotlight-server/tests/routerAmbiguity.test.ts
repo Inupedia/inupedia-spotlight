@@ -4,6 +4,7 @@ import type { FrontendToolDescriptorV1 } from "@inupedia/spotlight-protocol";
 import {
   applyToolInputCompletenessFence,
   hasUnresolvedExplicitActionTarget,
+  invalidRequiredToolInputKeys,
   LangChainIntentRouter,
   missingRequiredToolInputKeys,
 } from "../src/router.js";
@@ -30,6 +31,54 @@ const bookAppointmentTool: FrontendToolDescriptorV1 = {
       appointmentTime: { type: "string" },
     },
     required: ["patientName", "appointmentTime"],
+  },
+  sideEffect: "external",
+  replayPolicy: "never",
+  riskLevel: "high",
+  requiresConfirmation: true,
+};
+
+const convertLeadTool: FrontendToolDescriptorV1 = {
+  name: "convertLead",
+  version: "1.0.0",
+  description: "将线索转换为客户",
+  inputSchema: {
+    type: "object",
+    properties: { id: { type: "integer" } },
+    required: ["id"],
+  },
+  sideEffect: "external",
+  replayPolicy: "never",
+  riskLevel: "high",
+  requiresConfirmation: true,
+};
+
+const returnWorkflowTaskTool: FrontendToolDescriptorV1 = {
+  name: "returnWorkflowTask",
+  version: "1.0.0",
+  description: "将流程任务退回指定节点",
+  inputSchema: {
+    type: "object",
+    properties: {
+      taskId: { type: "string" },
+      targetActivityId: { type: "string" },
+    },
+    required: ["taskId", "targetActivityId"],
+  },
+  sideEffect: "external",
+  replayPolicy: "never",
+  riskLevel: "high",
+  requiresConfirmation: true,
+};
+
+const flexibleIdTool: FrontendToolDescriptorV1 = {
+  name: "confirmPurchaseOrder",
+  version: "1.0.0",
+  description: "确认采购单",
+  inputSchema: {
+    type: "object",
+    properties: { id: { type: ["integer", "string"] } },
+    required: ["id"],
   },
   sideEffect: "external",
   replayPolicy: "never",
@@ -109,6 +158,66 @@ describe("required client-tool input routing", () => {
     expect(fenced.requestedToolNames).toEqual([]);
     expect(fenced.requestedToolInput).toBeUndefined();
     expect(fenced.matchedSkillNames).toEqual(["skill.appointments"]);
+  });
+
+  it("rejects a fabricated string when the required schema field is an integer", () => {
+    const decision: IntentDecision = {
+      route: "action",
+      confidence: 0.95,
+      reason: "lead skill matched",
+      requestedToolNames: ["convertLead"],
+      requestedToolInput: { id: "请提供线索ID" },
+      explicitActionEvidence: "skill:skill.crm.leads",
+      matchedSkillNames: ["skill.crm.leads"],
+    };
+
+    expect(invalidRequiredToolInputKeys(decision, [convertLeadTool])).toEqual([
+      "id",
+    ]);
+    const fenced = applyToolInputCompletenessFence(decision, [convertLeadTool]);
+    expect(fenced.route).toBe("clarify");
+    expect(fenced.requestedToolNames).toEqual([]);
+  });
+
+  it("rejects a generated placeholder even when the required field type is string", () => {
+    const decision: IntentDecision = {
+      route: "action",
+      confidence: 0.95,
+      reason: "workflow skill matched",
+      requestedToolNames: ["returnWorkflowTask"],
+      requestedToolInput: {
+        taskId: "T-91",
+        targetActivityId: "需要用户指定退回的目标节点ID",
+      },
+      explicitActionEvidence: "skill:skill.oa.workflow-tasks",
+      matchedSkillNames: ["skill.oa.workflow-tasks"],
+    };
+
+    expect(
+      invalidRequiredToolInputKeys(decision, [returnWorkflowTaskTool]),
+    ).toEqual(["targetActivityId"]);
+    const fenced = applyToolInputCompletenessFence(decision, [
+      returnWorkflowTaskTool,
+    ]);
+    expect(fenced.route).toBe("clarify");
+    expect(fenced.requestedToolNames).toEqual([]);
+  });
+
+  it("preserves a real host union schema instead of coercing a valid string id", () => {
+    const decision: IntentDecision = {
+      route: "action",
+      confidence: 0.95,
+      reason: "purchase skill matched",
+      requestedToolNames: ["confirmPurchaseOrder"],
+      requestedToolInput: { id: "100" },
+      explicitActionEvidence: "skill:skill.erp.purchase",
+      matchedSkillNames: ["skill.erp.purchase"],
+    };
+
+    expect(invalidRequiredToolInputKeys(decision, [flexibleIdTool])).toEqual([]);
+    const fenced = applyToolInputCompletenessFence(decision, [flexibleIdTool]);
+    expect(fenced.route).toBe("action");
+    expect(fenced.requestedToolInput).toEqual({ id: "100" });
   });
 
   it("keeps a complete schema-shaped action executable", () => {
