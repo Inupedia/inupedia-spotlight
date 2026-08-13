@@ -91,6 +91,16 @@ function hasUsableRequiredValue(value: unknown): boolean {
   return true;
 }
 
+function toolSchemaHasInputProperties(tool?: FrontendToolDescriptorV1): boolean {
+  if (!tool?.inputSchema || typeof tool.inputSchema !== "object") return false;
+  const properties = (tool.inputSchema as { properties?: unknown }).properties;
+  return Boolean(
+    properties &&
+      typeof properties === "object" &&
+      Object.keys(properties as Record<string, unknown>).length > 0,
+  );
+}
+
 export function missingRequiredToolInputKeys(
   decision: IntentDecision,
   clientTools: FrontendToolDescriptorV1[],
@@ -157,7 +167,11 @@ export class LangChainIntentRouter implements IntentRouter {
     const required = Array.isArray(onlyCandidate?.inputSchema.required)
       ? onlyCandidate.inputSchema.required
       : [];
-    if (candidates.length === 1 && required.length === 0) {
+    if (
+      candidates.length === 1 &&
+      required.length === 0 &&
+      !toolSchemaHasInputProperties(onlyCandidate)
+    ) {
       return { requestedToolNames: [onlyCandidate.name] };
     }
     if (candidates.length === 0) return { requestedToolNames: [] };
