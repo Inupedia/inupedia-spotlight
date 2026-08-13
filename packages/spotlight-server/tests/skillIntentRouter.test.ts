@@ -28,6 +28,13 @@ const cartSkill = {
   responseStrategy: "tool_answer" as const,
 };
 
+const reservationSkill = {
+  name: "skill.reservations",
+  description: "图书预约",
+  allowedTools: ["getReservationList", "reserveBookByTitle"],
+  responseStrategy: "tool_answer" as const,
+};
+
 const clientTools = [
   {
     name: "getProductList",
@@ -101,6 +108,29 @@ const clientTools = [
     sideEffect: "ui" as const,
     replayPolicy: "never" as const,
     riskLevel: "medium" as const,
+  },
+  {
+    name: "getReservationList",
+    version: "1.0.0",
+    description: "查看当前预约记录",
+    inputSchema: { type: "object" },
+    sideEffect: "none" as const,
+    replayPolicy: "safe" as const,
+    riskLevel: "low" as const,
+  },
+  {
+    name: "reserveBookByTitle",
+    version: "1.0.0",
+    description: "创建图书预约",
+    inputSchema: {
+      type: "object",
+      properties: { title: { type: "string" } },
+      required: ["title"],
+    },
+    sideEffect: "external" as const,
+    replayPolicy: "never" as const,
+    riskLevel: "high" as const,
+    requiresConfirmation: true,
   },
 ];
 
@@ -184,6 +214,24 @@ describe("skill tool route enrichment", () => {
       productName: "Classic Tee",
       quantity: 2,
     });
+  });
+
+  it("never infers a write tool as open from a single string argument", () => {
+    const route: SkillRouteResult = {
+      route: "action",
+      matchedSkillNames: ["skill.reservations"],
+      requestedToolNames: ["getReservationList"],
+      confidence: 0.91,
+      reason: "model chose safe read",
+    };
+    const enriched = enrichSkillToolRoute(
+      "查看《活着》",
+      route,
+      [reservationSkill],
+      clientTools,
+    );
+    expect(enriched.requestedToolNames).toEqual(["getReservationList"]);
+    expect(enriched.requestedToolNames).not.toContain("reserveBookByTitle");
   });
 
   it("does not guess a tool when multiple skills are matched", () => {
