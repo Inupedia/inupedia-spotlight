@@ -45,6 +45,7 @@ describe("LangChain intent router", () => {
     const decision = await router.route("介绍下引大济岷", []);
     expect(decision.route).toBe("knowledge");
     expect(decision.requestedToolNames).toEqual([]);
+    expect(decision.knowledgeSource).toBe("web");
   });
 
   it.each([

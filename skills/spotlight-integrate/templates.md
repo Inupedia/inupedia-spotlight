@@ -168,14 +168,16 @@ capability-examples: 目前有哪些资源, 打开<exact host catalog name>, 把
 ---
 id: skill.knowledge
 name: 项目知识问答
-description: 用知识库或公开资料回答介绍、概念和事实，不操作页面。
-when_to_use: 用户问项目是什么、指标含义、公开资料，且没有要求操作当前页面。
+description: 回答介绍、概念、事实与公开信息；能联网搜索的不走项目知识库。不操作页面。
+when_to_use: 用户问项目是什么、公开资料、新闻，或问本系统模块含义，且没有要求操作当前页面。
 spotlight-response-strategy: direct_answer
-capability-examples: 介绍这个项目, 这个模块是什么意思
+capability-examples: 介绍这个项目, 最近有什么公开新闻, 这个模块是什么意思
 ---
 
 # 项目知识问答
 
+- 介绍、新闻、公开事实走联网搜索，不要调用项目知识库。
+- 只有本系统模块、内部指标、未公开资料才走知识库。
 - 不调用任何 Client Tool。
 - 业务名词本身不是操作意图。
 ```

@@ -286,6 +286,94 @@ describe("LangGraph runtime isolation", () => {
     });
   });
 
+  it("skips Yuxi when the question can be answered by web search", async () => {
+    let knowledgeCalls = 0;
+    let webCalls = 0;
+    const runContext = context("介绍下引大济岷", []);
+    runContext.project = {
+      ...runContext.project,
+      knowledgeProvider: {
+        id: "yuxi",
+        async search() {
+          knowledgeCalls += 1;
+          throw new Error("project knowledge must not run");
+        },
+      },
+      webSearchProvider: {
+        id: "hikari",
+        async search() {
+          webCalls += 1;
+          return [{ title: "公开报道", content: "工程介绍" }];
+        },
+      },
+    };
+    const tools: string[] = [];
+    await runSpotlightGraph(runContext, {
+      model: new FakeToolCallingModel(),
+      router: router({
+        route: "knowledge",
+        confidence: 1,
+        reason: "information request",
+        requestedToolNames: [],
+        explicitActionEvidence: null,
+        knowledgeSource: "web",
+      }),
+      checkpointer: new MemorySaver(),
+      store: new InMemoryStore(),
+      onTool: (event) => {
+        if (event.type === "tool_start") tools.push(event.call.name);
+      },
+    });
+
+    expect(knowledgeCalls).toBe(0);
+    expect(webCalls).toBe(1);
+    expect(tools).toEqual(["web_search"]);
+  });
+
+  it("queries Yuxi only for in-product knowledge questions", async () => {
+    let knowledgeCalls = 0;
+    let webCalls = 0;
+    const runContext = context("这个模块是什么意思", []);
+    runContext.project = {
+      ...runContext.project,
+      knowledgeProvider: {
+        id: "yuxi",
+        async search() {
+          knowledgeCalls += 1;
+          return [{ title: "模块说明", content: "内部说明" }];
+        },
+      },
+      webSearchProvider: {
+        id: "hikari",
+        async search() {
+          webCalls += 1;
+          throw new Error("web search must not run");
+        },
+      },
+    };
+    const tools: string[] = [];
+    await runSpotlightGraph(runContext, {
+      model: new FakeToolCallingModel(),
+      router: router({
+        route: "knowledge",
+        confidence: 1,
+        reason: "in-product fact",
+        requestedToolNames: [],
+        explicitActionEvidence: null,
+        knowledgeSource: "knowledge",
+      }),
+      checkpointer: new MemorySaver(),
+      store: new InMemoryStore(),
+      onTool: (event) => {
+        if (event.type === "tool_start") tools.push(event.call.name);
+      },
+    });
+
+    expect(knowledgeCalls).toBe(1);
+    expect(webCalls).toBe(0);
+    expect(tools).toEqual(["project_knowledge_search"]);
+  });
+
   it("executes the selected client tool through the host bridge", async () => {
     const hostResults: HostToolResultRequest[] = [];
     const phases: Array<{ phase: string; summary: string }> = [];

@@ -1,4 +1,5 @@
 export * from "./contracts.js";
+export * from "./knowledgeSource.js";
 export * from "./graph.js";
 export * from "./workflow/skillChain.js";
 export * from "./workflow/evidence.js";

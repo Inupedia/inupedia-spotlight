@@ -6,6 +6,9 @@ import type {
 
 export type AgentRoute = "knowledge" | "action" | "clarify";
 
+/** Which evidence source to use on the knowledge lane. Never run both in parallel. */
+export type KnowledgeSource = "web" | "knowledge";
+
 export type WorkflowLane =
   | "knowledge"
   | "action"
@@ -25,6 +28,12 @@ export interface IntentDecision {
   explicitActionEvidence: string | null;
   /** Consumer Skills deterministically matched for this turn. */
   matchedSkillNames?: string[];
+  /**
+   * Knowledge lane only. `web` skips the project knowledge base (Yuxi).
+   * `knowledge` skips public web search. Resolved again at gather time
+   * against which providers are actually configured.
+   */
+  knowledgeSource?: KnowledgeSource;
 }
 
 export interface KnowledgeEvidence {

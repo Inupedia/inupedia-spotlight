@@ -68,6 +68,7 @@ import {
   RuntimeState,
 } from "./state.js";
 import type { SpotlightGraphOptions } from "./types.js";
+import { resolveGatherSources } from "../knowledgeSource.js";
 
 function knowledgeToolCall(
   name: string,
@@ -141,6 +142,21 @@ async function invokeProviderSearch(
   }
 }
 
+function gatherSourceFlags(
+  context: RunContext,
+  state: { question: string; lane?: WorkflowLane; decision?: IntentDecision },
+  serverReadCount: number,
+) {
+  return resolveGatherSources({
+    question: state.question,
+    lane: state.lane ?? "knowledge",
+    knowledgeSource: state.decision?.knowledgeSource,
+    hasKnowledge: Boolean(context.project.knowledgeProvider),
+    hasWeb: Boolean(context.project.webSearchProvider),
+    hasServer: serverReadCount > 0,
+  });
+}
+
 function buildGatherSubgraph(
   context: RunContext,
   options: SpotlightGraphOptions,
@@ -154,9 +170,10 @@ function buildGatherSubgraph(
       const knowledgeSkill = runSkills.find(
         (skill) => skill.name === "skill.knowledge",
       );
+      const sources = gatherSourceFlags(context, state, serverReads.length);
       const availableSources = [
-        context.project.knowledgeProvider ? "知识库" : null,
-        context.project.webSearchProvider ? "联网搜索" : null,
+        sources.knowledge ? "知识库" : null,
+        sources.web ? "联网搜索" : null,
         ...serverReads.map((item) => `服务端工具“${item.name}”`),
       ].filter((item): item is string => Boolean(item));
       emitPhase(
@@ -171,7 +188,9 @@ function buildGatherSubgraph(
     })
     .addNode("provider_knowledge", async (state, config) => {
       const provider = context.project.knowledgeProvider;
-      if (!provider) return { evidenceBundle: emptyEvidenceBundle() };
+      if (!provider || !gatherSourceFlags(context, state, serverReads.length).knowledge) {
+        return { evidenceBundle: emptyEvidenceBundle() };
+      }
       return {
         evidenceBundle: await invokeProviderSearch(
           config,
@@ -220,7 +239,9 @@ function buildGatherSubgraph(
     })
     .addNode("provider_web", async (state, config) => {
       const provider = context.project.webSearchProvider;
-      if (!provider) return { evidenceBundle: emptyEvidenceBundle() };
+      if (!provider || !gatherSourceFlags(context, state, serverReads.length).web) {
+        return { evidenceBundle: emptyEvidenceBundle() };
+      }
       return {
         evidenceBundle: await invokeProviderSearch(
           config,
@@ -363,7 +384,10 @@ export function compileSpotlightWorkflow(
         clientTools,
       );
       let lane: WorkflowLane = decision.route;
-      if (chain) lane = "knowledge_then_action";
+      if (chain) {
+        lane = "knowledge_then_action";
+        decision.knowledgeSource = "knowledge";
+      }
       const allowed = actionToolAllowlist(
         toolsForMatchedSkills(skillBoundClientTools, runSkills, decision),
         decision,

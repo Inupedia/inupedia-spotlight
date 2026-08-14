@@ -265,7 +265,7 @@ export async function routeViaSkillCatalog(
           "Never use product-specific domain assumptions that are not present in the supplied Skill catalog and tool descriptors.",
           "",
           "Lane rules:",
-          "- knowledge: skill.knowledge and direct_answer skills about project facts, introductions, explanations, or public information without manipulating the live page.",
+          "- knowledge: skill.knowledge and direct_answer skills. Public introductions, news, and facts that a web search can answer stay on this lane; the runtime will NOT query the project knowledge base for those. Use this lane for in-product / unpublished facts (this module, this system, internal docs) as well.",
           "- action: tool_answer skills that read live page data (lists, counts, status) or perform UI/business operations via registered client tools.",
           "- clarify: an action skill matches but the target or a required parameter cannot be resolved safely.",
           "- A tool being high-risk or requiresConfirmation does NOT make the route clarify when all required arguments are concrete. Route it as action and let the execution/confirmation gate prevent unconfirmed execution.",

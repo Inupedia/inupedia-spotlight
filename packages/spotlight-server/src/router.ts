@@ -9,6 +9,7 @@ import {
   extractActionEvidence,
   hasMemoryControlEvidence,
 } from "./safety.js";
+import { attachKnowledgeSource } from "./knowledgeSource.js";
 import {
   candidateToolsForSkillRoute,
   routeViaSkillCatalog,
@@ -400,14 +401,14 @@ export class LangChainIntentRouter implements IntentRouter {
     context?: RouteContext,
   ): Promise<IntentDecision> {
     if (hasMemoryControlEvidence(question)) {
-      return {
+      return attachKnowledgeSource(question, {
         route: "knowledge",
         confidence: 1,
         reason: "Deterministic memory-control intent fence.",
         requestedToolNames: [],
         explicitActionEvidence: null,
         matchedSkillNames: [],
-      };
+      });
     }
 
     const explicitActionEvidence = extractActionEvidence(question);
@@ -486,7 +487,7 @@ export class LangChainIntentRouter implements IntentRouter {
       new SystemMessage(
         [
           "Route only the latest user message.",
-          "knowledge: asks for facts, explanations, summaries, comparisons or searches.",
+          "knowledge: asks for facts, explanations, summaries, comparisons or searches. Public/web-searchable questions still route here; the gather step will skip the project knowledge base.",
           "action: explicitly asks to change the UI or external state using a listed client tool.",
           "clarify: an action target or operation is missing or ambiguous.",
           "Never infer an action from project vocabulary, previous turns or memory.",

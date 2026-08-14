@@ -9,7 +9,9 @@ export function routeProgressSummary(
 ): string {
   const request = `“${compactText(question)}”`;
   if (decision.route === "knowledge") {
-    return `识别为知识问答：${request}；未检测到需要执行的页面操作。`;
+    const source =
+      decision.knowledgeSource === "knowledge" ? "项目知识库" : "联网搜索";
+    return `识别为知识问答（${source}）：${request}；未检测到需要执行的页面操作。`;
   }
   if (decision.route === "action") {
     const evidence = decision.explicitActionEvidence

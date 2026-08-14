@@ -3,6 +3,7 @@ import type {
   FrontendToolDescriptorV1,
 } from "@inupedia/spotlight-protocol";
 import type { IntentDecision } from "./contracts.js";
+import { attachKnowledgeSource } from "./knowledgeSource.js";
 
 const INFORMATION_PATTERNS = [
   /(?:介绍|说明|讲讲|了解|什么是|是什么|资料|概况|情况|知识|为什么|如何理解)/u,
@@ -136,14 +137,14 @@ export function applyIntentSafetyFence(
 ): IntentDecision {
   const actionEvidence = extractActionEvidence(question);
   if (hasMemoryControlEvidence(question)) {
-    return {
+    return attachKnowledgeSource(question, {
       route: "knowledge",
       confidence: 1,
       reason: "The latest user message explicitly controls personal memory.",
       requestedToolNames: [],
       explicitActionEvidence: null,
       matchedSkillNames: decision.matchedSkillNames,
-    };
+    });
   }
   if (
     decision.route === "action" &&
@@ -171,7 +172,7 @@ export function applyIntentSafetyFence(
     !skillAction &&
     !skillKnowledge
   ) {
-    return {
+    return attachKnowledgeSource(question, {
       route: "knowledge",
       confidence: Math.max(decision.confidence, 0.99),
       reason:
@@ -179,7 +180,7 @@ export function applyIntentSafetyFence(
       requestedToolNames: [],
       explicitActionEvidence: null,
       matchedSkillNames: [],
-    };
+    });
   }
   if (
     decision.route === "action" &&
@@ -201,7 +202,10 @@ export function applyIntentSafetyFence(
     actionEvidence ??
     decision.explicitActionEvidence ??
     (skillAction ? `skill:${decision.matchedSkillNames!.join(",")}` : null);
-  return { ...decision, explicitActionEvidence: resolvedEvidence };
+  return attachKnowledgeSource(question, {
+    ...decision,
+    explicitActionEvidence: resolvedEvidence,
+  });
 }
 
 export function actionToolAllowlist(

@@ -65,7 +65,7 @@ Do not depend on a Server patch that recognizes this product by name.
 
 - `spotlight-response-strategy: direct_answer`
 - no Client Tools
-- body: use knowledge/web/project sources; business nouns alone must not manipulate the live page
+- body: public introductions/news use web search; only in-product unpublished facts use the project knowledge base; business nouns alone must not manipulate the live page
 
 ## Collision review
 
