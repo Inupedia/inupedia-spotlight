@@ -114,7 +114,7 @@ async function invokeProviderSearch(
       config,
       options,
       "knowledge_agent_start",
-      `${summary} 正在依据资料组织回答。`,
+      `${summary}\n正在依据资料组织回答。`,
     );
     return evidenceFromSource({
       source,

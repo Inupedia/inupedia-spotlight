@@ -248,7 +248,7 @@ describe("LangGraph runtime isolation", () => {
       expect.objectContaining({
         phase: "knowledge_agent_done",
         summary: expect.stringMatching(
-          /命中 2 条资料.*引大济岷工程概况.*工程线路与规模/u,
+          /命中 2 条资料：\n1\. 引大济岷工程概况\n2\. 工程线路与规模/u,
         ),
       }),
     );

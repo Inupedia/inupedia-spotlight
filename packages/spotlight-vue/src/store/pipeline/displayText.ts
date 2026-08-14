@@ -115,6 +115,73 @@ export function sanitizeToolStepAnswerText(content: string): string {
     .trim();
 }
 
+export interface GatherProcessDisplay {
+  headline: string;
+  items: string[];
+  note: string;
+}
+
+const ORGANIZING_NOTE = "正在依据资料组织回答。";
+const NUMBERED_ITEM = /^\s*\d+[.、]\s+(.+)$/u;
+const HIT_HEAD = /^(.*?命中\s+\d+\s+条资料)/u;
+
+/**
+ * Turn a gather/search summary into a headline + numbered sources.
+ * Accepts both the new multiline `1. 2. 3.` form and the old `A；B；C` dump.
+ */
+export function parseGatherProcessDisplay(
+  content: string,
+): GatherProcessDisplay | null {
+  const trimmed = content.trim();
+  if (!trimmed) return null;
+
+  let note = "";
+  let body = trimmed;
+  if (body.includes(ORGANIZING_NOTE)) {
+    note = ORGANIZING_NOTE;
+    body = body.replace(ORGANIZING_NOTE, "").trim();
+  }
+
+  const numbered = body
+    .split(/\n/u)
+    .map((line) => line.match(NUMBERED_ITEM)?.[1]?.trim() ?? "")
+    .filter(Boolean);
+  if (numbered.length > 0) {
+    const headline =
+      body
+        .split(/\n/u)
+        .map((line) => line.trim())
+        .find((line) => line && !NUMBERED_ITEM.test(line))
+        ?.replace(/[：:]\s*$/u, "") ?? "";
+    return { headline, items: numbered, note };
+  }
+
+  const hit = body.match(HIT_HEAD);
+  if (hit) {
+    const headline = hit[1]!.trim();
+    const rest = body.slice(hit[0].length).replace(/^[：:]\s*/u, "").trim();
+    const titles = rest
+      .replace(/[。．.]\s*$/u, "")
+      .split(/[；;]\s*/u)
+      .map((title) => title.trim())
+      .filter(Boolean);
+    return { headline, items: titles, note };
+  }
+
+  return { headline: body, items: [], note };
+}
+
+export function formatGatherProcessText(content: string): string {
+  const parsed = parseGatherProcessDisplay(content);
+  if (!parsed) return "";
+  const parts = [parsed.headline];
+  if (parsed.items.length > 0) {
+    parts.push(parsed.items.map((item, index) => `${index + 1}. ${item}`).join("\n"));
+  }
+  if (parsed.note) parts.push(parsed.note);
+  return parts.filter(Boolean).join("\n");
+}
+
 export function isToolExecutionStep(stepId: string): boolean {
   return (
     stepId === GATHER_STEP_ID ||

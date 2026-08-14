@@ -84,6 +84,8 @@ export {
   humanizeSpotlightStepContent,
   isAnswerStep,
   isToolExecutionStep,
+  parseGatherProcessDisplay,
+  formatGatherProcessText,
   sanitizeToolStepAnswerText,
   splitToolStepContent,
   composeToolStepContent,

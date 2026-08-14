@@ -58,9 +58,11 @@ export function evidenceProgressSummary(
         .map((item) => item.title?.trim())
         .filter((title): title is string => Boolean(title) && !isInternalEvidenceTitle(title)),
     ),
-  ].slice(0, 3);
-  const titleSummary = titles.length > 0 ? `：${titles.join("；")}` : "";
-  return `${source}检索“${compactText(query, 48)}”命中 ${evidence.length} 条资料${titleSummary}。`;
+  ].slice(0, 8);
+  const head = `${source}检索“${compactText(query, 48)}”命中 ${evidence.length} 条资料`;
+  if (titles.length === 0) return `${head}。`;
+  const list = titles.map((title, index) => `${index + 1}. ${title}`).join("\n");
+  return `${head}：\n${list}`;
 }
 
 export function toolsForMatchedSkills(

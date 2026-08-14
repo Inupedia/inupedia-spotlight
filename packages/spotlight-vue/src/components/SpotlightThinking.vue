@@ -118,15 +118,36 @@
               <template v-if="isToolExecutionStep(step.id)">
                 <div class="thinking-bar-tool-step-flow">
                   <div
-                    v-if="getToolStepProcess(step)"
-                    class="thinking-bar-step-text thinking-bar-step-process"
+                    v-if="getGatherProcess(step)"
+                    class="thinking-bar-gather-process"
                   >
-                    {{ getToolStepProcess(step) }}
+                    <p
+                      v-if="getGatherProcess(step)?.headline"
+                      class="thinking-bar-gather-headline"
+                    >
+                      {{ getGatherProcess(step)?.headline }}
+                    </p>
+                    <ol
+                      v-if="getGatherProcess(step)?.items.length"
+                      class="thinking-bar-source-list"
+                    >
+                      <li
+                        v-for="(item, index) in getGatherProcess(step)?.items"
+                        :key="`${step.id}-source-${index}`"
+                      >
+                        {{ item }}
+                      </li>
+                    </ol>
+                    <p
+                      v-if="getGatherProcess(step)?.note"
+                      class="thinking-bar-gather-note"
+                    >
+                      {{ getGatherProcess(step)?.note }}
+                    </p>
                   </div>
                   <details
                     v-if="hasExecutionDetails(step)"
                     class="thinking-bar-execution-details"
-                    open
                   >
                     <summary class="thinking-bar-execution-details-summary">
                       <span class="thinking-bar-execution-details-title">{{
@@ -148,7 +169,6 @@
                         v-for="toolCall in getStepToolCalls(step)"
                         :key="toolCall.id"
                         class="thinking-bar-tool-call"
-                        :open="isToolCallOpen(toolCall)"
                       >
                         <summary class="thinking-bar-tool-call-head">
                           <div class="thinking-bar-tool-call-head-main">
@@ -192,7 +212,7 @@
                               执行摘要
                             </div>
                             <pre class="thinking-bar-tool-call-pre">{{
-                              toolCall.summary
+                              formatGatherProcessText(toolCall.summary)
                             }}</pre>
                           </div>
                           <div
@@ -389,7 +409,6 @@
                     <details
                       v-else-if="item.type === 'tool'"
                       class="thinking-bar-tool-call"
-                      :open="isToolCallOpen(item.toolCall)"
                     >
                       <summary class="thinking-bar-tool-call-head">
                         <div class="thinking-bar-tool-call-head-main">
@@ -667,6 +686,8 @@ import {
   humanizeSpotlightStepContent,
   isAnswerStep,
   isToolExecutionStep,
+  parseGatherProcessDisplay,
+  formatGatherProcessText,
   sanitizeToolStepAnswerText,
   splitToolStepContent,
 } from "../store/pipeline/displayText.js";
@@ -933,11 +954,11 @@ function getToolStepPlanning(step: PipelineStep): string {
   return splitToolStepContent(step.content ?? "").planning;
 }
 
-function getToolStepProcess(step: PipelineStep): string {
+function getGatherProcess(step: PipelineStep) {
   const { planning, answer } = splitToolStepContent(step.content ?? "");
-  const text = (planning || answer).trim();
-  if (!text) return "";
-  return stripInternalEvidenceAnswer(text);
+  const text = stripInternalEvidenceAnswer((planning || answer).trim());
+  if (!text) return null;
+  return parseGatherProcessDisplay(text);
 }
 
 function getToolStepAnswer(step: PipelineStep): string {
@@ -998,9 +1019,14 @@ function hasExecutionDetails(step: PipelineStep): boolean {
 }
 
 function executionDetailsMeta(step: PipelineStep): string {
-  const toolCount = getStepToolCalls(step).length;
-  if (toolCount > 0) return `${toolCount} 个工具调用`;
-  return "规划记录";
+  const calls = getStepToolCalls(step);
+  if (calls.length === 0) return "规划记录";
+  const busy = calls.some(
+    (toolCall) => toolCall.status === "running" || toolCall.status === "pending",
+  );
+  return busy
+    ? `${calls.length} 个工具 · 执行中`
+    : `${calls.length} 个工具调用`;
 }
 
 function toolStatusLabel(status: StepToolCall["status"]): string {
@@ -1024,14 +1050,6 @@ function formatToolTrace(trace?: ToolTraceEvent[]): string {
         `[${event.phase}/${event.type}] ${event.tool}${event.detail ? ` · ${event.detail}` : ""}`,
     )
     .join("\n");
-}
-
-function isToolCallOpen(toolCall: StepToolCall): boolean {
-  return (
-    toolCall.status === "running" ||
-    toolCall.status === "pending" ||
-    Boolean(toolCall.summary?.trim() || toolCall.resultText?.trim())
-  );
 }
 
 function parseStructuredText(value?: string): unknown {

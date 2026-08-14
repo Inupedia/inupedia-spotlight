@@ -455,6 +455,36 @@
   color: var(--tb-text-muted);
 }
 
+.thinking-bar-gather-process {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.thinking-bar-gather-headline,
+.thinking-bar-gather-note {
+  margin: 0;
+  color: var(--tb-text-secondary);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.thinking-bar-gather-note {
+  color: var(--tb-text-muted);
+}
+
+.thinking-bar-source-list {
+  margin: 0;
+  padding: 0 0 0 1.35em;
+  color: var(--tb-text);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.thinking-bar-source-list li + li {
+  margin-top: 6px;
+}
+
 .thinking-bar-step-markdown {
   white-space: normal;
 }
