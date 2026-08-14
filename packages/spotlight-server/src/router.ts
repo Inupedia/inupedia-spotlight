@@ -88,6 +88,7 @@ export function hasUnresolvedExplicitActionTarget(
     .slice(evidenceIndex + actionEvidence.length)
     .trim()
     .replace(/^[，,：:\s]+|[。.!！?？]+$/gu, "")
+    .replace(/^(?:(?:给|到|至|向)\s*|(?:to|into|toward|towards)\s+)/iu, "")
     .trim();
   if (!target) return true;
   if (context?.isReferential === true) return true;
