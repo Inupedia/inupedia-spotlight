@@ -32,6 +32,12 @@ interface YuxiStreamOutcome {
   interrupt: YuxiInterrupt | null;
 }
 
+function publicYuxiTitle(content: string): string {
+  const heading = content.match(/^#{1,6}\s+(.+)$/mu)?.[1]?.trim();
+  if (heading) return heading.slice(0, 80);
+  return "项目资料";
+}
+
 export class YuxiKnowledgeProvider implements KnowledgeProvider {
   readonly id = "yuxi";
   private token: string | null = null;
@@ -207,7 +213,7 @@ export class YuxiKnowledgeProvider implements KnowledgeProvider {
         if (!content) throw new Error("Yuxi returned no answer content");
         return [{
           content,
-          title: "Yuxi project knowledge",
+          title: publicYuxiTitle(content),
           metadata: { provider: this.id, runId: parentRunId },
         }];
       }

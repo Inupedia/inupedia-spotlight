@@ -52,6 +52,8 @@ export interface EvidenceBundle {
   sourceSummaries: string[];
   attemptedSources: string[];
   completedSources: string[];
+  /** When true, checkpointed evidence from prior turns is discarded. */
+  turnReset?: boolean;
 }
 
 export interface SpotlightToolCallInfo {

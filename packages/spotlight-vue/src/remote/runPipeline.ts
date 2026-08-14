@@ -1,6 +1,7 @@
 import type {
   HostToolEffect,
   SpotlightMemoryDecision,
+  ToolSideEffectV1,
 } from "@inupedia/spotlight-protocol";
 import { serializeSkillsForRemote } from "@inupedia/spotlight-client";
 import { useAgentSessionStore } from "../session/agentSession.js";
@@ -8,11 +9,14 @@ import { useSpotlightMemoryPreferenceStore } from "../store/memoryPreferenceStor
 import { useSpotlightRuntimeStore } from "../store/runtimeStore.js";
 import { SPOTLIGHT_PIPELINE_STEP_IDS } from "../store/pipeline/constants.js";
 import {
-  composeToolStepContent,
   isLoopPlanningChunk,
   splitIntentStepContent,
-  splitToolStepContent,
 } from "../store/pipeline/displayText.js";
+import {
+  resolveToolLane,
+  toolLaneStepId,
+  toolLaneStepLabel,
+} from "../store/pipeline/toolLane.js";
 import type { HandlerApi } from "../store/pipeline/types.js";
 import type { AgentStep, AgentStepToolCall } from "../store/types.js";
 import type { SpotlightExecutionEvent } from "../store/runtime/types.js";
@@ -219,16 +223,54 @@ function toolCallFromHostAction(
   };
 }
 
+export type ToolLaneLookup = {
+  sideEffectByName?: ReadonlyMap<string, ToolSideEffectV1>;
+};
+
+function laneForTool(name: string, lookup?: ToolLaneLookup): "gather" | "act" {
+  return resolveToolLane(name, lookup?.sideEffectByName?.get(name));
+}
+
+function completeStepIfPresent(
+  api: HandlerApi,
+  id: string,
+  fallbackContent?: string,
+) {
+  const step = api.getSteps().find((item) => item.id === id);
+  if (!step || step.status === "done" || step.status === "error") return;
+  api.setStep(id, "done", step.content ?? fallbackContent);
+}
+
+function activateLaneStep(api: HandlerApi, lane: "gather" | "act") {
+  completeStepIfPresent(api, SPOTLIGHT_PIPELINE_STEP_IDS.understand);
+  const stepId = toolLaneStepId(lane);
+  const label = toolLaneStepLabel(lane);
+  ensureStep(api, stepId, label);
+  const step = api.getSteps().find((item) => item.id === stepId);
+  if (!step || step.status === "active" || step.status === "done") return;
+  api.setStep(stepId, "active", step.content);
+}
+
+function ensureLaneForTool(
+  api: HandlerApi,
+  name: string,
+  lookup?: ToolLaneLookup,
+): string {
+  const lane = laneForTool(name, lookup);
+  activateLaneStep(api, lane);
+  return toolLaneStepId(lane);
+}
+
 export function beginHostToolCall(
   api: HandlerApi,
   call: Extract<
     RemoteRunEvent,
     { type: "host_action_request" }
   >["request"]["call"],
+  lookup?: ToolLaneLookup,
 ) {
-  ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
-  ensureToolStepActive(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool);
-  api.appendToolCallsToStep(SPOTLIGHT_PIPELINE_STEP_IDS.tool, [
+  const stepId = ensureLaneForTool(api, call.name, lookup);
+  api.appendToolCallsToStep(stepId, [
     {
       id: call.id,
       name: call.name,
@@ -246,37 +288,10 @@ export function settleHostToolCall(
     { type: "host_action_request" }
   >["request"]["call"],
   result: Awaited<ReturnType<typeof executeRemoteHostTool>>,
+  lookup?: ToolLaneLookup,
 ) {
-  ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
-  ensureToolStepActive(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool);
-  api.appendToolCallsToStep(SPOTLIGHT_PIPELINE_STEP_IDS.tool, [
-    toolCallFromHostAction(call, result),
-  ]);
-}
-
-function completeActionToolSelectionStep(api: HandlerApi) {
-  const agentStep = api
-    .getSteps()
-    .find(
-      (item) =>
-        item.id === SPOTLIGHT_PIPELINE_STEP_IDS.agent &&
-        item.label === "选择工具" &&
-        item.status === "active",
-    );
-  if (!agentStep) return;
-  api.setStep(
-    SPOTLIGHT_PIPELINE_STEP_IDS.agent,
-    "done",
-    agentStep.content ?? "工具选择与调用已完成。",
-  );
-}
-
-function ensureToolStepActive(api: HandlerApi, stepId: string) {
-  if (stepId !== SPOTLIGHT_PIPELINE_STEP_IDS.tool) return;
-  completeActionToolSelectionStep(api);
-  const step = api.getSteps().find((item) => item.id === stepId);
-  if (!step || step.status === "active" || step.status === "done") return;
-  api.setStep(stepId, "active", step.content);
+  const stepId = ensureLaneForTool(api, call.name, lookup);
+  api.appendToolCallsToStep(stepId, [toolCallFromHostAction(call, result)]);
 }
 
 function toolStepLabel(
@@ -284,18 +299,16 @@ function toolStepLabel(
   label: string | null | undefined,
 ): string {
   if (label) return label;
-  return stepId === SPOTLIGHT_PIPELINE_STEP_IDS.tool
-    ? "执行工具与回答"
-    : stepId;
+  if (stepId === SPOTLIGHT_PIPELINE_STEP_IDS.gather) return "获取信息";
+  if (stepId === SPOTLIGHT_PIPELINE_STEP_IDS.act) return "操作页面";
+  if (stepId === SPOTLIGHT_PIPELINE_STEP_IDS.answer) return "回答";
+  if (stepId === SPOTLIGHT_PIPELINE_STEP_IDS.understand) return "理解问题";
+  if (stepId === SPOTLIGHT_PIPELINE_STEP_IDS.tool) return "获取信息";
+  return stepId;
 }
 
-export function responseStepLabel(api: HandlerApi): string {
-  const agentStep = api
-    .getSteps()
-    .find((item) => item.id === SPOTLIGHT_PIPELINE_STEP_IDS.agent);
-  if (agentStep?.label === "检索知识") return "知识问答";
-  if (agentStep?.label === "选择工具") return "执行工具与回答";
-  return "生成回答";
+export function responseStepLabel(_api?: HandlerApi): string {
+  return "回答";
 }
 
 function setTransitionStep(
@@ -319,8 +332,8 @@ export function applyLangGraphTransition(
     case "analyzing":
       setTransitionStep(
         api,
-        SPOTLIGHT_PIPELINE_STEP_IDS.intent,
-        "分析意图",
+        SPOTLIGHT_PIPELINE_STEP_IDS.understand,
+        "理解问题",
         "active",
         summary ?? "正在分析用户意图。",
       );
@@ -328,55 +341,47 @@ export function applyLangGraphTransition(
     case "router_done":
       setTransitionStep(
         api,
-        SPOTLIGHT_PIPELINE_STEP_IDS.intent,
-        "分析意图",
+        SPOTLIGHT_PIPELINE_STEP_IDS.understand,
+        "理解问题",
         "done",
         summary ?? "意图分析已完成。",
       );
       return;
     case "knowledge_agent_start":
+      completeStepIfPresent(api, SPOTLIGHT_PIPELINE_STEP_IDS.understand);
       setTransitionStep(
         api,
-        SPOTLIGHT_PIPELINE_STEP_IDS.agent,
-        "检索知识",
+        SPOTLIGHT_PIPELINE_STEP_IDS.gather,
+        "获取信息",
         "active",
-        summary ?? "正在检索项目知识。",
+        summary ?? "正在检索资料。",
       );
       return;
     case "knowledge_agent_done":
-      setTransitionStep(
+      completeStepIfPresent(
         api,
-        SPOTLIGHT_PIPELINE_STEP_IDS.agent,
-        "检索知识",
-        "done",
-        summary ?? "项目知识检索已完成。",
+        SPOTLIGHT_PIPELINE_STEP_IDS.gather,
+        summary ?? "资料已就绪。",
       );
       return;
     case "action_agent_start":
-      setTransitionStep(
-        api,
-        SPOTLIGHT_PIPELINE_STEP_IDS.agent,
-        "选择工具",
-        "active",
-        summary ?? "正在从已注册工具中选择操作。",
-      );
+      completeStepIfPresent(api, SPOTLIGHT_PIPELINE_STEP_IDS.understand);
       return;
     case "action_agent_done":
-      setTransitionStep(
+      completeStepIfPresent(api, SPOTLIGHT_PIPELINE_STEP_IDS.gather);
+      completeStepIfPresent(
         api,
-        SPOTLIGHT_PIPELINE_STEP_IDS.agent,
-        "选择工具",
-        "done",
-        summary ?? "工具选择与调用已完成。",
+        SPOTLIGHT_PIPELINE_STEP_IDS.act,
+        summary ?? "页面操作已完成。",
       );
       return;
     case "memory_replay":
       setTransitionStep(
         api,
-        SPOTLIGHT_PIPELINE_STEP_IDS.breakdown,
-        "问题拆解",
+        SPOTLIGHT_PIPELINE_STEP_IDS.understand,
+        "理解问题",
         "done",
-        summary ?? "Memory 缓存命中，跳过 LLM 规划。",
+        summary ?? "已复用项目记忆，跳过本轮检索。",
       );
       return;
     default:
@@ -384,7 +389,11 @@ export function applyLangGraphTransition(
   }
 }
 
-export async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
+export async function applyRemoteEvent(
+  api: HandlerApi,
+  event: RemoteRunEvent,
+  lookup?: ToolLaneLookup,
+) {
   if (event.type === "ping") return;
 
   if (event.type === "step_sync") {
@@ -403,22 +412,24 @@ export async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
     let stepId = event.stepId;
     let content = event.content;
 
-    // 兼容旧服务端：loop 规划摘要误写入 intent 步骤时，重定向到 tool 步骤。
+    // 兼容旧服务端：loop 规划摘要误写入 intent 步骤时，重定向到获取信息。
     if (
-      stepId === SPOTLIGHT_PIPELINE_STEP_IDS.intent &&
+      (stepId === SPOTLIGHT_PIPELINE_STEP_IDS.intent ||
+        stepId === SPOTLIGHT_PIPELINE_STEP_IDS.understand) &&
       isLoopPlanningChunk(content)
     ) {
-      stepId = SPOTLIGHT_PIPELINE_STEP_IDS.tool;
+      stepId = SPOTLIGHT_PIPELINE_STEP_IDS.gather;
     } else if (
-      stepId === SPOTLIGHT_PIPELINE_STEP_IDS.intent &&
+      (stepId === SPOTLIGHT_PIPELINE_STEP_IDS.intent ||
+        stepId === SPOTLIGHT_PIPELINE_STEP_IDS.understand) &&
       event.mode === "replace"
     ) {
       const { intent, misplacedPlanning } = splitIntentStepContent(content);
       content = intent;
       if (misplacedPlanning.trim()) {
-        ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
+        ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.gather, "获取信息");
         api.appendChunkToStep(
-          SPOTLIGHT_PIPELINE_STEP_IDS.tool,
+          SPOTLIGHT_PIPELINE_STEP_IDS.gather,
           misplacedPlanning,
         );
       }
@@ -432,34 +443,50 @@ export async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
         content,
       );
     } else {
-      ensureToolStepActive(api, stepId);
+      if (
+        stepId === SPOTLIGHT_PIPELINE_STEP_IDS.tool ||
+        stepId === SPOTLIGHT_PIPELINE_STEP_IDS.gather ||
+        stepId === SPOTLIGHT_PIPELINE_STEP_IDS.act
+      ) {
+        const lane =
+          stepId === SPOTLIGHT_PIPELINE_STEP_IDS.act ? "act" : "gather";
+        activateLaneStep(api, lane);
+      }
       api.appendChunkToStep(stepId, content);
       await paintYield();
     }
   } else if (event.type === "step_artifact") {
-    ensureStep(api, event.stepId, toolStepLabel(event.stepId, event.label));
-    ensureToolStepActive(api, event.stepId);
+    const artifactStepId =
+      event.stepId === SPOTLIGHT_PIPELINE_STEP_IDS.tool
+        ? SPOTLIGHT_PIPELINE_STEP_IDS.gather
+        : event.stepId;
+    ensureStep(api, artifactStepId, toolStepLabel(artifactStepId, event.label));
+    if (
+      artifactStepId === SPOTLIGHT_PIPELINE_STEP_IDS.gather ||
+      artifactStepId === SPOTLIGHT_PIPELINE_STEP_IDS.act
+    ) {
+      activateLaneStep(
+        api,
+        artifactStepId === SPOTLIGHT_PIPELINE_STEP_IDS.act ? "act" : "gather",
+      );
+    }
     if (event.artifact === "tool_calls" && event.toolCalls?.length) {
-      api.appendToolCallsToStep(event.stepId, event.toolCalls);
+      api.appendToolCallsToStep(artifactStepId, event.toolCalls);
     } else if (event.artifact === "attachments" && event.attachments?.length) {
-      api.appendAttachmentsToStep(event.stepId, event.attachments);
+      api.appendAttachmentsToStep(artifactStepId, event.attachments);
     } else if (event.artifact === "files" && event.files?.length) {
-      api.appendFilesToStep(event.stepId, event.files);
+      api.appendFilesToStep(artifactStepId, event.files);
     } else if (event.artifact === "artifacts" && event.artifacts?.length) {
-      api.appendArtifactsToStep(event.stepId, event.artifacts);
+      api.appendArtifactsToStep(artifactStepId, event.artifacts);
     } else if (event.artifact === "chat_items" && event.chatItems?.length) {
-      api.appendChatItemsToStep(event.stepId, event.chatItems);
+      api.appendChatItemsToStep(artifactStepId, event.chatItems);
     }
   } else if (event.type === "tool_start") {
-    ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
-    ensureToolStepActive(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool);
-    api.appendToolCallsToStep(SPOTLIGHT_PIPELINE_STEP_IDS.tool, [
-      toolCallFromRemote(event),
-    ]);
+    const stepId = ensureLaneForTool(api, event.call.name, lookup);
+    api.appendToolCallsToStep(stepId, [toolCallFromRemote(event)]);
   } else if (event.type === "tool_progress") {
-    ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
-    ensureToolStepActive(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool);
-    api.appendToolCallsToStep(SPOTLIGHT_PIPELINE_STEP_IDS.tool, [
+    const stepId = ensureLaneForTool(api, event.call.name, lookup);
+    api.appendToolCallsToStep(stepId, [
       {
         id: event.call.id,
         name: event.call.name,
@@ -470,28 +497,16 @@ export async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
       },
     ]);
   } else if (event.type === "tool_result") {
-    ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
-    ensureToolStepActive(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool);
-    api.appendToolCallsToStep(SPOTLIGHT_PIPELINE_STEP_IDS.tool, [
-      buildToolResultCall(event),
-    ]);
+    const stepId = ensureLaneForTool(api, event.result.call.name, lookup);
+    api.appendToolCallsToStep(stepId, [buildToolResultCall(event)]);
     if (event.result.attachments?.length) {
-      api.appendAttachmentsToStep(
-        SPOTLIGHT_PIPELINE_STEP_IDS.tool,
-        event.result.attachments,
-      );
+      api.appendAttachmentsToStep(stepId, event.result.attachments);
     }
     if (event.result.files?.length) {
-      api.appendFilesToStep(
-        SPOTLIGHT_PIPELINE_STEP_IDS.tool,
-        event.result.files,
-      );
+      api.appendFilesToStep(stepId, event.result.files);
     }
     if (event.result.toolCalls?.length) {
-      api.appendToolCallsToStep(
-        SPOTLIGHT_PIPELINE_STEP_IDS.tool,
-        event.result.toolCalls,
-      );
+      api.appendToolCallsToStep(stepId, event.result.toolCalls);
     }
   } else if (event.type === "skill_permission_request") {
     const { useSpotlightStore } = await import("../store/spotlightStore.js");
@@ -503,54 +518,45 @@ export async function applyRemoteEvent(api: HandlerApi, event: RemoteRunEvent) {
       at: event.at,
     });
   } else if (event.type === "fork_progress") {
-    ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.tool, "执行工具与回答");
+    const stepId = SPOTLIGHT_PIPELINE_STEP_IDS.gather;
+    ensureStep(api, stepId, "获取信息");
     api.appendChunkToStep(
-      SPOTLIGHT_PIPELINE_STEP_IDS.tool,
+      stepId,
       `\n[fork ${event.agentId}] 第 ${event.iteration} 轮 · ${event.phase}：${event.summary}\n`,
     );
   } else if (event.type === "turn_transition") {
     applyLangGraphTransition(api, event);
   } else if (event.type === "memory_decision") {
-    ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.breakdown, "问题拆解");
     const labels: Record<SpotlightMemoryDecision["action"], string> = {
       reuse: "已复用项目记忆",
       augment: "正在结合历史项目结论",
       refresh: "资料可能变化，正在重新验证",
       ignore: "未发现可直接使用的项目记忆",
     };
-    api.setStep(
-      SPOTLIGHT_PIPELINE_STEP_IDS.breakdown,
-      event.decision.action === "reuse" ? "done" : "active",
+    const existing = api
+      .getSteps()
+      .find((item) => item.id === SPOTLIGHT_PIPELINE_STEP_IDS.understand);
+    const nextStatus =
+      event.decision.action === "reuse" || existing?.status === "done"
+        ? "done"
+        : "active";
+    setTransitionStep(
+      api,
+      SPOTLIGHT_PIPELINE_STEP_IDS.understand,
+      "理解问题",
+      nextStatus,
       labels[event.decision.action],
     );
   } else if (event.type === "assistant_response") {
-    ensureStep(
-      api,
-      SPOTLIGHT_PIPELINE_STEP_IDS.tool,
-      responseStepLabel(api),
+    completeStepIfPresent(api, SPOTLIGHT_PIPELINE_STEP_IDS.understand);
+    completeStepIfPresent(api, SPOTLIGHT_PIPELINE_STEP_IDS.gather);
+    completeStepIfPresent(api, SPOTLIGHT_PIPELINE_STEP_IDS.act);
+    ensureStep(api, SPOTLIGHT_PIPELINE_STEP_IDS.answer, "回答");
+    api.setStep(
+      SPOTLIGHT_PIPELINE_STEP_IDS.answer,
+      "done",
+      event.content.trim(),
     );
-    const step = api
-      .getSteps()
-      .find((item) => item.id === SPOTLIGHT_PIPELINE_STEP_IDS.tool);
-    const { planning, answer } = splitToolStepContent(step?.content ?? "");
-    const finalAnswer = event.content.trim();
-    const streamedAnswer = answer.trim();
-    if (
-      streamedAnswer &&
-      finalAnswer &&
-      (streamedAnswer === finalAnswer ||
-        finalAnswer.startsWith(
-          streamedAnswer.slice(0, Math.min(streamedAnswer.length, 80)),
-        ))
-    ) {
-      api.setStep(SPOTLIGHT_PIPELINE_STEP_IDS.tool, "done");
-    } else {
-      api.setStep(
-        SPOTLIGHT_PIPELINE_STEP_IDS.tool,
-        "done",
-        composeToolStepContent(planning, finalAnswer),
-      );
-    }
   }
 
   if (isTelemetryEvent(event)) {
@@ -673,6 +679,11 @@ export async function runRemoteSpotlightPipeline(
     options,
   );
   const allowedHostNames = new Set(hostManifest.tools.map((t) => t.name));
+  const lookup: ToolLaneLookup = {
+    sideEffectByName: new Map(
+      hostManifest.tools.map((tool) => [tool.name, tool.sideEffect]),
+    ),
+  };
   const createResponse = await fetch(`${base}/v1/runs`, {
     method: "POST",
     headers: buildSpotlightJsonHeaders(),
@@ -719,12 +730,12 @@ export async function runRemoteSpotlightPipeline(
       buffer = parsed.rest;
       for (const event of parsed.events) {
         if (event.type === "host_action_request") {
-          beginHostToolCall(api, event.request.call);
+          beginHostToolCall(api, event.request.call, lookup);
           const result = await executeRemoteHostTool(event.request.call, api, {
             allowedHostNames,
             hostEffect: event.request.hostEffect,
           });
-          settleHostToolCall(api, event.request.call, result);
+          settleHostToolCall(api, event.request.call, result, lookup);
           await postHostResult({
             runId,
             correlationId: event.request.correlationId,
@@ -736,7 +747,7 @@ export async function runRemoteSpotlightPipeline(
         if (event.type === "run_error") {
           throw new Error(event.error);
         }
-        await applyRemoteEvent(api, event);
+        await applyRemoteEvent(api, event, lookup);
         await paintYield();
         if (event.type === "run_completed") {
           if (event.sessionPatch) {

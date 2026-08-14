@@ -9,7 +9,13 @@ import type {
   IntentDecision,
   WorkflowLane,
 } from "../contracts.js";
-import { emptyEvidenceBundle, mergeEvidenceBundles } from "./evidence.js";
+import {
+  emptyEvidenceBundle,
+  applyEvidenceUpdate,
+  resetEvidenceBundle,
+} from "./evidence.js";
+
+export const INVOKED_TOOLS_TURN_RESET = "__spotlight_turn_reset__";
 
 export const RuntimeState = Annotation.Root({
   question: Annotation<string>(),
@@ -18,15 +24,14 @@ export const RuntimeState = Annotation.Root({
   skipGather: Annotation<boolean>(),
   assistantReply: Annotation<string>(),
   invokedClientTools: Annotation<string[]>({
-    reducer: (left, right) => [...left, ...right],
+    reducer: (left, right) => {
+      if (right[0] === INVOKED_TOOLS_TURN_RESET) return right.slice(1);
+      return [...left, ...right];
+    },
     default: () => [],
   }),
   evidenceBundle: Annotation<EvidenceBundle>({
-    reducer: (left, right) => {
-      if (!right.items.length && !right.attemptedSources.length) return left;
-      if (!left.items.length && !left.attemptedSources.length) return right;
-      return mergeEvidenceBundles(left, right);
-    },
+    reducer: applyEvidenceUpdate,
     default: emptyEvidenceBundle,
   }),
   messages: Annotation<BaseMessage[]>({
@@ -64,10 +69,10 @@ export function initialRuntimeState(
   return {
     question,
     messages: messages ?? [new HumanMessage(question)],
-    invokedClientTools: [],
+    invokedClientTools: [INVOKED_TOOLS_TURN_RESET],
     assistantReply: "",
     skipGather: false,
-    evidenceBundle: emptyEvidenceBundle(),
+    evidenceBundle: resetEvidenceBundle(),
   };
 }
 

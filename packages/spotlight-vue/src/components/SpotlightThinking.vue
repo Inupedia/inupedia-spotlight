@@ -117,14 +117,21 @@
             >
               <template v-if="isToolExecutionStep(step.id)">
                 <div class="thinking-bar-tool-step-flow">
+                  <div
+                    v-if="getToolStepProcess(step)"
+                    class="thinking-bar-step-text thinking-bar-step-process"
+                  >
+                    {{ getToolStepProcess(step) }}
+                  </div>
                   <details
                     v-if="hasExecutionDetails(step)"
                     class="thinking-bar-execution-details"
+                    open
                   >
                     <summary class="thinking-bar-execution-details-summary">
-                      <span class="thinking-bar-execution-details-title"
-                        >调用工具</span
-                      >
+                      <span class="thinking-bar-execution-details-title">{{
+                        step.label === "操作页面" ? "页面操作" : "本次检索"
+                      }}</span>
                       <span class="thinking-bar-execution-details-meta">{{
                         executionDetailsMeta(step)
                       }}</span>
@@ -344,20 +351,17 @@
                       </details>
                     </div>
                   </details>
-                  <section
-                    v-if="getToolStepAnswer(step)"
-                    class="thinking-bar-step-answer-section"
-                  >
-                    <div class="thinking-bar-step-section-label">回答</div>
-                    <div
-                      class="thinking-bar-step-text thinking-bar-step-markdown thinking-bar-step-answer"
-                    >
-                      <SpotlightMarkdownPreview
-                        :model-value="getToolStepAnswer(step)"
-                        format-knowledge
-                      />
-                    </div>
-                  </section>
+                </div>
+              </template>
+              <template v-else-if="isAnswerStep(step.id)">
+                <div
+                  v-if="step.content"
+                  class="thinking-bar-step-text thinking-bar-step-markdown thinking-bar-step-answer"
+                >
+                  <SpotlightMarkdownPreview
+                    :model-value="stripInternalEvidenceAnswer(step.content)"
+                    format-knowledge
+                  />
                 </div>
               </template>
               <template v-else>
@@ -661,6 +665,7 @@ import type { ToolTraceEvent } from "@inupedia/spotlight-protocol";
 import {
   getIntentStepDisplayContent,
   humanizeSpotlightStepContent,
+  isAnswerStep,
   isToolExecutionStep,
   sanitizeToolStepAnswerText,
   splitToolStepContent,
@@ -887,10 +892,14 @@ const isMemoryReuseResult = computed(
 );
 
 const memoryResultAnswer = computed(() => {
-  const answerStep = props.steps.find((step) => isToolExecutionStep(step.id));
+  const answerStep =
+    props.steps.find((step) => isAnswerStep(step.id)) ??
+    props.steps.find((step) => isToolExecutionStep(step.id));
   if (!answerStep) return "项目记忆中没有可展示的回答。";
   return (
-    getToolStepAnswer(answerStep).trim() ||
+    (isAnswerStep(answerStep.id)
+      ? answerStep.content?.trim()
+      : getToolStepAnswer(answerStep).trim()) ||
     answerStep.content?.trim() ||
     "项目记忆中没有可展示的回答。"
   );
@@ -924,7 +933,15 @@ function getToolStepPlanning(step: PipelineStep): string {
   return splitToolStepContent(step.content ?? "").planning;
 }
 
+function getToolStepProcess(step: PipelineStep): string {
+  const { planning, answer } = splitToolStepContent(step.content ?? "");
+  const text = (planning || answer).trim();
+  if (!text) return "";
+  return stripInternalEvidenceAnswer(text);
+}
+
 function getToolStepAnswer(step: PipelineStep): string {
+  if (!isAnswerStep(step.id) && isToolExecutionStep(step.id)) return "";
   const { planning } = splitToolStepContent(step.content ?? "");
   const cleaned = stripInternalEvidenceAnswer(
     sanitizeToolStepAnswerText(step.content ?? ""),
@@ -942,7 +959,10 @@ function stripInternalEvidenceAnswer(text: string): string {
   if (!trimmed) return "";
   if (
     trimmed.startsWith("联网检索证据：") ||
-    trimmed.includes("Tavily answer：")
+    trimmed.includes("Tavily answer：") ||
+    trimmed.includes("Hikari answer") ||
+    trimmed.includes("Yuxi project knowledge") ||
+    trimmed.includes("Spotlight knowledge")
   ) {
     return "";
   }
@@ -1007,7 +1027,11 @@ function formatToolTrace(trace?: ToolTraceEvent[]): string {
 }
 
 function isToolCallOpen(toolCall: StepToolCall): boolean {
-  return toolCall.status === "running" || toolCall.status === "pending";
+  return (
+    toolCall.status === "running" ||
+    toolCall.status === "pending" ||
+    Boolean(toolCall.summary?.trim() || toolCall.resultText?.trim())
+  );
 }
 
 function parseStructuredText(value?: string): unknown {

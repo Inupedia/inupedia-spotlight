@@ -4,7 +4,10 @@ const LOOP_ACTION_LABELS: Record<string, string> = {
   fallback: "兜底回复",
 };
 
-const TOOL_STEP_ID = "3";
+const LEGACY_TOOL_STEP_ID = "3";
+const GATHER_STEP_ID = "gather";
+const ACT_STEP_ID = "act";
+const ANSWER_STEP_ID = "answer";
 
 const LOOP_PLANNING_LINE = /^第 \d+ 轮：/u;
 const LOOP_PLANNING_BLOCK =
@@ -113,7 +116,15 @@ export function sanitizeToolStepAnswerText(content: string): string {
 }
 
 export function isToolExecutionStep(stepId: string): boolean {
-  return stepId === TOOL_STEP_ID;
+  return (
+    stepId === GATHER_STEP_ID ||
+    stepId === ACT_STEP_ID ||
+    stepId === LEGACY_TOOL_STEP_ID
+  );
+}
+
+export function isAnswerStep(stepId: string): boolean {
+  return stepId === ANSWER_STEP_ID;
 }
 
 /** 判断是否为 query loop 写入的规划摘要块（「第 N 轮：…」）。 */

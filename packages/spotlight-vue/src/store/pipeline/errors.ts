@@ -11,8 +11,7 @@ export function applyPipelineError(
   if (current) {
     api.setStep(current.id, "error", msg);
   } else {
-    api.setStep(SPOTLIGHT_PIPELINE_STEP_IDS.breakdown, "done");
-    api.setStep(SPOTLIGHT_PIPELINE_STEP_IDS.intent, "error", msg);
+    api.setStep(SPOTLIGHT_PIPELINE_STEP_IDS.understand, "error", msg);
   }
   api.setError(msg);
 }

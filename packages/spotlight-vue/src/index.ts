@@ -82,6 +82,7 @@ export { TOOL_NAMES } from "./constants/toolNames.js";
 export {
   getIntentStepDisplayContent,
   humanizeSpotlightStepContent,
+  isAnswerStep,
   isToolExecutionStep,
   sanitizeToolStepAnswerText,
   splitToolStepContent,

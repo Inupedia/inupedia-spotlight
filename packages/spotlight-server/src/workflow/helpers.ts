@@ -2,6 +2,7 @@ import type { FrontendToolDescriptorV1 } from "@inupedia/spotlight-protocol";
 import type { IntentDecision, KnowledgeEvidence } from "../contracts.js";
 import type { prepareRunSkills } from "../skills.js";
 import { compactText } from "./state.js";
+import { isInternalEvidenceTitle } from "./evidence.js";
 
 export function routeProgressSummary(
   question: string,
@@ -55,7 +56,7 @@ export function evidenceProgressSummary(
     ...new Set(
       evidence
         .map((item) => item.title?.trim())
-        .filter((title): title is string => Boolean(title)),
+        .filter((title): title is string => Boolean(title) && !isInternalEvidenceTitle(title)),
     ),
   ].slice(0, 3);
   const titleSummary = titles.length > 0 ? `：${titles.join("；")}` : "";

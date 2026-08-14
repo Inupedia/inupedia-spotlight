@@ -1,5 +1,5 @@
-/** 与 Spotlight 流水线「执行工具与回答 / 知识问答」步骤 id 一致 */
-export const LIVE2D_ANSWER_STEP_ID = "3";
+/** 与 Spotlight 流水线「回答」步骤 id 一致 */
+export const LIVE2D_ANSWER_STEP_ID = "answer";
 
 const SENTENCE_END_RE = /[。！？；\n]/;
 const DEFAULT_MIN_CHARS = 6;

@@ -95,7 +95,7 @@ const showSpotlightThinkingBar = computed(() => {
 
 const thinkingBarCentered = computed(() => {
   const isKnowledgeQa =
-    store.agentSteps.length === 1 && store.agentSteps[0]?.label === "知识问答";
+    store.agentSteps.length === 1 && store.agentSteps[0]?.label === "回答";
   return (
     store.pipelinePhase === "running" ||
     isKnowledgeQa ||
@@ -238,6 +238,7 @@ function releaseCurrentTtsAudio() {
 function getAnswerStepSpeechText(): string {
   const step =
     store.agentSteps.find((item) => item.id === LIVE2D_ANSWER_STEP_ID) ??
+    store.agentSteps.find((item) => item.label === "回答") ??
     store.agentSteps.find((item) => item.label === "执行工具与回答") ??
     store.agentSteps.find((item) => item.label === "知识问答");
   return step?.content ?? "";

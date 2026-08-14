@@ -637,8 +637,8 @@ export const useSpotlightStore = defineStore("spotlight", {
         if (this.agentSteps.length === 0) {
           this.agentSteps = [
             {
-              id: SPOTLIGHT_PIPELINE_STEP_IDS.intent,
-              label: SPOTLIGHT_PIPELINE_STEP_LABELS.intent,
+              id: SPOTLIGHT_PIPELINE_STEP_IDS.understand,
+              label: SPOTLIGHT_PIPELINE_STEP_LABELS.understand,
               status: "error",
               content: msg,
             },

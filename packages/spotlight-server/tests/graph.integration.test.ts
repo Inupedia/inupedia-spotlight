@@ -530,6 +530,67 @@ describe("LangGraph runtime isolation", () => {
     expect(second.assistantReply).toContain("第二轮问题");
   });
 
+  it("does not leak previous-turn knowledge titles into this turn", async () => {
+    const checkpointer = new MemorySaver();
+    const store = new InMemoryStore();
+    const sessionId = crypto.randomUUID();
+    const runContextFor = (question: string) => {
+      const runContext = context(question, [], { sessionId });
+      runContext.project = {
+        ...runContext.project,
+        knowledgeProvider: {
+          id: "yuxi",
+          async search({ query }) {
+            return [
+              {
+                title: query.includes("引大济岷") ? "引大济岷工程概况" : "监控点位清单",
+                content: `${query} 的资料`,
+              },
+            ];
+          },
+        },
+      };
+      return runContext;
+    };
+    const options = {
+      model: new FakeToolCallingModel(),
+      router: router({
+        route: "knowledge" as const,
+        confidence: 1,
+        reason: "information request",
+        requestedToolNames: [],
+        explicitActionEvidence: null,
+        knowledgeSource: "knowledge" as const,
+      }),
+      checkpointer,
+      store,
+    };
+
+    const firstPhases: string[] = [];
+    await runSpotlightGraph(runContextFor("介绍下引大济岷"), {
+      ...options,
+      onPhase: (_phase, summary) => firstPhases.push(summary),
+    });
+    expect(firstPhases.some((summary) => summary.includes("引大济岷工程概况"))).toBe(
+      true,
+    );
+
+    const secondPhases: string[] = [];
+    await runSpotlightGraph(runContextFor("这个模块有哪些监控"), {
+      ...options,
+      onPhase: (_phase, summary) => secondPhases.push(summary),
+    });
+    expect(secondPhases.some((summary) => summary.includes("监控点位清单"))).toBe(
+      true,
+    );
+    expect(
+      secondPhases.some((summary) => summary.includes("引大济岷工程概况")),
+    ).toBe(false);
+    expect(
+      secondPhases.some((summary) => summary.includes("介绍下引大济岷")),
+    ).toBe(false);
+  });
+
   it("does not recall long-term memory when the user disables it", async () => {
     const store = new InMemoryStore();
     const subjectId = "user-memory-off";

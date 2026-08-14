@@ -42,7 +42,7 @@ export class HikariSearchProvider implements WebSearchProvider {
           url: item.url,
           score: item.score,
         }));
-        if (payload.answer) evidence.unshift({ content: payload.answer, title: "Hikari answer" });
+        if (payload.answer) evidence.unshift({ content: payload.answer });
         return evidence.filter((item) => item.content.trim());
       } catch (error) {
         lastError = error;

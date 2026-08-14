@@ -10,6 +10,7 @@ import { appendStepToolCalls } from "../src/store/pipeline/steps.js";
 import type { HandlerApi } from "../src/store/pipeline/types.js";
 import type { AgentStep } from "../src/store/types.js";
 import type { SpotlightExecutionEvent } from "../src/store/runtime/types.js";
+import { resolveToolLane } from "../src/store/pipeline/toolLane.js";
 
 function createApi() {
   let steps: AgentStep[] = [];
@@ -55,92 +56,218 @@ function transition(
   };
 }
 
+describe("resolveToolLane", () => {
+  it("treats knowledge search as 获取信息", () => {
+    expect(resolveToolLane("web_search")).toBe("gather");
+    expect(resolveToolLane("project_knowledge_search")).toBe("gather");
+    expect(resolveToolLane("query_kb")).toBe("gather");
+  });
+
+  it("splits client tools by sideEffect, not by 'is a tool'", () => {
+    expect(resolveToolLane("getVideoInfo", "none")).toBe("gather");
+    expect(resolveToolLane("playVideoFullscreen", "ui")).toBe("act");
+  });
+});
+
 describe("LangGraph progress steps", () => {
-  it("shows real action-agent phases in order", () => {
+  it("shows action tools under 操作页面, not a leftover 选择工具 step", async () => {
     const { api, getSteps } = createApi();
     applyLangGraphTransition(api, transition("routing", "正在路由"));
     applyLangGraphTransition(api, transition("router_done", "已路由到 action Agent"));
     applyLangGraphTransition(api, transition("action_agent_start", "Action Agent 已启动"));
 
     expect(getSteps()).toEqual([
-      expect.objectContaining({ label: "分析意图", status: "done" }),
-      expect.objectContaining({ label: "选择工具", status: "active" }),
+      expect.objectContaining({ label: "理解问题", status: "done" }),
     ]);
 
-    applyLangGraphTransition(api, transition("action_agent_done", "Action Agent 已完成操作"));
-    expect(getSteps()[1]).toEqual(
-      expect.objectContaining({ label: "选择工具", status: "done" }),
-    );
-    expect(responseStepLabel(api)).toBe("执行工具与回答");
+    await applyRemoteEvent(api, {
+      type: "tool_start",
+      at: Date.now(),
+      iteration: 1,
+      call: {
+        id: "play-1",
+        name: "playVideoFullscreen",
+        input: { name: "泸定取水口" },
+        displayName: "全屏播放监控",
+      },
+    });
+
+    expect(getSteps()).toEqual([
+      expect.objectContaining({ label: "理解问题", status: "done" }),
+      expect.objectContaining({ label: "操作页面", status: "active" }),
+    ]);
+    expect(responseStepLabel(api)).toBe("回答");
   });
 
-  it("shows real knowledge-agent phases in order", () => {
+  it("puts knowledge retrieval into 获取信息 and keeps 回答 separate", async () => {
     const { api, getSteps } = createApi();
     applyLangGraphTransition(api, transition("routing", "正在路由"));
     applyLangGraphTransition(api, transition("router_done", "已路由到 knowledge Agent"));
-    applyLangGraphTransition(api, transition("knowledge_agent_start", "Knowledge Agent 已启动"));
-    applyLangGraphTransition(api, transition("knowledge_agent_done", "Knowledge Agent 已完成回答"));
-
-    expect(getSteps()).toEqual([
-      expect.objectContaining({ label: "分析意图", status: "done" }),
-      expect.objectContaining({ label: "检索知识", status: "done" }),
-    ]);
-    expect(responseStepLabel(api)).toBe("知识问答");
-  });
-
-  it("labels a clarification response without pretending a tool ran", () => {
-    const { api } = createApi();
-    applyLangGraphTransition(api, transition("routing", "正在路由"));
-    applyLangGraphTransition(api, transition("router_done", "已路由到 clarify Agent"));
-    expect(responseStepLabel(api)).toBe("生成回答");
-  });
-
-  it("keeps memory replay visible as a completed step", () => {
-    const { api, getSteps } = createApi();
-    applyLangGraphTransition(api, transition("memory_replay", "已复用记忆"));
-    expect(getSteps()).toEqual([
-      expect.objectContaining({
-        label: "问题拆解",
-        status: "done",
-        content: "已复用记忆",
-      }),
-    ]);
-  });
-
-  it("closes the action selection step when tool execution starts", async () => {
-    const { api, getSteps } = createApi();
     applyLangGraphTransition(
       api,
-      transition("action_agent_start", "已选定工具：openBimBuilding。"),
+      transition("knowledge_agent_start", "正在使用联网搜索搜索：“引大济岷”。"),
     );
     await applyRemoteEvent(api, {
       type: "tool_start",
       at: Date.now(),
       iteration: 1,
       call: {
-        id: "bim-1",
-        name: "openBimBuilding",
-        input: { target: "泸定取水口" },
-        displayName: "打开 BIM 建筑",
+        id: "web-1",
+        name: "web_search",
+        input: { query: "引大济岷" },
+        displayName: "联网搜索",
       },
     });
-
-    const steps = getSteps();
-    expect(steps).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ label: "选择工具", status: "done" }),
-        expect.objectContaining({
-          label: "执行工具与回答",
-          status: "active",
-        }),
-      ]),
+    applyLangGraphTransition(
+      api,
+      transition("knowledge_agent_done", "联网搜索命中 3 条资料。"),
     );
-    expect(
-      steps.filter((step) => step.status === "active").map((step) => step.label),
-    ).toEqual(["执行工具与回答"]);
+    await applyRemoteEvent(api, {
+      type: "assistant_response",
+      at: Date.now(),
+      iteration: 1,
+      content: "引大济岷是一项跨流域调水工程。",
+    });
+
+    expect(getSteps()).toEqual([
+      expect.objectContaining({ label: "理解问题", status: "done" }),
+      expect.objectContaining({
+        label: "获取信息",
+        status: "done",
+        toolCalls: [
+          expect.objectContaining({ name: "web_search", status: "running" }),
+        ],
+      }),
+      expect.objectContaining({
+        label: "回答",
+        status: "done",
+        content: "引大济岷是一项跨流域调水工程。",
+      }),
+    ]);
+    expect(responseStepLabel(api)).toBe("回答");
   });
 
-  it("renders expandable tool calls from tool_start and tool_result events", async () => {
+  it("labels a clarification response without pretending a tool ran", () => {
+    const { api, getSteps } = createApi();
+    applyLangGraphTransition(api, transition("routing", "正在路由"));
+    applyLangGraphTransition(api, transition("router_done", "已路由到 clarify Agent"));
+    expect(getSteps()).toEqual([
+      expect.objectContaining({ label: "理解问题", status: "done" }),
+    ]);
+    expect(responseStepLabel(api)).toBe("回答");
+  });
+
+  it("keeps memory replay on 理解问题 and never leaves it active", async () => {
+    const { api, getSteps } = createApi();
+    await applyRemoteEvent(api, {
+      type: "memory_decision",
+      at: Date.now(),
+      turnId: "turn-1",
+      decision: {
+        action: "ignore",
+        reasonCode: "no_hit",
+        confidence: 0,
+        memoryIds: [],
+        canForceRefresh: false,
+      },
+    });
+    applyLangGraphTransition(api, transition("routing", "正在路由"));
+    applyLangGraphTransition(api, transition("router_done", "已路由"));
+
+    const understand = getSteps().find((step) => step.label === "理解问题");
+    expect(understand?.status).toBe("done");
+    expect(getSteps().some((step) => step.label === "问题拆解")).toBe(false);
+  });
+
+  it("routes getVideoInfo to 获取信息 and playVideoFullscreen to 操作页面", async () => {
+    const { api, getSteps } = createApi();
+    const lookup = {
+      sideEffectByName: new Map([
+        ["getVideoInfo", "none" as const],
+        ["playVideoFullscreen", "ui" as const],
+      ]),
+    };
+
+    await applyRemoteEvent(
+      api,
+      {
+        type: "tool_start",
+        at: Date.now(),
+        iteration: 1,
+        call: {
+          id: "get-1",
+          name: "getVideoInfo",
+          input: {},
+          displayName: "获取监控信息",
+        },
+      },
+      lookup,
+    );
+    await applyRemoteEvent(
+      api,
+      {
+        type: "tool_result",
+        at: Date.now(),
+        iteration: 1,
+        result: {
+          call: {
+            id: "get-1",
+            name: "getVideoInfo",
+            input: {},
+            displayName: "获取监控信息",
+          },
+          success: true,
+          summary: "当前有 12 路监控",
+          output: [{ name: "泸定取水口" }],
+          trace: [],
+        },
+      },
+      lookup,
+    );
+    await applyRemoteEvent(
+      api,
+      {
+        type: "tool_start",
+        at: Date.now(),
+        iteration: 1,
+        call: {
+          id: "play-1",
+          name: "playVideoFullscreen",
+          input: { name: "泸定取水口" },
+          displayName: "全屏播放监控",
+        },
+      },
+      lookup,
+    );
+    await applyRemoteEvent(api, {
+      type: "assistant_response",
+      at: Date.now(),
+      iteration: 1,
+      content: "当前共有 12 路监控，已为您打开泸定取水口。",
+    });
+
+    const gather = getSteps().find((step) => step.label === "获取信息");
+    const act = getSteps().find((step) => step.label === "操作页面");
+    const answer = getSteps().find((step) => step.label === "回答");
+    expect(gather?.toolCalls).toEqual([
+      expect.objectContaining({
+        name: "getVideoInfo",
+        status: "done",
+        summary: "当前有 12 路监控",
+      }),
+    ]);
+    expect(act?.toolCalls).toEqual([
+      expect.objectContaining({
+        name: "playVideoFullscreen",
+        status: "running",
+      }),
+    ]);
+    expect(answer?.content).toBe("当前共有 12 路监控，已为您打开泸定取水口。");
+    expect(gather?.status).toBe("done");
+    expect(act?.status).toBe("done");
+  });
+
+  it("renders expandable knowledge tool calls on 获取信息", async () => {
     const { api, getSteps } = createApi();
     await applyRemoteEvent(api, {
       type: "tool_start",
@@ -182,9 +309,9 @@ describe("LangGraph progress steps", () => {
       },
     });
 
-    const toolStep = getSteps().find((step) => step.id === "3");
-    expect(toolStep?.status).toBe("active");
-    expect(toolStep?.toolCalls).toEqual([
+    const gather = getSteps().find((step) => step.id === "gather");
+    expect(gather?.status).toBe("active");
+    expect(gather?.toolCalls).toEqual([
       expect.objectContaining({
         id: "kb-1",
         name: "project_knowledge_search",
@@ -198,7 +325,7 @@ describe("LangGraph progress steps", () => {
     ]);
   });
 
-  it("shows host tool execution while the frontend action is running", () => {
+  it("shows host tool execution on 操作页面 while the frontend action is running", () => {
     const { api, getSteps } = createApi();
     const call = {
       id: "host-1",
@@ -206,7 +333,10 @@ describe("LangGraph progress steps", () => {
       input: {},
       displayName: "开启人员定位",
     };
-    beginHostToolCall(api, call);
+    beginHostToolCall(api, call, {
+      sideEffectByName: new Map([["mode.openPeopleFocus", "ui"]]),
+    });
+    expect(getSteps()[0]?.label).toBe("操作页面");
     expect(getSteps()[0]?.toolCalls).toEqual([
       expect.objectContaining({
         id: "host-1",

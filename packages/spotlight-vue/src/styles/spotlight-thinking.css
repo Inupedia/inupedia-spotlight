@@ -451,6 +451,10 @@
   word-break: break-word;
 }
 
+.thinking-bar-step-process {
+  color: var(--tb-text-muted);
+}
+
 .thinking-bar-step-markdown {
   white-space: normal;
 }

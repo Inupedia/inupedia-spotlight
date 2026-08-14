@@ -15,6 +15,37 @@ export function emptyEvidenceBundle(): EvidenceBundle {
   };
 }
 
+export function resetEvidenceBundle(): EvidenceBundle {
+  return { ...emptyEvidenceBundle(), turnReset: true };
+}
+
+const INTERNAL_EVIDENCE_TITLES = new Set([
+  "hikari answer",
+  "yuxi project knowledge",
+  "spotlight knowledge",
+  "tavily answer",
+]);
+
+export function isInternalEvidenceTitle(title: string | undefined): boolean {
+  return INTERNAL_EVIDENCE_TITLES.has(title?.trim().toLowerCase() ?? "");
+}
+
+export function applyEvidenceUpdate(
+  left: EvidenceBundle,
+  right: EvidenceBundle,
+): EvidenceBundle {
+  if (right.turnReset) {
+    const { turnReset: _ignored, ...rest } = right;
+    if (!rest.items.length && !rest.attemptedSources.length) {
+      return emptyEvidenceBundle();
+    }
+    return rest;
+  }
+  if (!right.items.length && !right.attemptedSources.length) return left;
+  if (!left.items.length && !left.attemptedSources.length) return right;
+  return mergeEvidenceBundles(left, right);
+}
+
 export function evidenceFromSource(input: {
   source: string;
   items?: KnowledgeEvidence[];
@@ -28,7 +59,10 @@ export function evidenceFromSource(input: {
     ...new Set(
       items
         .flatMap((item) => [item.title?.trim(), item.url?.trim()])
-        .filter((value): value is string => Boolean(value)),
+        .filter(
+          (value): value is string =>
+            Boolean(value) && !isInternalEvidenceTitle(value),
+        ),
     ),
   ];
   let sufficiency: EvidenceSufficiency = "none";

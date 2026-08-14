@@ -88,7 +88,7 @@ pnpm test
 pnpm build
 ```
 
-1. Push tag，例如 `v0.5.16`。
+1. Push tag，例如 `v0.5.17`。
 2. GitHub Actions 对齐所有 package 版本、跑测试、发布 npm（`NPM_TOKEN`）。
 3. Server 镜像：`ghcr.io/inupedia/spotlight-server:<ver>`。
 
