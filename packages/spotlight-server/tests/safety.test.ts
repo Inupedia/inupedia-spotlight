@@ -75,9 +75,7 @@ describe("intent safety fence", () => {
       explicitActionEvidence: "skill:skill.bim",
       matchedSkillNames: ["skill.bim"],
     };
-    expect(
-      actionToolAllowlist([readTool, actionTool], decision),
-    ).toEqual([]);
+    expect(actionToolAllowlist([readTool, actionTool], decision)).toEqual([]);
     expect(
       actionToolAllowlist(
         [
@@ -120,6 +118,113 @@ describe("intent safety fence", () => {
     });
     expect(decision.route).toBe("clarify");
     expect(actionToolAllowlist([actionTool], decision)).toEqual([]);
+  });
+
+  it.each(["?", "？", "unknown", "待确认", "<required>"])(
+    "fails closed when a Skill-selected tool contains a fabricated placeholder: %s",
+    (placeholder) => {
+      const decision = applyIntentSafetyFence("确认那个采购单", {
+        route: "action",
+        confidence: 0.99,
+        reason: "skill matched but target was unresolved",
+        requestedToolNames: ["confirmPurchaseOrder"],
+        requestedToolInput: { id: placeholder },
+        explicitActionEvidence: "skill:skill.erp.purchase",
+        matchedSkillNames: ["skill.erp.purchase"],
+      });
+
+      expect(decision.route).toBe("clarify");
+      expect(decision.requestedToolNames).toEqual([]);
+      expect(decision.requestedToolInput).toBeUndefined();
+    },
+  );
+
+  it.each([
+    "需要用户提供具体的收货行项目信息（itemId和receivedQty）",
+    "需要用户提供退回的目标节点ID",
+    "请用户指定目标审批节点",
+    "未提供设备编号",
+    "Please provide the target activity id",
+    "Missing required line item details",
+  ])(
+    "fails closed when the model substitutes a missing argument explanation: %s",
+    (explanation) => {
+      const decision = applyIntentSafetyFence("把采购单退回上一节点", {
+        route: "action",
+        confidence: 0.99,
+        reason: "model explained the missing value instead of resolving it",
+        requestedToolNames: ["returnPurchaseOrder"],
+        requestedToolInput: {
+          id: "PO-100",
+          targetActivityId: explanation,
+        },
+        explicitActionEvidence: "skill:skill.oa.workflow",
+        matchedSkillNames: ["skill.oa.workflow"],
+      });
+
+      expect(decision.route).toBe("clarify");
+      expect(decision.requestedToolNames).toEqual([]);
+      expect(decision.requestedToolInput).toBeUndefined();
+    },
+  );
+
+  it("fails closed on unresolved placeholders nested inside arrays or objects", () => {
+    const decision = applyIntentSafetyFence("把采购单退回上一节点", {
+      route: "action",
+      confidence: 0.99,
+      reason: "nested input",
+      requestedToolNames: ["returnPurchaseOrder"],
+      requestedToolInput: {
+        id: "PO-100",
+        target: { activityIds: ["待定"] },
+      },
+      explicitActionEvidence: "skill:skill.oa.workflow",
+      matchedSkillNames: ["skill.oa.workflow"],
+    });
+
+    expect(decision.route).toBe("clarify");
+    expect(decision.requestedToolNames).toEqual([]);
+  });
+
+  it("fails closed on a nested explanatory substitute", () => {
+    const decision = applyIntentSafetyFence("收货采购单 PO-100", {
+      route: "action",
+      confidence: 0.99,
+      reason: "nested missing lines",
+      requestedToolNames: ["receivePurchaseOrder"],
+      requestedToolInput: {
+        id: "PO-100",
+        items: [
+          {
+            itemId: "需要用户提供具体的收货行项目信息（itemId和receivedQty）",
+          },
+        ],
+      },
+      explicitActionEvidence: "skill:skill.erp.purchase",
+      matchedSkillNames: ["skill.erp.purchase"],
+    });
+
+    expect(decision.route).toBe("clarify");
+    expect(decision.requestedToolNames).toEqual([]);
+  });
+
+  it("does not reject a legitimate value that is grounded verbatim in the user message", () => {
+    const literalBusinessValue = "需要用户确认的特殊批次";
+    const decision = applyIntentSafetyFence(
+      `创建备注为“${literalBusinessValue}”的任务`,
+      {
+        route: "action",
+        confidence: 0.99,
+        reason: "literal user-provided business value",
+        requestedToolNames: ["createTask"],
+        requestedToolInput: { note: literalBusinessValue },
+        explicitActionEvidence: "skill:skill.tasks",
+        matchedSkillNames: ["skill.tasks"],
+      },
+    );
+
+    expect(decision.route).toBe("action");
+    expect(decision.requestedToolNames).toEqual(["createTask"]);
   });
 
   it("keeps explicit memory control out of the client action route", () => {

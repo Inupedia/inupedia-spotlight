@@ -18,8 +18,11 @@ const skillRouteSchema = z.object({
 export type SkillRouteResult = z.infer<typeof skillRouteSchema>;
 
 const LIST_QUERY_PATTERN =
-  /(?:有哪些|多少|几路|清单|列表|数量|在线状态|覆盖哪些|有几个)/u;
-const OPEN_TARGET_VERB_PATTERN = /(?:看看|查看|打开|显示|播放)/u;
+  /(?:有哪些|多少|几路|清单|列表|数量|在线状态|覆盖哪些|有几个|list|how many|what .*available)/iu;
+const OPEN_TARGET_VERB_PATTERN =
+  /(?:看看|查看|打开|显示|播放|进入|定位|open|show|view|play|navigate to|go to)/iu;
+const OPEN_TOOL_NAME_PATTERN =
+  /^(?:open|show|view|play|navigate|select|focus|display|enter|locate)/i;
 
 function toolsForSkill(
   skill: SpotlightSkill,
@@ -47,6 +50,35 @@ function inferReadOnlyTool(
   return null;
 }
 
+function requiredStringInputKeys(tool: FrontendToolDescriptorV1): string[] {
+  const schema = tool.inputSchema as {
+    properties?: Record<string, { type?: unknown }>;
+    required?: unknown;
+  };
+  const required = Array.isArray(schema.required)
+    ? schema.required.filter((key): key is string => typeof key === "string")
+    : [];
+  const properties = schema.properties ?? {};
+  return required.filter((key) => properties[key]?.type === "string");
+}
+
+function inferOpenTool(
+  skill: SpotlightSkill,
+  clientTools: FrontendToolDescriptorV1[],
+): FrontendToolDescriptorV1 | null {
+  const tools = toolsForSkill(skill, clientTools).filter(
+    (tool) => tool.sideEffect !== "none",
+  );
+  const explicitlyOpen = tools.filter((tool) =>
+    OPEN_TOOL_NAME_PATTERN.test(tool.name),
+  );
+  return explicitlyOpen.length === 1 ? explicitlyOpen[0] : null;
+}
+
+function registeredToolMap(clientTools: FrontendToolDescriptorV1[]) {
+  return new Map(clientTools.map((tool) => [tool.name, tool]));
+}
+
 export function isSkillListQuery(question: string): boolean {
   return LIST_QUERY_PATTERN.test(question);
 }
@@ -60,24 +92,30 @@ export function hasOpenTargetIntent(question: string): boolean {
 export function extractOpenTargetName(question: string): string | undefined {
   const normalized = question
     .trim()
-    .replace(/^(请|帮我|给我)?/u, "")
-    .replace(/^(看看|查看|打开|显示|播放)/u, "")
-    .replace(/(的)?(BIM|bim)?(模型|三维|建筑物?)?$/u, "")
+    .replace(/^(请|帮我|给我|please\s+|could you\s+|can you\s+)?/iu, "")
+    .replace(
+      /^(看看|查看|打开|显示|播放|进入|定位|open|show|view|play|navigate to|go to)\s*/iu,
+      "",
+    )
     .trim();
   return normalized || undefined;
 }
 
+/** @deprecated Use extractOpenTargetName. Kept for compatibility with older imports. */
 export function extractMonitorTargetName(question: string): string | undefined {
-  const normalized = question
-    .trim()
-    .replace(/^(请|帮我|给我)?/u, "")
-    .replace(/^(看看|查看|打开|显示|播放)/u, "")
-    .trim();
-  return normalized || undefined;
+  return extractOpenTargetName(question);
 }
 
-function registeredToolMap(clientTools: FrontendToolDescriptorV1[]) {
-  return new Map(clientTools.map((tool) => [tool.name, tool]));
+function buildTargetInput(
+  tool: FrontendToolDescriptorV1,
+  question: string,
+  currentInput?: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const target = extractOpenTargetName(question);
+  if (!target) return currentInput;
+  const keys = requiredStringInputKeys(tool);
+  if (keys.length !== 1) return currentInput;
+  return { ...(currentInput ?? {}), [keys[0]]: target };
 }
 
 export function enrichSkillToolRoute(
@@ -91,88 +129,41 @@ export function enrichSkillToolRoute(
   const matched = skills.filter((skill) =>
     route.matchedSkillNames.includes(skill.name),
   );
-  if (matched.length === 0) return route;
+  if (matched.length !== 1) return route;
 
+  const skill = matched[0];
   const openIntent = hasOpenTargetIntent(question);
   const listIntent = isSkillListQuery(question);
 
-  if (route.matchedSkillNames.includes("skill.monitoring")) {
-    const playTool = "playVideoFullscreen";
-    if (openIntent && registered.has(playTool)) {
-      const name = extractMonitorTargetName(question);
+  if (listIntent) {
+    const readTool = inferReadOnlyTool([skill], clientTools);
+    if (readTool && registered.has(readTool)) {
       return {
         ...route,
-        requestedToolNames: [playTool],
-        toolInput: name ? { name } : route.toolInput,
-        reason: `${route.reason} Monitoring open intent → ${playTool}.`,
-      };
-    }
-    if (listIntent && registered.has("getVideoInfo")) {
-      return {
-        ...route,
-        requestedToolNames: ["getVideoInfo"],
-        toolInput: {},
-        reason: `${route.reason} Monitoring list intent → getVideoInfo.`,
+        requestedToolNames: [readTool],
+        toolInput: route.toolInput ?? {},
+        reason: `${route.reason} Generic list intent → ${readTool}.`,
       };
     }
   }
 
-  if (route.matchedSkillNames.includes("skill.bim")) {
-    const openTool = "openBimBuilding";
-    if (openIntent && registered.has(openTool)) {
-      const target = extractOpenTargetName(question);
-      if (target) {
+  if (openIntent) {
+    const openTool = inferOpenTool(skill, clientTools);
+    if (openTool) {
+      const selected = route.requestedToolNames[0];
+      const selectedTool = selected ? registered.get(selected) : undefined;
+      const shouldCorrect =
+        !selectedTool ||
+        selectedTool.sideEffect === "none" ||
+        !OPEN_TOOL_NAME_PATTERN.test(selectedTool.name);
+      if (shouldCorrect || selected === openTool.name) {
         return {
           ...route,
-          requestedToolNames: [openTool],
-          toolInput: { target },
-          reason: `${route.reason} BIM open intent → ${openTool}.`,
+          requestedToolNames: [openTool.name],
+          toolInput: buildTargetInput(openTool, question, route.toolInput),
+          reason: `${route.reason} Generic named-target intent → ${openTool.name}.`,
         };
       }
-    }
-    if (
-      (listIntent || (!openIntent && route.requestedToolNames.length === 0)) &&
-      registered.has("getBimModelInfo")
-    ) {
-      return {
-        ...route,
-        requestedToolNames: ["getBimModelInfo"],
-        toolInput: {},
-        reason: `${route.reason} BIM list intent → getBimModelInfo.`,
-      };
-    }
-  }
-
-  const selected = route.requestedToolNames[0];
-  if (
-    selected === "getVideoInfo" &&
-    openIntent &&
-    route.matchedSkillNames.includes("skill.monitoring") &&
-    registered.has("playVideoFullscreen")
-  ) {
-    const name = extractMonitorTargetName(question);
-    return {
-      ...route,
-      requestedToolNames: ["playVideoFullscreen"],
-      toolInput: name ? { name } : route.toolInput,
-      reason: "Corrected monitoring list tool to play tool for a named target.",
-    };
-  }
-
-  if (
-    selected === "getBimModelInfo" &&
-    openIntent &&
-    route.matchedSkillNames.includes("skill.bim") &&
-    registered.has("openBimBuilding")
-  ) {
-    const target = extractOpenTargetName(question);
-    if (target) {
-      return {
-        ...route,
-        requestedToolNames: ["openBimBuilding"],
-        toolInput: { target },
-        reason: "Corrected BIM list tool to open tool for a named building.",
-      };
     }
   }
 
@@ -239,6 +230,9 @@ export function buildSkillCatalog(
           name,
           description: tool.description,
           sideEffect: tool.sideEffect,
+          riskLevel: tool.riskLevel,
+          requiresConfirmation: tool.requiresConfirmation,
+          inputSchema: tool.inputSchema,
         };
       }),
     capabilityExamples: skill.capabilityExamples?.slice(0, 6),
@@ -268,22 +262,24 @@ export async function routeViaSkillCatalog(
           "You are Spotlight's skill-first router aligned with LangChain Agent Skills.",
           "Match the latest user message to consumer Skills using semantic understanding of description and whenToUse.",
           "Do not rely on exact phrase matching against capability examples; treat examples as hints only.",
+          "Never use product-specific domain assumptions that are not present in the supplied Skill catalog and tool descriptors.",
           "",
           "Lane rules:",
           "- knowledge: skill.knowledge and direct_answer skills about project facts, introductions, explanations, or public information without manipulating the live page.",
-          "- action: tool_answer skills that read live page data (lists, counts, status) or perform UI operations via registered client tools.",
-          "- clarify: an action skill matches but the target, channel, or required parameter is missing.",
+          "- action: tool_answer skills that read live page data (lists, counts, status) or perform UI/business operations via registered client tools.",
+          "- clarify: an action skill matches but the target or a required parameter cannot be resolved safely.",
+          "- A tool being high-risk or requiresConfirmation does NOT make the route clarify when all required arguments are concrete. Route it as action and let the execution/confirmation gate prevent unconfirmed execution.",
           "",
-          "Tool selection hints:",
-          "- List/count/status (有哪些/多少/清单) → read-only tool for that skill.",
-          "- 看看/查看/打开 + specific target → open/play tool with extracted target/name.",
-          "- “看看泸定取水口” → skill.bim, openBimBuilding, target=泸定取水口",
-          "- “目前有哪些监控” → skill.monitoring, getVideoInfo",
-          "- “查看昂州河河道水位监测” → skill.monitoring, playVideoFullscreen",
+          "Tool selection rules:",
+          "- List/count/status intent → choose the matched skill's read-only tool when one clearly fits.",
+          "- Open/show/view/play + a specific named target → choose the matched skill's open-like tool and copy the user's target into the required string argument without inventing a name.",
+          "- Mutations such as add/remove/update/submit → choose only the exact mutation tool explicitly allowed by the matched skill; preserve quantities and other arguments from the user message.",
+          "- If a required argument is missing or referential context is insufficient, return clarify instead of guessing.",
+          "- Never substitute a list/read tool as the only call for a named-target open request.",
           "",
           "requestedToolNames must contain only exact names from the matched skill's allowedTools.",
           "matchedSkillNames must come from the provided catalog. Return an empty array when no skill fits.",
-          "When conversationContext or lastAssistantReply is provided, use it to resolve referential follow-ups (刚才/那个/继续).",
+          "When conversationContext or lastAssistantReply is provided, use it to resolve referential follow-ups (刚才/那个/继续/that one/continue).",
         ].join("\n"),
       ),
       new HumanMessage(

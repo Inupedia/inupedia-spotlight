@@ -1,53 +1,67 @@
-# Stage 5 — Wire SDK, Vue, Project Pack
+# Stage 5 — Wire Core SDK, optional UI Adapter, Project Pack
 
-Only after Tools + Skills + gold questions exist. Layout, packages, env, and boot: [standard.md](../standard.md). Snippets: [templates.md](../templates.md). Checks: [testing.md](../testing.md).
+Only after verified Tools + Skills + gold questions exist, and only when the relevant compatibility axis permits wiring. Layout/packages/env/boot: [standard.md](../standard.md). Snippets: [templates.md](../templates.md). Checks: [testing.md](../testing.md).
 
 ## Packages
 
-```bash
-pnpm add @inupedia/spotlight-client@<ver> @inupedia/spotlight-protocol@<ver> @inupedia/spotlight-vue@<ver>
-```
+Use the **existing host package manager** and the exact published `<ver>` verified in stage 0. Do not create a second lockfile and do not use force/legacy-peer-deps to hide peer mismatches.
 
-Same `<ver>` everywhere. Server image tag = that semver: `ghcr.io/inupedia/spotlight-server:<ver>`.
+Core packages are `@inupedia/spotlight-client` + `@inupedia/spotlight-protocol`. Install `@inupedia/spotlight-vue` only when the Vue adapter is compatible.
 
-## Vite
+Examples are in [standard.md](../standard.md) §5.
 
-Add `spotlightClientTools`; `include` must match the tools file path (`/src/spotlight/tools.ts` or the existing tools file).
+All published `@inupedia/spotlight-*` packages used by the host must use the same compatible `<ver>`. Treat the Server image tag as independently verifiable deployment input; if the matching image cannot be verified, report it instead of claiming runtime readiness.
 
-Set `projectId` and `frontendBuildId`. Production builds fail without them.
+## Tool compiler / build integration
 
-If the app uses a custom base, keep proxy paths consistent with `VITE_SPOTLIGHT_SERVER_URL`.
+For Vite hosts, add `spotlightClientTools`; `include` must match the actual tools file path (`/src/spotlight/tools.ts` or the existing tools entrypoint). The compiler accepts TS/JS/TSX/JSX and is not itself Vue-specific.
 
-## Vue
+Set one `projectId` and `frontendBuildId`. If the app has a custom base/proxy setup, preserve it and make `VITE_SPOTLIGHT_SERVER_URL` consistent.
 
-- Import `@inupedia/spotlight-vue/styles/spotlight-vue.css`
-- `defineSpotlightConfig` in `src/spotlight/config.ts`
+Do not migrate a non-Vite host here unless build migration was explicitly approved.
+
+## Visual UI adapter
+
+### Vue adapter
+
+Only when `ui adapter = VUE_READY`:
+
+- import `@inupedia/spotlight-vue/styles/spotlight-vue.css`
+- `defineSpotlightConfig` in the canonical or existing config file
 - `loadBundledSkillsFromGlob` on `.inupedia/skills/**/SKILL.md`
 - `app.use(SpotlightVue, { config, enabled: true })`
-- `getUiContext`: return current route + any already-centralized UI context object. Do not invent a new global store.
-- `getMemorySubjectId`: stable user id. If none, omit or use session id and say long-term memory is session-scoped. Never use a rotating access token.
+- `getUiContext`: expose only useful already-available state such as current route, selected entity, active tab/scene; do not invent a duplicate global store
+- `getMemorySubjectId`: stable user id when available; never a rotating access token
+
+### React / other frameworks
+
+If `ui adapter = ADAPTER_REQUIRED`, do not install or emulate `@inupedia/spotlight-vue`. Continue the framework-neutral Client Tool + Skill + Server path and run headless/live benchmarks. Record the missing embedded command UI as adapter work rather than declaring Core Agentization unsupported.
+
+Referential prompts require enough `uiContext`/conversation context to resolve “那个 / this / continue”. If not resolvable, the gold expectation is clarify.
 
 ## Project Pack
 
-Create `spotlight-project/` even if Server already runs elsewhere:
+Create/reuse `spotlight-project/`:
 
-- `spotlight.project.yml` — `projectId` identical to Vite plugin
-- `system-prompt.md` — 10–30 lines: product name, do not invent entities, prefer tools
-- `ui-prompts.json` — suggestion chips from gold list prompts
-- `.env.example` — LLM and provider placeholders from [standard.md](../standard.md) §5
-- `docker-compose.yml` — server + postgres + writable memory volume (`SPOTLIGHT_MEMORY_PACKS_ROOT`)
+- `spotlight.project.yml` — same `projectId`
+- `system-prompt.md` — concise product constraints; no invented entities
+- `ui-prompts.json` — suggestions grounded in gold prompts
+- `.env.example` — provider placeholders from [standard.md](../standard.md)
+- `docker-compose.yml` — Server + required persistence when local deployment is part of the host plan
 
-Do not copy `.inupedia/skills` into the server image.
+Do not copy `.inupedia/skills` into the Server image; browser/run capability context supplies host Skills.
 
 ## Verify locally
 
-Run the static checks in [testing.md](../testing.md) §1. Typecheck new files. Report leftovers from `leftovers.md`.
+Run:
 
-## User wrap-up (required)
+1. static checks from [testing.md](../testing.md)
+2. host typecheck/build/tests that cover changed files
+3. live health + gold benchmark only if Server/model credentials/runtime are available
+4. for `ADAPTER_REQUIRED`, explicitly verify Core Agentization separately from visual embedding
 
-1. Files created/edited (paths from [standard.md](../standard.md) §2)
-2. Tool count + Skill count
-3. `.env` they must fill
-4. Boot order from [standard.md](../standard.md) §6
-5. First gold prompts from `gold-questions.md`
-6. What you refused to wrap and why
+A package-registry, Docker, provider-key, or network blocker is `BLOCKED`, not `PASS`.
+
+## Handoff to stage 6
+
+Do not produce the final user wrap-up here. Collect exact files, counts, env keys, boot order, static results, benchmark status, Core/UI-adapter status, and leftovers, then write [08-stage6-report.md](08-stage6-report.md).

@@ -1,34 +1,51 @@
-# Stage 4 — Pressure test (gold questions)
+# Stage 4 — Pressure test
 
-Canonical format, counts, static checks, and list-vs-open contract: **[testing.md](../testing.md)**. This file only says when to write the gold set.
+Canonical format, metrics, and acceptance rules: **[testing.md](../testing.md)**.
 
-You cannot call the live Spotlight Server from this skill unless the user has it running. Still **write** `.spotlight-integrate/gold-questions.md` and dry-check the router text.
+This stage produces a gold set even when no live Server/model is available. It must never report dry review as model accuracy.
 
-## File
+## Outputs
 
-Use the table in [testing.md](../testing.md) §2 only. Do not invent extra columns or a YAML list format.
+Always write:
 
-Minimum:
+- `.spotlight-integrate/gold-questions.md`
+- smoke coverage summary in pipeline state
 
-- 5 rows for the whole app
-- ≥2 rows (list + open) per domain that has both tools
-- 1 knowledge row (`expectTool` empty, `notTools: *`)
-- 1 bait row when two catalog domains exist
+When a live Server + target LLM is available, also write:
 
-Prompts use the host UI language. Open prompts copy a **string that exists in this repo**.
+- `.spotlight-integrate/benchmark-results.md`
+- Route / Skill / Tool / Argument / E2E / Clarification / Unsafe Execution metrics
 
-## Dry check (mandatory)
+## Smoke set
 
-For each gold row, re-read the Skill body + `when_to_use` + examples.
+Minimum 8 rows for a simple app and coverage of every actionable Skill. Include:
 
-- If list and open would both match, **rewrite the Skill** (stage 3), do not weaken the test.
-- If an open row has no catalog-grounded name, go back to stage 0 catalogs.
-- If two Skills both claim the same prompt, add a disambiguating sentence to both bodies.
+- each supported intent family (read/list, named-open, mutation, close/navigation as applicable)
+- knowledge
+- negative/bait collisions
+- ambiguous/referential prompts when parameters can be missing
+- gated/destructive prompt when such a host capability exists
 
-## If Server is up
+Use real host catalog strings.
 
-Follow [testing.md](../testing.md) §4 (`/health`, then UI or `pnpm spotlight:test-tools` if present). Failures = Skill rewrite, not Tool rename, unless the Tool wrapped the wrong symbol.
+## Dry check
+
+For every row:
+
+- verify the expected Skill owns the intent;
+- verify the expected Tool is in that Skill's allowlist;
+- verify expected arguments are derivable from user text/context;
+- verify ambiguous prompts require clarification rather than guessing;
+- verify forbidden/gated prompts cannot be silently redirected to a different Tool.
+
+Rewrite Skill text/tool description when routing would be ambiguous. Do not delete a hard test simply to make the pack look successful.
+
+## Live check
+
+If `:8787` is healthy, run the gold set against the target runtime/model and verify UI/store state deltas for executable rows. Follow [testing.md](../testing.md).
+
+Failures may require Skill text, Tool description/schema, uiContext, or host adapter fixes. Do not patch generic Server code with a product-specific Skill/tool name to make one benchmark pass.
 
 ## Stage gate
 
-Do not start stage 5 until every Skill with a list+open pair has both gold rows that the Skill text can distinguish, and the static checks in [testing.md](../testing.md) §1 would pass on the current files.
+Stage 5 may continue after static/dry acceptance, but final reporting must explicitly say `LIVE BENCHMARK: NOT RUN` when runtime testing did not occur.

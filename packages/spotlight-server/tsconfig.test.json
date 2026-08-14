@@ -3,7 +3,8 @@
   "compilerOptions": {
     "noEmit": true,
     "rootDir": ".",
-    "types": ["node", "vitest/globals"]
+    "types": ["node", "vitest/globals"],
+    "lib": ["ES2023"]
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"]
 }

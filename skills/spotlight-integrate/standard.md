@@ -1,12 +1,10 @@
 # Spotlight host-app standard
 
-This file is the **only** contract for install, directory layout, naming, env, and boot. Do not copy another product’s folders, tool names, or catalog strings.
+This file is the **single contract** for compatibility, install, directory layout, naming, env, and boot. Do not copy another product's folders, tool names, or catalog strings.
 
 ## 1. Install this Agent Skill (human, once)
 
-Two ways. Details and host leftovers: [README.md](README.md).
-
-**A. Copy the entire directory** (not only `SKILL.md`):
+Copy the **entire** `spotlight-integrate/` directory, not only `SKILL.md`.
 
 | Agent | Path |
 |---|---|
@@ -15,116 +13,188 @@ Two ways. Details and host leftovers: [README.md](README.md).
 | Codex | `<app>/.codex/skills/spotlight-integrate/` |
 | Claude Code | `<app>/.claude/skills/spotlight-integrate/` |
 
-Then in the **host frontend** chat:
+Then in the host frontend chat:
 
 ```
-Use spotlight-integrate. Follow standard.md. Distill this app into Spotlight.
+Use spotlight-integrate. Follow architecture.md and standard.md. Agentize this app with Spotlight.
 ```
 
-**B. Paste into any LLM** that already has the host repo open:
+Or use `./prompt.sh --copy` and paste the generated pack into an LLM that already has the host repo open.
+
+## 2. Compatibility preflight (before coding)
+
+Read `package.json`, lockfiles, Node engine, build system, frontend framework, and existing Spotlight dependencies. Write `.spotlight-integrate/COMPATIBILITY.md`.
+
+Compatibility is **two-axis**: Core Agentization and visual UI adapter.
+
+### Core classification
+
+| Status | Condition | Action |
+|---|---|---|
+| `READY` | Browser JS/TS host can compile/register framework-neutral Client Tools and reach Spotlight Server | continue core pipeline |
+| `UPGRADE_REQUIRED` | Core package/build/Node ranges are incompatible | report exact mismatch; do not force upgrade |
+| `BUILD_MIGRATION_REQUIRED` | Current build cannot support the Tool compiler/runtime path without migration | analyze capabilities; stop before build migration unless requested |
+| `UNSUPPORTED_AUTOMATION` | No viable browser Tool integration path exists | readiness report only |
+
+### UI adapter classification
+
+| Status | Condition | Action |
+|---|---|---|
+| `VUE_READY` | Vue 3 host satisfies `@inupedia/spotlight-vue` peer ranges | embed Vue command UI/runtime |
+| `UPGRADE_REQUIRED` | Vue host exists but Vue/Pinia/Node peers are incompatible | continue core when possible; do not force upgrade |
+| `ADAPTER_REQUIRED` | React/other framework host has no shipped visual adapter | continue core + headless Server benchmark; report visual-shell gap |
+| `HEADLESS_ONLY` | Product intentionally does not embed a visual command shell | continue core/runtime benchmark only |
+
+A missing visual adapter is **not** the same as unsupported Core Agentization.
+
+### Registry version check
+
+Use the registry as the install source of truth:
 
 ```bash
-./prompt.sh --copy
+npm view @inupedia/spotlight-vue version peerDependencies --json
+npm view @inupedia/spotlight-client version peerDependencies --json
+npm view @inupedia/spotlight-protocol version --json
 ```
 
-Paste the clipboard, then: follow `SKILL.md`; do not copy example names.
+All installed `@inupedia/spotlight-*` packages must resolve to one compatible version. Do not assume GitHub `main` equals the latest published npm version. If registry lookup is unavailable, mark version verification `BLOCKED` instead of guessing.
 
-This skill’s own tree must stay intact:
+### Package manager
 
-```
-spotlight-integrate/
-├── prompt.sh                # dump pack for any LLM
-├── SKILL.md                 # agent entry
-├── README.md                # human entry
-├── standard.md              # this file
-├── testing.md               # gold questions + static/live checks
-├── templates.md             # copy-paste file snippets (generic names)
-├── examples.md              # shape only — never copy names into the host
-├── methodology/             # stages 0–5
-└── extractors/              # candidate finders
-```
+Preserve the host package manager:
 
-Do not start coding until `methodology/` and `extractors/` sit next to `SKILL.md` (or the pasted prompt includes them).
+- `pnpm-lock.yaml` -> pnpm
+- `yarn.lock` -> yarn
+- `package-lock.json` -> npm
+- no lockfile -> use the package manager declared by `packageManager`, otherwise ask only if installation is required
 
-## 2. Host app directory structure (generated)
+Do not add a second lockfile.
 
-```
+## 3. Host app directory structure (generated)
+
+```text
 <app>/
 ├── package.json
-├── vite.config.ts
-├── .env.example                         # frontend VITE_SPOTLIGHT_* only
+├── <build config>
+├── .env.example
 ├── .inupedia/
 │   └── skills/
-│       ├── skill.knowledge/SKILL.md     # required
-│       └── skill.<domain>/SKILL.md      # one folder per domain
+│       ├── skill.knowledge/SKILL.md
+│       └── skill.<domain>/SKILL.md
 ├── src/
-│   ├── main.ts                          # app.use(SpotlightVue)
+│   ├── <app entry>
 │   └── spotlight/
-│       ├── config.ts                    # defineSpotlightConfig
-│       ├── tools.ts                     # defineClientTool exports + spotlightTools
-│       └── actions/                     # OPTIONAL: extracted handlers (<40 lines)
-├── spotlight-project/                   # Server Project Pack (not the SDK)
+│       ├── config.ts
+│       ├── tools.ts
+│       └── actions/                    # optional behavior-preserving extractions
+├── spotlight-project/
 │   ├── spotlight.project.yml
 │   ├── system-prompt.md
 │   ├── ui-prompts.json
 │   ├── .env.example
 │   └── docker-compose.yml
-└── .spotlight-integrate/                # distillation working dir
+└── .spotlight-integrate/
     ├── PIPELINE_STATE.md
+    ├── COMPATIBILITY.md
     ├── FRONTEND_OVERVIEW.md
     ├── candidates/
     ├── rejected/
     ├── verified.md
+    ├── leftovers.md
     ├── gold-questions.md
-    └── leftovers.md
+    ├── benchmark-results.md            # only when live benchmark ran
+    └── INTEGRATION_REPORT.md
 ```
 
-If the host already has tools or `defineSpotlightConfig` elsewhere, keep those paths and set Vite `include` to the existing tools file. Do not create a second tools file or a second `projectId`. Do not generate `videoChannels` / `quickPanelActions` / avatar unless this host already has that UI.
+If the host already has tools or `defineSpotlightConfig` elsewhere, reuse those paths and point the Tool compiler at the existing tools module. Never create a second tools entrypoint or `projectId`.
 
-## 3. Naming
+## 4. Naming
 
-| Thing | Rule | Example (shape only) |
+| Thing | Rule | Shape-only example |
 |---|---|---|
-| `projectId` | kebab-case; identical in Vite plugin, config, `spotlight.project.yml`, `VITE_SPOTLIGHT_PROJECT_ID` | `media-console` |
-| Client Tool | camelCase, verb-first export | `getItemList`, `openItem`, `closeItem` |
-| Skill id | `skill.` + dotted domain | `skill.knowledge`, `skill.items` |
+| `projectId` | kebab-case; identical in Tool compiler, config, yml, env | `media-console` |
+| Client Tool | camelCase, verb-first export | `getItemList`, `openItem`, `addItem` |
+| Skill id | `skill.` + dotted domain | `skill.items` |
 | Skill folder | equals id | `.inupedia/skills/skill.items/SKILL.md` |
-| npm + image | one semver for all `@inupedia/spotlight-*` and `ghcr.io/inupedia/spotlight-server:<ver>` | output of `npm view @inupedia/spotlight-vue version` |
+| npm packages | exact same published version | `0.x.y` |
 
-Read catalog strings, route titles, and button labels from **this** host repo. Never reuse names from [examples.md](examples.md) or [templates.md](templates.md).
+Read names, route titles, and button labels from **this** host repo.
 
-## 4. Install SDK into the host (agent, stage 5)
+## 5. Install SDK into a compatible host (stage 5)
+
+### Core packages
+
+Use the host package manager and exact verified version `<ver>`.
 
 ```bash
-pnpm add @inupedia/spotlight-client@<ver> \
-         @inupedia/spotlight-protocol@<ver> \
-         @inupedia/spotlight-vue@<ver>
+# pnpm
+pnpm add @inupedia/spotlight-client@<ver> @inupedia/spotlight-protocol@<ver>
+
+# npm
+npm install @inupedia/spotlight-client@<ver> @inupedia/spotlight-protocol@<ver>
+
+# yarn
+yarn add @inupedia/spotlight-client@<ver> @inupedia/spotlight-protocol@<ver>
 ```
 
-`<ver>` = `npm view @inupedia/spotlight-vue version` unless the user pinned it.
+For a Vite host, wire the framework-neutral `spotlightClientTools({ projectId, frontendBuildId, include })` plugin.
 
-Required wiring (snippets in [templates.md](templates.md)):
+### Vue visual adapter
 
-1. Vite plugin `spotlightClientTools({ projectId, frontendBuildId, include })`
+Only when `ui adapter = VUE_READY`, install the same version of `@inupedia/spotlight-vue`:
+
+```bash
+pnpm add @inupedia/spotlight-vue@<ver>
+# or equivalent npm/yarn command
+```
+
+Verify its Vue/Pinia peers first. Never use `--force` or `--legacy-peer-deps` to hide a mismatch.
+
+Vue visual wiring:
+
+1. Tool compiler `spotlightClientTools({ projectId, frontendBuildId, include })`
 2. `src/spotlight/config.ts` + `loadBundledSkillsFromGlob('.inupedia/skills/**/SKILL.md')`
-3. `main.ts`: css import + `app.use(SpotlightVue, { config, enabled: true })`
-4. Dev proxy: frontend `VITE_SPOTLIGHT_SERVER_URL` → Spotlight Server `:8787`
+3. `main.*`: Spotlight CSS + `app.use(SpotlightVue, { config, enabled: true })`
+4. Dev proxy: frontend `VITE_SPOTLIGHT_SERVER_URL` -> Spotlight Server `:8787`
 
-## 5. Environment
+For React/other frameworks with `ui adapter = ADAPTER_REQUIRED`, do **not** install `@inupedia/spotlight-vue`. Continue Client Tool/Skill/Server wiring and headless live benchmarks. Report visual embedding as remaining adapter work.
 
-**Frontend** `<app>/.env.example`:
+## 6. Client Tool contract
 
-```
+Every generated Tool must:
+
+- call an existing host function/export;
+- preserve the host application's authorization checks and backend permission enforcement;
+- have JSDoc immediately above `defineClientTool`;
+- expose the narrowest input schema needed by the host capability;
+- preserve the actual callable boundary's field names, types, enums, requiredness, and identity semantics unless an explicit adapter performs a documented transform;
+- declare correct `sideEffect`, `replayPolicy`, `riskLevel`, and confirmation requirements supported by the runtime;
+- avoid returning entire stores or arbitrary internal objects when a small result is enough;
+- never provide a generic `invokeStoreMethod(name, args)` or DOM selector escape hatch.
+
+**Schema fidelity rule:** derive Tool schemas from the actual Store/Service/API/function boundary, not from a convenient benchmark shape. Do not casually widen `Long`/numeric ids to `string | number`, and do not narrow a real host union merely to improve model scoring. If the Tool intentionally adapts the host contract, the adapter must contain the explicit conversion and the generated report/gold set must test the Tool's real adapter contract. Never add generic Server-side coercion just to compensate for an inaccurate Tool schema.
+
+**Behavior fidelity rule:** a user-visible action is not `DIRECT` merely because its final step is an HTTP call. Follow the real behavior through component state, session data, route/query state, validation, chained calls, and all writes. If the UI behavior depends on component-local state or performs multiple/transitive writes, classify it `REFACTOR` (and `GATED` when risk requires it) until the complete behavior is extracted into a stable host capability shared by UI and Agent. Do not fabricate a simplified Tool that skips those invariants.
+
+**Authorization rule:** static Skill/Tool declarations describe capability; they never grant permission. If availability depends on the current role, tenant, record ownership, workflow state, feature flag, or another live host condition, keep that guard in the host and include the capability in the live Tool set only when it is currently available. The Tool handler/backend must re-check authorization at execution time. Never duplicate or weaken product-specific RBAC/ABAC rules inside the generic Spotlight Server.
+
+`DIRECT` capabilities become Tools. `REFACTOR` capabilities become Tools only after an approved behavior-preserving extraction. `GATED` capabilities are not auto-exposed.
+
+## 7. Environment
+
+Frontend `<app>/.env.example`:
+
+```env
 VITE_SPOTLIGHT_PROJECT_ID=<projectId>
 VITE_SPOTLIGHT_SERVER_URL=/spotlight-api
 VITE_SPOTLIGHT_API_KEY=local-dev-key
 ```
 
-Vite proxy `/spotlight-api` → `http://127.0.0.1:8787`.
+Vite proxy `/spotlight-api` -> `http://127.0.0.1:8787`.
 
-**Server** `spotlight-project/.env.example`:
+Server `spotlight-project/.env.example`:
 
-```
+```env
 SPOTLIGHT_API_KEYS=local-dev-key
 SPOTLIGHT_POSTGRES_PASSWORD=spotlight
 CORS_ORIGIN=http://localhost:5173
@@ -138,30 +208,48 @@ TAVILY_API_BASE=
 TAVILY_API_KEY=
 ```
 
-Never copy host secrets into Skills. Never put LLM keys in `VITE_*`.
+Never copy host secrets into Skills. Never put LLM/provider keys in `VITE_*`.
 
-## 6. Boot order
+## 8. Boot order
+
+Core/headless benchmark:
 
 1. `cd spotlight-project && docker compose up -d`
 2. `curl -sfS http://127.0.0.1:8787/health`
-3. Start the Vite app
-4. Open the Spotlight command UI and run [testing.md](testing.md) gold prompts
+3. Start the host app/backend as required by its own stack
+4. Run the Spotlight Server gold benchmark through registered Client Tools
 
-## 7. Definition of done
+Vue visual integration adds opening the embedded Spotlight command UI after the host frontend starts.
 
-Integration is done only when **all** of these hold:
+## 9. Definition of done
 
-- Layout matches §2 (or an existing tools path is reused, not duplicated)
-- `skill.knowledge` exists
-- every Skill `allowed-tools` name is an export in the tools module
-- gold file uses the table in [testing.md](testing.md)
-- list+open domains have both gold rows
-- wrap-up lists env keys, boot order, and leftovers
+Integration is done only when all applicable gates hold:
 
-## 8. What must not appear in the host app
+- Core compatibility and UI-adapter compatibility are reported separately;
+- every discovered user-facing capability is classified `DIRECT / REFACTOR / GATED / REJECT`;
+- every `DIRECT` capability selected for exposure is wrapped;
+- every generated Tool schema is traceable to a real host boundary or an explicit adapter transform;
+- component-local multi-step behavior is not mislabeled as a simple DIRECT Tool;
+- `skill.knowledge` exists;
+- every Skill `allowed-tools` name is an exported registered Client Tool;
+- projectId is identical across Tool compiler/config/project/env;
+- host authorization, record-ownership, and workflow-state guards still protect every exposed capability, and Tool registration is never treated as permission;
+- smoke gold rows cover all actionable Skills;
+- static checks pass;
+- `INTEGRATION_REPORT.md` distinguishes static readiness, Core Agentization, UI embedding, and live accuracy;
+- live metrics are reported only if the Server + target LLM actually ran.
 
-- LangGraph / custom planner
-- Copied `SKILL.md` onto the Server image (browser sends Skills per run)
-- A second `projectId`
-- Client Tools that do not call an existing host function
-- Catalog names, tool names, or domains copied from this skill’s examples
+A project may be Core-Agentized and benchmarked successfully while its visual adapter remains `ADAPTER_REQUIRED`; that state must be reported explicitly rather than mislabeled as a complete embedded UI integration.
+
+## 10. What must not appear in the host app
+
+- LangGraph/custom planner added solely for Spotlight integration
+- copied product-specific Skill ids/tool names from the integration pack
+- a second `projectId`
+- Client Tools that do not reach an existing host capability
+- simplified Tools that bypass real validation, session state, chained writes, or state-machine invariants
+- forced peer-dependency installation
+- framework-specific package installation into an incompatible host
+- DOM-click automation where a stable Store/Service/Router capability exists
+- authorization bypasses or generic Server copies of product-specific RBAC/ABAC rules
+- claims such as “95% accuracy” derived only from grep/static checks

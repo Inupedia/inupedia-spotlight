@@ -1,54 +1,65 @@
-# Stage 1 — Parallel extractors
+# Stage 1 — Parallel capability extraction
 
-Spawn **separate** extraction passes (parallel sub-agents if the host supports them; otherwise serial). Each pass reads `FRONTEND_OVERVIEW.md` plus its prompt, and writes **one** file under `.spotlight-integrate/candidates/`.
+Run separate extraction passes (parallel sub-agents when available, otherwise serial). Each pass reads `FRONTEND_OVERVIEW.md` and writes Candidate records under `.spotlight-integrate/candidates/`.
 
-Do not wrap tools yet. Only emit **Candidate** records.
+Do **not** create Client Tools yet. Discovery and exposure are separate decisions.
 
 ## Extractors (all required)
 
 | File | Looks for |
 |---|---|
-| [extractors/navigation.md](../extractors/navigation.md) | scene / route / tab / mode switches |
+| [extractors/navigation.md](../extractors/navigation.md) | route / scene / tab / mode navigation |
 | [extractors/panels.md](../extractors/panels.md) | open/close dialog, drawer, overlay, filters |
-| [extractors/catalogs.md](../extractors/catalogs.md) | named entity lists the user can speak |
-| [extractors/reads.md](../extractors/reads.md) | fetch + summarize APIs the UI already shows |
-| [extractors/ui-actions.md](../extractors/ui-actions.md) | click handlers that call named host functions |
+| [extractors/catalogs.md](../extractors/catalogs.md) | named entities the user can speak |
+| [extractors/reads.md](../extractors/reads.md) | read/list/status data already surfaced by the UI |
+| [extractors/ui-actions.md](../extractors/ui-actions.md) | user actions backed by host functions/stores/services |
+| [extractors/danger.md](../extractors/danger.md) | destructive, external, security-sensitive, or generic escape hatches |
 
-Optional last pass: [extractors/danger.md](../extractors/danger.md) marks candidates that must not ship.
+The danger pass is mandatory: high-risk host behavior must be **classified**, not silently omitted.
 
-## Candidate schema (every record)
+## Candidate schema
 
 ```md
 ### CANDIDATE <slug>
 - domain: <domain id from stage 0>
-- kind: read | open | close | navigate | filter | toggle
-- proposedToolName: openItem
-- userPhrasings: ["<list phrasing from UI copy>", "<open phrasing + exact catalog name>"]
+- kind: read | open | close | navigate | filter | toggle | create | update | add | remove | submit | external
+- proposedToolName: <verb-first name>
+- userPhrasings: ["<host-grounded phrasing>"]
 - symbol: <file>#<exportOrAction>
   - file: src/services/items.ts
   - export: openItemByName
-  - pinia: useItemStore().open   # if wrapping a store action
+  - store: useItemStore().open
 - inputs:
-  - name: name, type: string, required: true, source: "catalog name or id"
-- sideEffect: none | ui
-- pairsWith: getItemList   # list/open twins when both exist
+  - name: name, type: string, required: true, source: "catalog/user/uiContext"
+- sideEffect: none | ui | external
+- replayPolicy: safe | idempotency-key | never
+- riskLevel: low | medium | high
+- requiresConfirmation: true | false
+- pairsWith: <tool/capability or none>
 - evidence:
-  - UI: <Component.vue> click "<visible label>"
-  - catalog: <file> name field
-- risk: low | medium | high
+  - UI: <Component.vue> / <visible label>
+  - catalog: <file> / <name field>
 - notes:
 ```
 
-`proposedToolName`, file paths, and phrasings above are **schema placeholders**. Replace them with this host’s symbols.
+Replace every placeholder with host evidence.
 
-Rules for extractors:
+## Extraction rules
 
-- `symbol` must be copy-pasteable. If you cannot name file + export/action, it is not a candidate.
-- `userPhrasings` must come from visible UI copy, route titles, catalog `name`/`label`/`alias`, or comments next to the handler. Inventing English-only names for a Chinese UI is wrong.
-- Prefer **one tool per user intention**, not one tool per store setter. `setFoo(true)` + `setFoo(false)` often become `openFoo` / `closeFoo`, not `setFoo`.
-- Catalog-backed open tools take `name` or `id` the user would say, not raw array indexes, unless the UI itself is index-only.
-- Skip: persistence plugins, HTTP interceptors, shaders, worker internals, `console.log` helpers.
+- `symbol` must identify the real behavior. If no callable/named code path can be located, record the UI job as unresolved/`REFACTOR` evidence instead of inventing a Tool.
+- Include component-local handlers when they are real user jobs; stage 1.5 decides whether they need behavior-preserving extraction.
+- `userPhrasings` come from visible UI copy, route titles, catalog `name/label/alias`, or nearby product semantics.
+- Prefer one Tool per user intention, not one Tool per low-level setter.
+- Catalog-backed actions accept a user-meaningful name/id, not arbitrary indexes unless the UI itself is index-only.
+- Preserve quantities, enum values, ids, and validation boundaries that already exist in the host.
+- Skip renderer/telemetry/worker/persistence internals that are not user jobs.
+- Never propose `runStoreMethod`, `executeScript`, arbitrary URL fetch, or arbitrary CSS selector tools.
 
 ## Coverage bar
 
-After all extractors, every domain in `FRONTEND_OVERVIEW.md` must have **either** ≥1 candidate **or** a written reason in `candidates/_coverage.md` (“domain X is display-only charts, no imperative API”).
+Every domain in `FRONTEND_OVERVIEW.md` must end with:
+
+- one or more Candidates, or
+- a written reason in `candidates/_coverage.md` explaining why it has no imperative/speakable capability.
+
+Coverage is about **classification**, not maximizing Tool count.

@@ -20,6 +20,37 @@ const MEMORY_CONTROL_PATTERNS = [
   /(?:remember|forget|delete.*memory)/iu,
 ];
 
+const UNRESOLVED_TOOL_INPUT_PLACEHOLDERS = new Set([
+  "?",
+  "？",
+  "unknown",
+  "undefined",
+  "null",
+  "n/a",
+  "na",
+  "tbd",
+  "todo",
+  "placeholder",
+  "<unknown>",
+  "<required>",
+  "待定",
+  "待确认",
+  "未知",
+  "未提供",
+  "不详",
+]);
+
+const UNRESOLVED_TOOL_INPUT_EXPLANATIONS = [
+  /^(?:需要|需)(?:用户)?(?:提供|指定|选择|确认|补充)/u,
+  /^请(?:用户)?(?:提供|指定|选择|确认|补充)/u,
+  /^(?:未|尚未)(?:提供|指定|选择|确认|补充)/u,
+  /^缺少/u,
+  /^待(?:提供|指定|选择|确认|补充)/u,
+  /^(?:please\s+)?(?:provide|specify|select|confirm|supply)\b/iu,
+  /^(?:need|needs|requires?)\b.*\b(?:provide|specify|select|confirm|supply)\b/iu,
+  /^(?:missing|required\s+but\s+missing|not\s+provided|not\s+specified|not\s+selected)\b/iu,
+];
+
 export function hasInformationEvidence(question: string): boolean {
   return INFORMATION_PATTERNS.some((pattern) => pattern.test(question));
 }
@@ -58,6 +89,39 @@ export function memoryControlMode(
   return null;
 }
 
+function hasUnresolvedToolInputPlaceholder(
+  value: unknown,
+  question: string,
+): boolean {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const normalized = trimmed.toLocaleLowerCase();
+    if (UNRESOLVED_TOOL_INPUT_PLACEHOLDERS.has(normalized)) return true;
+
+    const looksLikeExplanation = UNRESOLVED_TOOL_INPUT_EXPLANATIONS.some(
+      (pattern) => pattern.test(trimmed),
+    );
+    if (!looksLikeExplanation) return false;
+
+    // A legitimate business value may itself begin with words such as "需要".
+    // Treat it as grounded when the exact value appears in the user's message;
+    // otherwise fail closed because it is likely the model explaining a missing
+    // argument instead of supplying one.
+    return !question.includes(trimmed);
+  }
+  if (Array.isArray(value)) {
+    return value.some((item) =>
+      hasUnresolvedToolInputPlaceholder(item, question),
+    );
+  }
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).some((item) =>
+      hasUnresolvedToolInputPlaceholder(item, question),
+    );
+  }
+  return false;
+}
+
 function skillMatchedAction(decision: IntentDecision): boolean {
   return (
     decision.route === "action" &&
@@ -79,6 +143,21 @@ export function applyIntentSafetyFence(
       requestedToolNames: [],
       explicitActionEvidence: null,
       matchedSkillNames: decision.matchedSkillNames,
+    };
+  }
+  if (
+    decision.route === "action" &&
+    hasUnresolvedToolInputPlaceholder(decision.requestedToolInput, question)
+  ) {
+    return {
+      ...decision,
+      route: "clarify",
+      reason:
+        "The selected client tool contains an unresolved placeholder or an explanatory substitute instead of a concrete argument.",
+      requestedToolNames: [],
+      requestedToolInput: undefined,
+      explicitActionEvidence:
+        actionEvidence ?? decision.explicitActionEvidence ?? null,
     };
   }
   const skillAction = skillMatchedAction(decision);

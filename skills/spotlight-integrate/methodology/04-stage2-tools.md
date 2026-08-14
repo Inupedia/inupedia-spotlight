@@ -1,57 +1,85 @@
 # Stage 2 — Generate Client Tools
 
-Input: `verified.md`. Output: a single tools module the Vite plugin can parse.
+Input: `verified.md`. Output: one Client Tool module parsed by the Spotlight Vite plugin.
 
-Default path: `src/spotlight/tools.ts` ([standard.md](../standard.md) §2). If the repo already has `defineClientTool`, **extend that file** and keep the existing export array name.
+Default path is `src/spotlight/tools.ts`. If the host already has `defineClientTool`, extend the existing module and registry instead of creating a second entrypoint.
 
 ## Wrapper law
 
 ```ts
-/** <one sentence of what the user is asking the page to do> */
+/** <one sentence describing the user-visible host capability> */
 export const toolName = defineClientTool(
-  async (input): Promise<Out> => {
-    return existingFunction(map(input));
+  async (input): Promise<Out> => existingHostFunction(mapInput(input)),
+  {
+    sideEffect: "ui",
+    replayPolicy: "never",
+    riskLevel: "low",
   },
 );
 ```
 
-- Tool name = exported const name, camelCase, verb-first: `openX`, `closeX`, `getX`, `playX`, `selectX`, `navigateToX`, `setX` (toggles only).
-- JSDoc is **mandatory** and must sit immediately above `defineClientTool` (not above imports, not inside). The Vite plugin reads it as `description`.
-- Handler must be an inline function. Do not pass a pre-bound function identifier as the first argument if that hides the parameter types from the plugin.
-- Zero-arg tools: `async (): Promise<void>` or `Promise<Data>`.
-- One input object: `async ({ name }: { name: string })`. Destructured typed object only.
-- Enums/unions the plugin cannot infer from TS keywords → explicit `schema.input` (`type: "string", enum: [...]`). See [templates.md](../templates.md).
-- Do not use `any`. Catalog ids/names are `string`. Indexes only if verified UI is index-based; still document the catalog in JSDoc.
+The handler is an adapter, not a new business implementation.
 
-## Mapping inputs to user language
+## Required metadata
 
-| User says | Tool input |
-|---|---|
-| open phrasing + catalog name | `{ name: "<exact string from this repo>" }` not an internal URL or mesh id |
-| a year / tab / mode the UI already enums | `{ tab: "<literal from the store>" }` |
+Set metadata from verified host semantics:
 
-Resolve names **inside the existing action** if the host already has a resolve/alias helper. Do not reimplement resolvers in `tools.ts`.
+| Capability | sideEffect | replayPolicy | riskLevel |
+|---|---|---|---|
+| read/list/status only | `none` | `safe` | usually `low` |
+| open/view/navigation | `ui` | usually `never` | usually `low` |
+| reversible mutation | `ui` or `external` | `never` or host-backed idempotency | usually `medium` |
+| destructive/irreversible/external commit | `GATED` in stage 1.5 | do not auto-wrap | high |
 
-## Read vs UI
+Do not rely on default metadata when the Tool is a mutation.
 
-- `get*` / `list*` / `fetch*` that only return JSON: no Pinia writes, no route changes. Return the same summary the panel already shows, not a huge raw payload. If a `summarizeX` helper exists, call it.
-- `open*` / `play*` / `navigate*` / `select*`: may write stores. Return void or a small `{ ok, name }` the host already returns.
+## Tool shape rules
 
-## Array export
+- name = exported const name, camelCase, verb-first (`getX`, `openX`, `addX`, `updateX`, `removeX`, `navigateToX`)
+- JSDoc immediately above `defineClientTool`; the Vite plugin uses it as Tool description
+- inline typed handler so the plugin can infer parameters
+- zero args: `async (): Promise<...>`
+- object input: `async ({ name }: { name: string })`
+- enum/union that cannot be inferred safely -> explicit `schema.input`
+- no `any`
+- return only the useful host result/state summary; avoid dumping entire stores or huge payloads
+
+## Input semantics
+
+Inputs should reflect what users and host code actually understand:
+
+- named-open -> host catalog `name/id/alias`
+- mutation -> exact quantity/value/id validated by the host
+- route/tab/mode -> literal values from host Router/Store
+
+Reuse existing host resolver/validation functions. Do not recreate alias lookup or business validation in `tools.ts`.
+
+## Refactor boundary
+
+If stage 1.5 promoted a `REFACTOR` capability, extract the existing component behavior into a narrow host function first, then make both:
+
+1. the original UI handler call that extracted host function;
+2. the Client Tool call the same extracted host function.
+
+That preserves one source of truth.
+
+## Array/registry
+
+Keep the registry mechanically aligned:
 
 ```ts
-export const spotlightTools = [getItemList, openItem, closeItem];
+export const spotlightTools = [getItemList, openItem, updateItem];
 ```
 
-Keep this list mechanically in sync with every `export const`. If the project uses a generated names constant, update that too.
+Every Skill tool must be registered; no extra “hidden” generic executor.
 
-## Refactors allowed without asking
+## Forbidden
 
-- Move an inline `@click` body into `src/spotlight/actions/<domain>.ts` **only** when V1 failed solely because the logic lived in a Vue SFC, the logic is <40 lines, and it already calls stores/services. Do not rewrite a page engine.
+- `eval` / dynamic method dispatch / arbitrary store invocation
+- new HTTP endpoint or API call the host did not already use
+- DOM selector/click automation when a stable host capability exists
+- sleep/retry loops that change business semantics
+- importing page-engine internals solely to bypass the host's own adapter
+- auto-wrapping `GATED` capabilities
 
-## Forbidden in tools.ts
-
-- `eval`, dynamic `store[action]()`, wrapping the entire Pinia store
-- HTTP calls that the page does not already make
-- Sleep/retry loops
-- Importing a page-engine package directly unless the existing action already does
+See [templates.md](../templates.md) for shape-only examples.

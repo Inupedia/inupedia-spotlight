@@ -27,10 +27,242 @@ const skillToolSelectionSchema = z.object({
   toolInput: z.record(z.string(), z.unknown()).default({}),
 });
 
+const TARGET_REQUIRED_ACTION_EVIDENCE =
+  /^(?:打开|播放|进入|定位|显示|查看|删除|移除|修改|编辑|取消|退回|转派|撤回|open|play|enter|locate|show|view|delete|remove|update|edit|cancel|return|transfer|withdraw)$/iu;
+const TARGET_REQUIRED_ACTION_SCAN =
+  /(?:打开|播放|进入|定位|显示|查看|删除|移除|修改|编辑|取消|退回|转派|撤回|open|play|enter|locate|show|view|delete|remove|update|edit|cancel|return|transfer|withdraw)/iu;
+const UNRESOLVED_REFERENTIAL_TARGET =
+  /^(?:这个|那个|它|这个东西|那个东西|刚才那个|刚才的|上一个|上一项|上一节点|前一个|前一项|前一节点|之前的|之前节点|这位|那位|this|this one|that|that one|it|the one)$/iu;
+const UNRESOLVED_CHINESE_DEICTIC_TARGET =
+  /^(?:这个|那个|刚才那个|刚才的|上一个|上一|前一个|前一|之前的?|这位|那位)[\p{Script=Han}]{1,8}$/u;
+const UNRESOLVED_ENGLISH_DEICTIC_TARGET =
+  /^(?:this|that|the previous|the last)\s+[a-z][a-z -]{0,32}$/iu;
+const GENERATED_MISSING_VALUE =
+  /^(?:请(?:提供|指定|填写|选择)|需要(?:用户|你|您)?(?:提供|指定|填写|选择)|未(?:提供|指定|填写|选择)|待(?:提供|指定|填写|选择)|please\s+(?:provide|specify|enter|select)|missing(?:\s+value)?|not\s+(?:provided|specified))/iu;
+
+type InputSchemaShape = {
+  type?: unknown;
+  enum?: unknown;
+  items?: unknown;
+  properties?: unknown;
+  required?: unknown;
+};
+
 export interface RouteContext {
   isReferential?: boolean;
   lastAssistantReply?: string | null;
   conversationContext?: string;
+}
+
+function hasUsableReferentialContext(context?: RouteContext): boolean {
+  return Boolean(
+    context?.lastAssistantReply?.trim() || context?.conversationContext?.trim(),
+  );
+}
+
+function extractTargetRequiredActionEvidence(question: string): string | null {
+  const match = question.match(TARGET_REQUIRED_ACTION_SCAN);
+  return match?.[0] ?? null;
+}
+
+function isUnresolvedReferentialTarget(target: string): boolean {
+  return (
+    UNRESOLVED_REFERENTIAL_TARGET.test(target) ||
+    UNRESOLVED_CHINESE_DEICTIC_TARGET.test(target) ||
+    UNRESOLVED_ENGLISH_DEICTIC_TARGET.test(target)
+  );
+}
+
+export function hasUnresolvedExplicitActionTarget(
+  question: string,
+  actionEvidence: string,
+  context?: RouteContext,
+): boolean {
+  if (!TARGET_REQUIRED_ACTION_EVIDENCE.test(actionEvidence)) return false;
+  if (hasUsableReferentialContext(context)) return false;
+  const lowerQuestion = question.toLocaleLowerCase();
+  const lowerEvidence = actionEvidence.toLocaleLowerCase();
+  const evidenceIndex = lowerQuestion.indexOf(lowerEvidence);
+  if (evidenceIndex < 0) return false;
+  const target = question
+    .slice(evidenceIndex + actionEvidence.length)
+    .trim()
+    .replace(/^[，,：:\s]+|[。.!！?？]+$/gu, "")
+    .replace(/^(?:(?:给|到|至|向)\s*|(?:to|into|toward|towards)\s+)/iu, "")
+    .trim();
+  if (!target) return true;
+  if (context?.isReferential === true) return true;
+  return isUnresolvedReferentialTarget(target);
+}
+
+function hasUsableRequiredValue(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+function isGeneratedMissingValue(value: unknown): boolean {
+  return typeof value === "string" && GENERATED_MISSING_VALUE.test(value.trim());
+}
+
+function schemaTypeList(schema: InputSchemaShape): string[] {
+  if (typeof schema.type === "string") return [schema.type];
+  if (!Array.isArray(schema.type)) return [];
+  return schema.type.filter((item): item is string => typeof item === "string");
+}
+
+function valueMatchesSchema(value: unknown, rawSchema: unknown): boolean {
+  if (!rawSchema || typeof rawSchema !== "object") return true;
+  const schema = rawSchema as InputSchemaShape;
+
+  if (Array.isArray(schema.enum) && !schema.enum.some((item) => Object.is(item, value))) {
+    return false;
+  }
+
+  const types = schemaTypeList(schema);
+  if (types.length > 0) {
+    const typeMatches = types.some((type) => {
+      switch (type) {
+        case "string":
+          return typeof value === "string";
+        case "integer":
+          return typeof value === "number" && Number.isInteger(value);
+        case "number":
+          return typeof value === "number" && Number.isFinite(value);
+        case "boolean":
+          return typeof value === "boolean";
+        case "array":
+          return Array.isArray(value);
+        case "object":
+          return Boolean(value && typeof value === "object" && !Array.isArray(value));
+        case "null":
+          return value === null;
+        default:
+          return true;
+      }
+    });
+    if (!typeMatches) return false;
+  }
+
+  if (Array.isArray(value) && schema.items) {
+    return value.every((item) => valueMatchesSchema(item, schema.items));
+  }
+
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const properties =
+      schema.properties && typeof schema.properties === "object"
+        ? (schema.properties as Record<string, unknown>)
+        : {};
+    const required = Array.isArray(schema.required)
+      ? schema.required.filter(
+          (field): field is string => typeof field === "string",
+        )
+      : [];
+    const record = value as Record<string, unknown>;
+    if (required.some((field) => !hasUsableRequiredValue(record[field]))) {
+      return false;
+    }
+    return Object.entries(record).every(([key, item]) =>
+      properties[key] ? valueMatchesSchema(item, properties[key]) : true,
+    );
+  }
+
+  return true;
+}
+
+function toolSchemaHasInputProperties(tool?: FrontendToolDescriptorV1): boolean {
+  if (!tool?.inputSchema || typeof tool.inputSchema !== "object") return false;
+  const properties = (tool.inputSchema as { properties?: unknown }).properties;
+  return Boolean(
+    properties &&
+      typeof properties === "object" &&
+      Object.keys(properties as Record<string, unknown>).length > 0,
+  );
+}
+
+function selectedToolAndRequired(
+  decision: IntentDecision,
+  clientTools: FrontendToolDescriptorV1[],
+): {
+  tool?: FrontendToolDescriptorV1;
+  required: string[];
+  properties: Record<string, unknown>;
+} {
+  if (decision.route !== "action" || decision.requestedToolNames.length !== 1) {
+    return { required: [], properties: {} };
+  }
+  const tool = clientTools.find(
+    (item) => item.name === decision.requestedToolNames[0],
+  );
+  if (!tool) return { required: [], properties: {} };
+  const required = Array.isArray(tool.inputSchema?.required)
+    ? tool.inputSchema.required.filter(
+        (field): field is string => typeof field === "string",
+      )
+    : [];
+  const properties =
+    tool.inputSchema?.properties && typeof tool.inputSchema.properties === "object"
+      ? (tool.inputSchema.properties as Record<string, unknown>)
+      : {};
+  return { tool, required, properties };
+}
+
+export function missingRequiredToolInputKeys(
+  decision: IntentDecision,
+  clientTools: FrontendToolDescriptorV1[],
+): string[] {
+  const { required } = selectedToolAndRequired(decision, clientTools);
+  const input = decision.requestedToolInput ?? {};
+  return required.filter((field) => !hasUsableRequiredValue(input[field]));
+}
+
+export function invalidRequiredToolInputKeys(
+  decision: IntentDecision,
+  clientTools: FrontendToolDescriptorV1[],
+): string[] {
+  const { required, properties } = selectedToolAndRequired(decision, clientTools);
+  const input = decision.requestedToolInput ?? {};
+  return required.filter((field) => {
+    const value = input[field];
+    if (!hasUsableRequiredValue(value)) return false;
+    if (isGeneratedMissingValue(value)) return true;
+    return !valueMatchesSchema(value, properties[field]);
+  });
+}
+
+export function applyToolInputCompletenessFence(
+  decision: IntentDecision,
+  clientTools: FrontendToolDescriptorV1[],
+): IntentDecision {
+  if (decision.route === "clarify") {
+    return {
+      ...decision,
+      requestedToolNames: [],
+      requestedToolInput: undefined,
+    };
+  }
+  const missing = missingRequiredToolInputKeys(decision, clientTools);
+  if (missing.length > 0) {
+    return {
+      ...decision,
+      route: "clarify",
+      reason: `The selected client tool is missing required input: ${missing.join(", ")}.`,
+      requestedToolNames: [],
+      requestedToolInput: undefined,
+    };
+  }
+  const invalid = invalidRequiredToolInputKeys(decision, clientTools);
+  if (invalid.length > 0) {
+    return {
+      ...decision,
+      route: "clarify",
+      reason: `The selected client tool has invalid or fabricated required input: ${invalid.join(", ")}.`,
+      requestedToolNames: [],
+      requestedToolInput: undefined,
+    };
+  }
+  return decision;
 }
 
 export interface IntentRouter {
@@ -57,7 +289,11 @@ export class LangChainIntentRouter implements IntentRouter {
     const required = Array.isArray(onlyCandidate?.inputSchema.required)
       ? onlyCandidate.inputSchema.required
       : [];
-    if (candidates.length === 1 && required.length === 0) {
+    if (
+      candidates.length === 1 &&
+      required.length === 0 &&
+      !toolSchemaHasInputProperties(onlyCandidate)
+    ) {
       return { requestedToolNames: [onlyCandidate.name] };
     }
     if (candidates.length === 0) return { requestedToolNames: [] };
@@ -71,6 +307,7 @@ export class LangChainIntentRouter implements IntentRouter {
           "Select exactly one registered client tool for the latest user request.",
           "Use the matched Skill instructions, tool descriptions, and input schemas.",
           "Return only a toolName from the provided candidates. Never invent a name.",
+          "Extract only arguments explicitly present or unambiguously resolved from context; never fabricate required values or placeholder strings.",
         ].join("\n"),
       ),
       new HumanMessage(
@@ -107,14 +344,14 @@ export class LangChainIntentRouter implements IntentRouter {
     IntentDecision,
     "requestedToolNames" | "requestedToolInput"
   >> {
+    if (route.route !== "action") {
+      return { requestedToolNames: [] };
+    }
     if (route.requestedToolNames.length > 0) {
       return {
         requestedToolNames: route.requestedToolNames,
         requestedToolInput: route.toolInput,
       };
-    }
-    if (route.route !== "action") {
-      return { requestedToolNames: [] };
     }
     const matchedSkills = skills.filter((skill) =>
       route.matchedSkillNames.includes(skill.name),
@@ -173,6 +410,28 @@ export class LangChainIntentRouter implements IntentRouter {
       };
     }
 
+    const explicitActionEvidence = extractActionEvidence(question);
+    const targetRequiredEvidence =
+      explicitActionEvidence ?? extractTargetRequiredActionEvidence(question);
+    if (
+      targetRequiredEvidence &&
+      hasUnresolvedExplicitActionTarget(
+        question,
+        targetRequiredEvidence,
+        context,
+      )
+    ) {
+      return {
+        route: "clarify",
+        confidence: 1,
+        reason:
+          "The action verb requires a target, but the latest message contains only an unresolved or missing reference.",
+        requestedToolNames: [],
+        explicitActionEvidence: targetRequiredEvidence,
+        matchedSkillNames: [],
+      };
+    }
+
     if (skills.length > 0) {
       const skillRoute = await routeViaSkillCatalog(
         this.model,
@@ -188,11 +447,13 @@ export class LangChainIntentRouter implements IntentRouter {
           clientTools,
           skillRoute,
         );
-        return applyIntentSafetyFence(question, decision);
+        return applyIntentSafetyFence(
+          question,
+          applyToolInputCompletenessFence(decision, clientTools),
+        );
       }
     }
 
-    const explicitActionEvidence = extractActionEvidence(question);
     if (explicitActionEvidence) {
       return {
         route: "action",
