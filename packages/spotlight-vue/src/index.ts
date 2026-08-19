@@ -91,6 +91,7 @@ export {
   composeToolStepContent,
   isLoopPlanningChunk,
   splitIntentStepContent,
+  stripInternalEvidenceAnswer,
 } from "./store/pipeline/displayText.js";
 export { partitionToolCalls } from "./store/pipeline/toolDisplay.js";
 export {

@@ -690,6 +690,7 @@ import {
   formatGatherProcessText,
   sanitizeToolStepAnswerText,
   splitToolStepContent,
+  stripInternalEvidenceAnswer,
 } from "../store/pipeline/displayText.js";
 import {
   isUserFacingKnowledgeTool,
@@ -973,21 +974,6 @@ function getToolStepAnswer(step: PipelineStep): string {
   return stripInternalEvidenceAnswer(
     sanitizeToolStepAnswerText(step.content ?? ""),
   );
-}
-
-function stripInternalEvidenceAnswer(text: string): string {
-  const trimmed = text.trim();
-  if (!trimmed) return "";
-  if (
-    trimmed.startsWith("联网检索证据：") ||
-    trimmed.includes("Tavily answer：") ||
-    trimmed.includes("Hikari answer") ||
-    trimmed.includes("Yuxi project knowledge") ||
-    trimmed.includes("Spotlight knowledge")
-  ) {
-    return "";
-  }
-  return trimmed;
 }
 
 function collectRawToolCalls(step: PipelineStep): StepToolCall[] {

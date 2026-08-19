@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseGatherProcessDisplay } from "../src/store/pipeline/displayText.js";
+import {
+  parseGatherProcessDisplay,
+  stripInternalEvidenceAnswer,
+} from "../src/store/pipeline/displayText.js";
 
 describe("parseGatherProcessDisplay", () => {
   it("turns a semicolon dump into a numbered source list", () => {
@@ -28,5 +31,21 @@ describe("parseGatherProcessDisplay", () => {
       items: ["引大济岷工程 - 维基百科", "四川为什么需要引大济岷"],
       note: "正在依据资料组织回答。",
     });
+  });
+});
+
+describe("stripInternalEvidenceAnswer", () => {
+  it("keeps a synthesized answer that mentions Hikari only as a citation label", () => {
+    expect(
+      stripInternalEvidenceAnswer(
+        "Hikari answer：引大济岷是一项跨流域调水工程。工程从大渡河引水补充岷江。",
+      ),
+    ).toContain("引大济岷是一项跨流域调水工程。");
+  });
+
+  it("does not wipe a normal knowledge answer", () => {
+    expect(
+      stripInternalEvidenceAnswer("引大济岷是一项跨流域调水工程。"),
+    ).toBe("引大济岷是一项跨流域调水工程。");
   });
 });

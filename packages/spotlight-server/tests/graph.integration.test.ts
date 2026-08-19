@@ -1,4 +1,5 @@
 import { InMemoryStore, MemorySaver } from "@langchain/langgraph";
+import { AIMessage } from "@langchain/core/messages";
 import { FakeToolCallingModel } from "langchain";
 import type {
   FrontendToolDescriptorV1,
@@ -328,6 +329,42 @@ describe("LangGraph runtime isolation", () => {
     expect(knowledgeCalls).toBe(0);
     expect(webCalls).toBe(1);
     expect(tools).toEqual(["web_search"]);
+  });
+
+  it("fills the knowledge answer from web search evidence when the model returns no text", async () => {
+    const runContext = context("介绍下引大济岷", []);
+    runContext.project = {
+      ...runContext.project,
+      webSearchProvider: {
+        id: "hikari",
+        async search() {
+          return [
+            { content: "引大济岷是一项跨流域调水工程。" },
+            { title: "引大济岷工程 - 维基百科", content: "从大渡河引水补充岷江。" },
+          ];
+        },
+      },
+    };
+    const result = await runSpotlightGraph(runContext, {
+      model: {
+        async invoke() {
+          return new AIMessage("");
+        },
+      } as never,
+      router: router({
+        route: "knowledge",
+        confidence: 1,
+        reason: "information request",
+        requestedToolNames: [],
+        explicitActionEvidence: null,
+        knowledgeSource: "web",
+      }),
+      checkpointer: new MemorySaver(),
+      store: new InMemoryStore(),
+    });
+
+    expect(result.assistantReply).toContain("引大济岷是一项跨流域调水工程。");
+    expect(result.assistantReply).toContain("引大济岷工程 - 维基百科");
   });
 
   it("queries Yuxi only for in-product knowledge questions", async () => {

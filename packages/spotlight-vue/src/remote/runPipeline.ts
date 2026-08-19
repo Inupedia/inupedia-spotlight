@@ -148,9 +148,29 @@ function paintYield(): Promise<void> {
   });
 }
 
+function formatEvidenceOutput(output: unknown): string {
+  if (!Array.isArray(output)) return "";
+  const blocks = output.flatMap((item, index) => {
+    if (!item || typeof item !== "object") return [];
+    const record = item as Record<string, unknown>;
+    const content =
+      typeof record.content === "string" ? record.content.trim() : "";
+    if (!content) return [];
+    const title =
+      (typeof record.title === "string" && record.title.trim()) ||
+      (typeof record.url === "string" && record.url.trim()) ||
+      `资料 ${index + 1}`;
+    const url = typeof record.url === "string" ? record.url.trim() : "";
+    return [[title, url && url !== title ? url : "", content].filter(Boolean).join("\n")];
+  });
+  return blocks.join("\n\n");
+}
+
 function formatHostToolResultText(
   result: Extract<RemoteRunEvent, { type: "tool_result" }>["result"],
 ): string {
+  const evidenceText = formatEvidenceOutput(result.output);
+  if (evidenceText) return evidenceText;
   const summary = result.summary?.trim();
   if (
     summary &&

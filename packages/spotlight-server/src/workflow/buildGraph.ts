@@ -31,7 +31,6 @@ import {
 import {
   canonicalSkillName,
   createAgentSkillsRuntime,
-  skillsReadFromMessages,
 } from "../deepAgentSkills.js";
 import {
   createClientLangChainTool,
@@ -67,6 +66,10 @@ import {
   finalAgentText,
   RuntimeState,
 } from "./state.js";
+import {
+  buildKnowledgeSynthesizeMessages,
+  fallbackReplyFromEvidence,
+} from "./synthesize.js";
 import type { SpotlightGraphOptions } from "./types.js";
 import { resolveGatherSources } from "../knowledgeSource.js";
 
@@ -463,43 +466,23 @@ export function compileSpotlightWorkflow(
             .join("\n")}`
         : "";
       const evidence = state.evidenceBundle ?? emptyEvidenceBundle();
-      const evidenceContext = evidence.items.length
-        ? `Evidence bundle (${evidence.sufficiency}):\n${evidence.items
-            .map(
-              (item) =>
-                `- ${item.title ?? "untitled"}: ${item.content.slice(0, 800)}`,
-            )
-            .join("\n")}`
-        : "No external evidence was gathered.";
-      const skillRuntime = createAgentSkillsRuntime(runSkills);
-      const synthesizer = createAgent({
-        model: options.model,
-        tools: [],
-        systemPrompt: [
-          "You are the Spotlight Knowledge synthesizer.",
-          "Answer informational questions using the evidence bundle. Never perform or propose a client UI action.",
-          "Cite source titles or URLs when available. If sufficiency is none or partial, say the evidence is insufficient.",
-          "Long-term memory is user-scoped context, not evidence.",
-          memoryReadEnabled
+      const result = await options.model.invoke(
+        buildKnowledgeSynthesizeMessages({
+          question: state.question,
+          evidence,
+          sessionPrompt,
+          projectPrompt: context.project.systemPrompt ?? "",
+          memoryContext: memoryReadEnabled
             ? memoryContext
             : "The user disabled memory recall for this turn. Do not use long-term memory.",
-          evidenceContext,
-          sessionPrompt,
-          context.project.systemPrompt ?? "",
-        ].join("\n"),
-        middleware: [
-          ...skillRuntime.middleware,
-          ...conversationMemoryMiddleware(options.model),
-        ],
-      });
-      const result = await synthesizer.invoke(
-        { messages: state.messages, files: skillRuntime.files },
+          messages: state.messages,
+        }),
         config,
       );
-      const reply = finalAgentText(result);
-      const usedKnowledgeSkills = skillsReadFromMessages(
-        result.messages,
-        runSkills,
+      const reply =
+        finalAgentText(result) || fallbackReplyFromEvidence(evidence);
+      const usedKnowledgeSkills = runSkills.filter((skill) =>
+        state.decision.matchedSkillNames?.includes(skill.name),
       );
       const incompleteSearches = evidence.attemptedSources
         .filter((source) => !evidence.completedSources.includes(source))

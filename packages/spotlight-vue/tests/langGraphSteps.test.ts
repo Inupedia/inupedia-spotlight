@@ -147,6 +147,52 @@ describe("LangGraph progress steps", () => {
     expect(responseStepLabel(api)).toBe("回答");
   });
 
+  it("keeps web search snippets in the expandable tool result", async () => {
+    const { api, getSteps } = createApi();
+    await applyRemoteEvent(api, {
+      type: "tool_start",
+      at: Date.now(),
+      iteration: 1,
+      call: {
+        id: "web-1",
+        name: "web_search",
+        input: { query: "引大济岷" },
+        displayName: "联网搜索",
+      },
+    });
+    await applyRemoteEvent(api, {
+      type: "tool_result",
+      at: Date.now(),
+      iteration: 1,
+      result: {
+        call: {
+          id: "web-1",
+          name: "web_search",
+          input: { query: "引大济岷" },
+          displayName: "联网搜索",
+        },
+        success: true,
+        summary:
+          "联网搜索检索“引大济岷”命中 2 条资料：\n1. 引大济岷工程 - 维基百科\n2. 四川为什么需要引大济岷",
+        output: [
+          { content: "引大济岷是一项跨流域调水工程。" },
+          {
+            title: "引大济岷工程 - 维基百科",
+            url: "https://example.com/wiki",
+            content: "从大渡河引水补充岷江。",
+          },
+        ],
+        trace: [],
+      },
+    });
+
+    const gather = getSteps().find((step) => step.id === "gather");
+    expect(gather?.toolCalls?.[0]?.resultText).toContain(
+      "引大济岷是一项跨流域调水工程。",
+    );
+    expect(gather?.toolCalls?.[0]?.resultText).toContain("从大渡河引水补充岷江。");
+  });
+
   it("labels a clarification response without pretending a tool ran", () => {
     const { api, getSteps } = createApi();
     applyLangGraphTransition(api, transition("routing", "正在路由"));

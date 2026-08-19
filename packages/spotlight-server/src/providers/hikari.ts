@@ -6,6 +6,39 @@ export interface HikariProviderOptions {
   maxAttempts?: number;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function unwrapSearchPayload(raw: unknown): {
+  answer?: string;
+  results?: unknown[];
+} {
+  const obj = asRecord(raw);
+  if (!obj) return {};
+  if (Array.isArray(obj.results) || typeof obj.answer === "string") {
+    return {
+      answer: typeof obj.answer === "string" ? obj.answer : undefined,
+      results: Array.isArray(obj.results) ? obj.results : undefined,
+    };
+  }
+  for (const key of ["data", "payload", "result", "body"]) {
+    const nested = unwrapSearchPayload(obj[key]);
+    if (nested.answer || nested.results) return nested;
+  }
+  return {};
+}
+
+function resultContent(item: Record<string, unknown>): string {
+  for (const key of ["content", "snippet", "raw_content", "text", "description"]) {
+    const value = item[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "";
+}
+
 export class HikariSearchProvider implements WebSearchProvider {
   readonly id = "hikari";
 
@@ -32,17 +65,24 @@ export class HikariSearchProvider implements WebSearchProvider {
           signal: input.signal,
         });
         if (!response.ok) throw new Error(`Hikari search failed: ${response.status}`);
-        const payload = (await response.json()) as {
-          answer?: string;
-          results?: Array<{ title?: string; url?: string; content?: string; score?: number }>;
-        };
-        const evidence: KnowledgeEvidence[] = (payload.results ?? []).map((item) => ({
-          content: item.content ?? "",
-          title: item.title,
-          url: item.url,
-          score: item.score,
-        }));
-        if (payload.answer) evidence.unshift({ content: payload.answer });
+        const payload = unwrapSearchPayload(await response.json());
+        const evidence: KnowledgeEvidence[] = (payload.results ?? []).flatMap((item) => {
+          const record = asRecord(item);
+          if (!record) return [];
+          const content = resultContent(record);
+          if (!content) return [];
+          return [
+            {
+              content,
+              title: typeof record.title === "string" ? record.title : undefined,
+              url: typeof record.url === "string" ? record.url : undefined,
+              score: typeof record.score === "number" ? record.score : undefined,
+            },
+          ];
+        });
+        if (payload.answer?.trim()) {
+          evidence.unshift({ content: payload.answer.trim() });
+        }
         return evidence.filter((item) => item.content.trim());
       } catch (error) {
         lastError = error;

@@ -45,6 +45,7 @@ export type RuntimeStateType = typeof RuntimeState.State;
 export function messageText(message: BaseMessage | undefined): string {
   if (!message) return "";
   if (typeof message.content === "string") return message.content;
+  if (!Array.isArray(message.content)) return "";
   return message.content
     .map((part) =>
       typeof part === "string" ? part : "text" in part ? String(part.text) : "",
@@ -52,8 +53,41 @@ export function messageText(message: BaseMessage | undefined): string {
     .join("");
 }
 
-export function finalAgentText(result: { messages?: BaseMessage[] }): string {
-  return messageText(result.messages?.at(-1)).trim();
+function isAiMessage(message: BaseMessage | undefined): boolean {
+  if (!message) return false;
+  if (message instanceof AIMessage) return true;
+  const typed = message as BaseMessage & {
+    getType?: () => string;
+    _getType?: () => string;
+  };
+  return (typed.getType?.() ?? typed._getType?.()) === "ai";
+}
+
+function hasMessages(
+  result: unknown,
+): result is { messages: BaseMessage[] } {
+  return Boolean(
+    result &&
+      typeof result === "object" &&
+      Array.isArray((result as { messages?: unknown }).messages),
+  );
+}
+
+/** Last non-empty AI text; skip tool results and tool-call-only AI messages. */
+export function finalAgentText(
+  result: BaseMessage | { messages?: BaseMessage[] } | undefined,
+): string {
+  if (!result) return "";
+  const messages: BaseMessage[] = hasMessages(result)
+    ? result.messages
+    : [result as BaseMessage];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!isAiMessage(message)) continue;
+    const text = messageText(message).trim();
+    if (text) return text;
+  }
+  return "";
 }
 
 export function compactText(value: string, maxLength = 72): string {

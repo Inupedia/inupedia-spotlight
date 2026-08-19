@@ -115,6 +115,27 @@ export function sanitizeToolStepAnswerText(content: string): string {
     .trim();
 }
 
+/**
+ * Strip vendor evidence labels from displayed text.
+ * Never wipe the whole answer just because a label appears inside it.
+ */
+export function stripInternalEvidenceAnswer(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  return trimmed
+    .replace(/^联网检索证据：\s*/u, "")
+    .split(/\n/u)
+    .map((line) =>
+      line.replace(
+        /(?:^[-*]\s*)?(?:Tavily answer|Hikari answer|Yuxi project knowledge|Spotlight knowledge)\s*[：:]\s*/giu,
+        "",
+      ),
+    )
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export interface GatherProcessDisplay {
   headline: string;
   items: string[];
