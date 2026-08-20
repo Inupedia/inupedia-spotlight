@@ -1,4 +1,5 @@
 import type {
+  AgentUiContext,
   CreateRunRequest,
   FrontendToolDescriptorV1,
   HostToolResultRequest,
@@ -151,6 +152,12 @@ export interface RunContext {
   project: ProjectPack;
   host: HostActionBridge;
   signal: AbortSignal;
+  /**
+   * Latest observation of the browser UI. Seeded from the run request and
+   * refreshed after every host call, so callers must read it at the moment they
+   * build a prompt rather than capturing it once.
+   */
+  observed?: () => AgentUiContext | undefined;
 }
 
 export interface SpotlightRunResult {

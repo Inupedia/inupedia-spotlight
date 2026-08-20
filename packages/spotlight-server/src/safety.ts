@@ -1,6 +1,9 @@
-import type {
-  CreateRunRequest,
-  FrontendToolDescriptorV1,
+import {
+  deriveToolTier,
+  isToolTierReplaySafe,
+  type CreateRunRequest,
+  type FrontendToolDescriptorV1,
+  type ToolTierV1,
 } from "@inupedia/spotlight-protocol";
 import type { IntentDecision } from "./contracts.js";
 import { attachKnowledgeSource } from "./knowledgeSource.js";
@@ -208,6 +211,47 @@ export function applyIntentSafetyFence(
   });
 }
 
+export function clientToolTier(tool: FrontendToolDescriptorV1): ToolTierV1 {
+  return deriveToolTier(tool);
+}
+
+/** Only replay-safe tiers can be dispatched; `mutate` has no broker behind it yet. */
+export function isDispatchableClientTool(
+  tool: FrontendToolDescriptorV1,
+): boolean {
+  return isToolTierReplaySafe(clientToolTier(tool));
+}
+
+export class UnsupportedToolTierError extends Error {
+  constructor(readonly tools: Array<{ name: string; tier: ToolTierV1 }>) {
+    super(
+      [
+        `Cannot register ${tools.length} capability(ies) at the "mutate" tier: ${tools
+          .map((tool) => tool.name)
+          .join(", ")}.`,
+        "A mutate capability changes an external system, so a lost result is not safely replayable.",
+        "The runtime has no call ledger, no acknowledgement channel and no reconciliation slot to make that safe.",
+        "See docs/design/capability-protocol-v2.md for what must be built first.",
+      ].join(" "),
+    );
+    this.name = "UnsupportedToolTierError";
+  }
+}
+
+/**
+ * Registration-time gate. Every capability the runtime accepts must be one it can
+ * re-dispatch after a lost connection, because re-dispatch is the only recovery
+ * mechanism that exists today.
+ */
+export function assertRegisterableClientTools(
+  tools: readonly FrontendToolDescriptorV1[],
+): void {
+  const rejected = tools
+    .map((tool) => ({ name: tool.name, tier: clientToolTier(tool) }))
+    .filter((entry) => !isToolTierReplaySafe(entry.tier));
+  if (rejected.length > 0) throw new UnsupportedToolTierError(rejected);
+}
+
 export function actionToolAllowlist(
   tools: FrontendToolDescriptorV1[],
   decision: IntentDecision,
@@ -220,7 +264,7 @@ export function actionToolAllowlist(
   if (!hasSkillMatch && !hasActionEvidence) return [];
   const requested = new Set(decision.requestedToolNames);
   const filterTool = (tool: FrontendToolDescriptorV1) => {
-    if (tool.requiresConfirmation && tool.riskLevel === "high") return false;
+    if (!isDispatchableClientTool(tool)) return false;
     if (requested.size > 0) return requested.has(tool.name);
     if (hasSkillMatch) return false;
     return true;

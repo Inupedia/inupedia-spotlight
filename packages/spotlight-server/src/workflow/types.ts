@@ -1,5 +1,6 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { BaseCheckpointSaver, BaseStore } from "@langchain/langgraph";
+import type { ToolTraceEvent } from "@inupedia/spotlight-protocol";
 import type { SpotlightToolCallInfo } from "../contracts.js";
 import type { IntentRouter } from "../router.js";
 
@@ -14,6 +15,8 @@ export type SpotlightGraphToolEvent =
         summary: string;
         output?: unknown;
         error?: string;
+        /** Executor timeline reported by the browser, surfaced to the thinking bar. */
+        trace?: ToolTraceEvent[];
       };
     };
 

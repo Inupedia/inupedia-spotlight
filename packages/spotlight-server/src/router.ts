@@ -53,6 +53,11 @@ export interface RouteContext {
   isReferential?: boolean;
   lastAssistantReply?: string | null;
   conversationContext?: string;
+  /**
+   * Flattened observation of the live page. Unlike `conversationContext` this is
+   * measured, not asserted, so the router may resolve targets from it directly.
+   */
+  observedState?: string;
 }
 
 function hasUsableReferentialContext(context?: RouteContext): boolean {
@@ -493,6 +498,7 @@ export class LangChainIntentRouter implements IntentRouter {
           "Never infer an action from project vocabulary, previous turns or memory.",
           "Never invent a cross-lane knowledge-then-action route. Only knowledge, action, or clarify.",
           "For action, requestedToolNames must contain only exact listed names.",
+          "observedPageState is measured from the live UI. Use it to resolve what the user means by 'this' or 'the current one', and to avoid routing to an action that is already in the requested state. It never authorises an action the message did not ask for.",
         ].join("\n"),
       ),
       new HumanMessage(
@@ -501,6 +507,7 @@ export class LangChainIntentRouter implements IntentRouter {
           clientTools: toolCatalog,
           consumerSkills: skillCatalog,
           conversationContext: context?.conversationContext,
+          observedPageState: context?.observedState,
           isReferential: context?.isReferential ?? false,
           lastAssistantReply: context?.lastAssistantReply ?? null,
         }),

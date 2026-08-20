@@ -1,4 +1,6 @@
 import {
+  deriveToolTier,
+  isToolTierReplaySafe,
   SPOTLIGHT_CAPABILITY_PROTOCOL_V1,
   type FrontendToolDescriptorV1,
   type FrontendToolManifestV1,
@@ -6,6 +8,7 @@ import {
   type ToolReplayPolicyV1,
   type ToolRiskLevelV1,
   type ToolSideEffectV1,
+  type ToolTierV1,
 } from "@inupedia/spotlight-protocol";
 
 export const CLIENT_TOOL_META = Symbol.for("inupedia.spotlight.client-tool");
@@ -19,6 +22,12 @@ export interface ClientToolOptions {
   /** Escape hatch for types the build plugin cannot safely infer. */
   schema?: ClientToolSchemaOverride;
   version?: string;
+  /**
+   * What the runtime must guarantee before dispatching this tool. Declare it
+   * directly; the legacy fields below only exist to keep older call sites
+   * working and are derived from each other when `tier` is omitted.
+   */
+  tier?: ToolTierV1;
   sideEffect?: ToolSideEffectV1;
   replayPolicy?: ToolReplayPolicyV1;
   riskLevel?: ToolRiskLevelV1;
@@ -80,6 +89,12 @@ export function getClientToolDescriptor(
   tool: ClientTool,
 ): FrontendToolDescriptorV1 {
   const meta = tool[CLIENT_TOOL_META];
+  const legacy = {
+    sideEffect: meta.sideEffect ?? "ui",
+    replayPolicy: meta.replayPolicy ?? "never",
+    riskLevel: meta.riskLevel ?? "low",
+    requiresConfirmation: meta.requiresConfirmation ?? false,
+  } as const;
   return {
     name: meta.name,
     version: meta.version ?? "1.0.0",
@@ -87,21 +102,30 @@ export function getClientToolDescriptor(
     inputSchema: meta.schema.input,
     outputSchema: meta.schema.output,
     maxOutputBytes: meta.maxOutputBytes,
-    sideEffect: meta.sideEffect ?? "ui",
-    replayPolicy: meta.replayPolicy ?? "never",
-    riskLevel: meta.riskLevel ?? "low",
-    requiresConfirmation: meta.requiresConfirmation ?? false,
+    tier: deriveToolTier({ tier: meta.tier, ...legacy }),
+    ...legacy,
   };
 }
 
 export function createClientToolRegistry(tools: readonly ClientTool[]) {
   const byName = new Map<string, ClientTool>();
+  const unsupported: string[] = [];
   for (const tool of tools) {
     const descriptor = getClientToolDescriptor(tool);
     if (byName.has(descriptor.name)) {
       throw new Error(`Duplicate client tool: ${descriptor.name}`);
     }
+    // Every dispatch path recovers by re-running the call, so a tool that
+    // cannot be re-run safely must not reach the runtime at all.
+    if (!isToolTierReplaySafe(descriptor.tier ?? "navigate")) {
+      unsupported.push(descriptor.name);
+    }
     byName.set(descriptor.name, tool);
+  }
+  if (unsupported.length > 0) {
+    throw new Error(
+      `Client tools at the "mutate" tier cannot be registered yet: ${unsupported.join(", ")}. See docs/design/capability-protocol-v2.md.`,
+    );
   }
   return {
     descriptors: [...byName.values()].map(getClientToolDescriptor),

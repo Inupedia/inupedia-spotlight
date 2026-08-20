@@ -197,18 +197,38 @@ function shouldInclude(id: string, include: string | RegExp): boolean {
   return typeof include === "string" ? clean.includes(include) : include.test(clean);
 }
 
+type ToolTier = "observe" | "query" | "navigate" | "mutate";
+
 type BuildDescriptor = {
   name: string;
   version: string;
   description: string;
   inputSchema: JsonSchema;
   outputSchema?: JsonSchema;
+  tier?: ToolTier;
   sideEffect: "none" | "ui" | "external";
   replayPolicy: "safe" | "idempotency-key" | "never";
   riskLevel: "low" | "medium" | "high";
   requiresConfirmation: boolean;
   maxOutputBytes?: number;
 };
+
+function withTier(descriptor: BuildDescriptor): BuildDescriptor {
+  return { ...descriptor, tier: buildTier(descriptor) };
+}
+
+/** Mirrors `deriveToolTier` in the protocol package, which cannot be imported here. */
+function buildTier(descriptor: BuildDescriptor): ToolTier {
+  if (descriptor.tier) return descriptor.tier;
+  if (descriptor.sideEffect === "external") return "mutate";
+  if (descriptor.riskLevel === "high" || descriptor.requiresConfirmation) {
+    return "mutate";
+  }
+  if (descriptor.sideEffect === "none") {
+    return descriptor.replayPolicy === "safe" ? "query" : "navigate";
+  }
+  return "navigate";
+}
 
 function staticToolOptions(
   options: t.ObjectExpression | undefined,
@@ -217,6 +237,7 @@ function staticToolOptions(
   if (!options) return {};
   const allowed = new Set([
     "version",
+    "tier",
     "sideEffect",
     "replayPolicy",
     "riskLevel",
@@ -235,6 +256,12 @@ function staticToolOptions(
   }
   if (values.version !== undefined && typeof values.version !== "string") {
     throw new Error("version must be a string literal");
+  }
+  if (
+    values.tier !== undefined &&
+    !["observe", "query", "navigate", "mutate"].includes(String(values.tier))
+  ) {
+    throw new Error("tier must be observe, query, navigate or mutate");
   }
   if (
     values.sideEffect !== undefined &&
@@ -346,18 +373,20 @@ export function transformSpotlightClientTools(
         ...(schema ? [`schema:${JSON.stringify(schema)}`] : []),
       ].join(",");
       if (schema) {
-        onDescriptor?.({
-          name: path.node.id.name,
-          version: "1.0.0",
-          description,
-          inputSchema: schema.input,
-          outputSchema: schema.output,
-          sideEffect: "ui",
-          replayPolicy: "never",
-          riskLevel: "low",
-          requiresConfirmation: false,
-          ...descriptorOptions,
-        });
+        onDescriptor?.(
+          withTier({
+            name: path.node.id.name,
+            version: "1.0.0",
+            description,
+            inputSchema: schema.input,
+            outputSchema: schema.output,
+            sideEffect: "ui",
+            replayPolicy: "never",
+            riskLevel: "low",
+            requiresConfirmation: false,
+            ...descriptorOptions,
+          }),
+        );
       } else if (optionArg) {
         const schemaProperty = optionArg.properties.find(
           (property): property is t.ObjectProperty =>
@@ -373,18 +402,20 @@ export function transformSpotlightClientTools(
             if (!parsed?.input || typeof parsed.input !== "object") {
               throw new Error("schema.input must be an object");
             }
-            onDescriptor?.({
-              name: path.node.id.name,
-              version: "1.0.0",
-              description,
-              inputSchema: parsed.input,
-              outputSchema: parsed.output,
-              sideEffect: "ui",
-              replayPolicy: "never",
-              riskLevel: "low",
-              requiresConfirmation: false,
-              ...descriptorOptions,
-            });
+            onDescriptor?.(
+              withTier({
+                name: path.node.id.name,
+                version: "1.0.0",
+                description,
+                inputSchema: parsed.input,
+                outputSchema: parsed.output,
+                sideEffect: "ui",
+                replayPolicy: "never",
+                riskLevel: "low",
+                requiresConfirmation: false,
+                ...descriptorOptions,
+              }),
+            );
           } catch (error) {
             if (onDescriptor) {
               throw path.buildCodeFrameError(
@@ -453,6 +484,14 @@ export default function spotlightClientTools(
       if (!productionBuild) return;
       if (descriptors.size === 0) {
         throw new Error("spotlightClientTools: production manifest has no tools");
+      }
+      const unsupported = [...descriptors.values()]
+        .filter((descriptor) => descriptor.tier === "mutate")
+        .map((descriptor) => descriptor.name);
+      if (unsupported.length > 0) {
+        throw new Error(
+          `spotlightClientTools: the runtime cannot dispatch "mutate" tier tools yet: ${unsupported.join(", ")}. See docs/design/capability-protocol-v2.md.`,
+        );
       }
       const unsigned = {
         protocolVersion: "spotlight.capabilities/1" as const,

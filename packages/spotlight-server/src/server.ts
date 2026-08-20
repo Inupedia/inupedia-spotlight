@@ -2,8 +2,15 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import type { FastifyReply } from "fastify";
 import { readFileSync } from "node:fs";
-import type { HostToolResultRequest } from "@inupedia/spotlight-protocol";
+import type {
+  FrontendToolDescriptorV1,
+  HostToolResultRequest,
+} from "@inupedia/spotlight-protocol";
 import type { RunManager } from "./runManager.js";
+import {
+  assertRegisterableClientTools,
+  UnsupportedToolTierError,
+} from "./safety.js";
 
 export const SPOTLIGHT_SERVER_VERSION = (
   JSON.parse(
@@ -20,8 +27,24 @@ export interface BuildServerOptions {
   videoChannels?: Array<{ id: string; name: string; aliases: string[] }>;
 }
 
-function writeSse(reply: FastifyReply, event: unknown): void {
-  reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+function writeSse(reply: FastifyReply, event: unknown, seq?: number): void {
+  const id = seq === undefined ? "" : `id: ${seq}\n`;
+  reply.raw.write(`${id}data: ${JSON.stringify(event)}\n\n`);
+}
+
+/**
+ * Where to resume an event stream. `Last-Event-ID` is set automatically by
+ * EventSource; the query parameter lets a fetch-based reader do the same.
+ */
+function resumeCursor(
+  header: string | string[] | undefined,
+  query: unknown,
+): number {
+  const raw =
+    (typeof header === "string" ? header : header?.[0]) ??
+    (typeof query === "string" ? query : undefined);
+  const parsed = Number.parseInt(raw ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 export async function buildServer(options: BuildServerOptions) {
@@ -29,7 +52,12 @@ export async function buildServer(options: BuildServerOptions) {
   await app.register(cors, {
     origin: options.corsOrigin ?? "*",
     methods: ["GET", "POST", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Spotlight-Api-Key"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Spotlight-Api-Key",
+      "Last-Event-ID",
+    ],
   });
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health" || !options.apiKeys?.length) return;
@@ -92,19 +120,47 @@ export async function buildServer(options: BuildServerOptions) {
             },
           });
       }
+      const manifestTools = (
+        body.clientToolManifest as { tools?: FrontendToolDescriptorV1[] } | undefined
+      )?.tools;
+      try {
+        assertRegisterableClientTools(manifestTools ?? []);
+      } catch (error) {
+        if (!(error instanceof UnsupportedToolTierError)) throw error;
+        return reply.status(400).send({
+          error: {
+            code: "TOOL_TIER_UNSUPPORTED",
+            message: error.message,
+            retryable: false,
+            details: { tools: error.tools },
+          },
+        });
+      }
       const run = options.runManager.createRun(
         body as unknown as Parameters<RunManager["createRun"]>[0],
       );
       return { runId: run.id };
     },
   );
-  app.get<{ Params: { runId: string } }>(
+  app.get<{ Params: { sessionId: string } }>(
+    "/v1/sessions/:sessionId/runs",
+    async (request) => ({
+      sessionId: request.params.sessionId,
+      runs: options.runManager.activeRunsForSession(request.params.sessionId),
+    }),
+  );
+  app.get<{ Params: { runId: string }; Querystring: { lastEventId?: string } }>(
     "/v1/runs/:runId/events",
     async (request, reply) => {
       if (!options.runManager.getRun(request.params.runId)) {
-        return reply
-          .status(404)
-          .send({ error: { code: "RUN_NOT_FOUND", message: "Run not found" } });
+        // A run that aged out is a different problem from one that never
+        // existed: the client should stop retrying, not re-create the run.
+        const expired = options.runManager.isExpired(request.params.runId);
+        return reply.status(expired ? 410 : 404).send({
+          error: expired
+            ? { code: "RUN_EXPIRED", message: "Run is no longer retained" }
+            : { code: "RUN_NOT_FOUND", message: "Run not found" },
+        });
       }
       reply.raw.writeHead(200, {
         "Content-Type": "text/event-stream; charset=utf-8",
@@ -118,14 +174,21 @@ export async function buildServer(options: BuildServerOptions) {
       const onEvent = (
         event: Parameters<Parameters<RunManager["subscribe"]>[1]>[0],
       ) => {
-        writeSse(reply, event);
+        writeSse(reply, event, event.seq);
         if (event.type === "run_completed" || event.type === "run_error") {
           if (heartbeat) clearInterval(heartbeat);
           unsubscribe?.();
           reply.raw.end();
         }
       };
-      unsubscribe = options.runManager.subscribe(request.params.runId, onEvent);
+      unsubscribe = options.runManager.subscribe(
+        request.params.runId,
+        onEvent,
+        resumeCursor(
+          request.headers["last-event-id"],
+          request.query?.lastEventId,
+        ),
+      );
       if (!reply.raw.writableEnded) {
         heartbeat = setInterval(
           () => writeSse(reply, { type: "ping", at: Date.now() }),

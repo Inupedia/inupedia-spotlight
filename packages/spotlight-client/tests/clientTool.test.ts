@@ -32,6 +32,45 @@ describe("client tools", () => {
     );
   });
 
+  it("derives a tier from the legacy descriptor fields", () => {
+    const readTool = defineClientTool(
+      async ({ videoId }: { videoId: string }) => videoId,
+      {
+        name: "readVideo",
+        description: "Read video state",
+        schema,
+        sideEffect: "none",
+        replayPolicy: "safe",
+      },
+    );
+    const uiTool = defineClientTool(
+      async ({ videoId }: { videoId: string }) => videoId,
+      { name: "openVideo", description: "Open a video", schema },
+    );
+    const registry = createClientToolRegistry([readTool, uiTool]);
+
+    expect(registry.descriptors.map((tool) => tool.tier)).toEqual([
+      "query",
+      "navigate",
+    ]);
+  });
+
+  it("refuses to register a tool the runtime could not safely re-dispatch", () => {
+    const submit = defineClientTool(
+      async ({ videoId }: { videoId: string }) => videoId,
+      {
+        name: "submitPurchaseOrder",
+        description: "Submit a purchase order",
+        schema,
+        tier: "mutate",
+      },
+    );
+
+    expect(() => createClientToolRegistry([submit])).toThrow(
+      /submitPurchaseOrder/u,
+    );
+  });
+
   it("builds a deterministic build-pinned manifest", async () => {
     const tool = defineClientTool(async () => undefined, {
       name: "closePanel",

@@ -49,6 +49,7 @@ export function buildKnowledgeSynthesizeMessages(input: {
   sessionPrompt: string;
   projectPrompt: string;
   memoryContext: string;
+  observedPrompt?: string;
   messages?: BaseMessage[];
 }) {
   const evidenceContext = `Evidence bundle (${input.evidence.sufficiency}):\n${formatEvidenceForPrompt(input.evidence.items)}`;
@@ -68,6 +69,7 @@ export function buildKnowledgeSynthesizeMessages(input: {
         "Long-term memory is user-scoped context, not evidence.",
         input.memoryContext,
         evidenceContext,
+        input.observedPrompt ?? "",
         input.sessionPrompt,
         input.projectPrompt,
       ]

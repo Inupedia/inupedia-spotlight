@@ -1,5 +1,8 @@
 import { tool } from "langchain";
-import type { FrontendToolDescriptorV1 } from "@inupedia/spotlight-protocol";
+import type {
+  FrontendToolDescriptorV1,
+  ToolTraceEvent,
+} from "@inupedia/spotlight-protocol";
 import { z } from "zod";
 import type { BaseStore } from "@langchain/langgraph";
 import type {
@@ -25,7 +28,12 @@ export interface LangChainToolProgress {
   onStart?: (call: SpotlightToolCallInfo) => void;
   onComplete?: (
     call: SpotlightToolCallInfo,
-    result: { success: boolean; output?: unknown; error?: string },
+    result: {
+      success: boolean;
+      output?: unknown;
+      error?: string;
+      trace?: ToolTraceEvent[];
+    },
   ) => void;
 }
 
@@ -52,7 +60,11 @@ export function createClientLangChainTool(
         if (!result.success) {
           const error =
             result.error || `Client tool failed: ${descriptor.name}`;
-          progress?.onComplete?.(call, { success: false, error });
+          progress?.onComplete?.(call, {
+            success: false,
+            error,
+            trace: result.trace,
+          });
           reported = true;
           throw new Error(error);
         }
@@ -61,6 +73,7 @@ export function createClientLangChainTool(
         progress?.onComplete?.(call, {
           success: true,
           output: result.output,
+          trace: result.trace,
         });
         reported = true;
         return completedOutput;

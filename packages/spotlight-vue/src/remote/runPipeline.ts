@@ -1,6 +1,8 @@
 import type {
   HostToolEffect,
   SpotlightMemoryDecision,
+  SpotlightRunStatus,
+  SpotlightRunSummary,
   ToolSideEffectV1,
 } from "@inupedia/spotlight-protocol";
 import { serializeSkillsForRemote } from "@inupedia/spotlight-client";
@@ -51,7 +53,16 @@ type RemoteRunEvent =
           displayName: string;
         };
         hostEffect?: HostToolEffect;
+        /** >1 means the server is re-sending this call after a lost connection. */
+        dispatch?: number;
       };
+    }
+  | {
+      type: "run_status";
+      at: number;
+      runId: string;
+      status: SpotlightRunStatus;
+      detail?: string;
     }
   | {
       type: "run_completed";
@@ -63,6 +74,7 @@ type RemoteRunEvent =
       stopReason: string;
       failureClass: string | null;
       elapsedMs: number;
+      summary?: SpotlightRunSummary;
       memoryReplay?: {
         source: "exact" | "semantic" | "session";
         entryId: string;
@@ -129,6 +141,7 @@ function isTelemetryEvent(
     event.type !== "host_action_request" &&
     event.type !== "run_completed" &&
     event.type !== "run_error" &&
+    event.type !== "run_status" &&
     event.type !== "ping" &&
     event.type !== "memory_decision"
   );
@@ -567,6 +580,16 @@ export async function applyRemoteEvent(
       nextStatus,
       labels[event.decision.action],
     );
+  } else if (event.type === "run_status") {
+    const detail = event.detail?.trim();
+    if (detail) {
+      const lane =
+        api.getSteps().find((step) => step.id === SPOTLIGHT_PIPELINE_STEP_IDS.act)
+          ? SPOTLIGHT_PIPELINE_STEP_IDS.act
+          : SPOTLIGHT_PIPELINE_STEP_IDS.gather;
+      ensureStep(api, lane, toolStepLabel(lane, null));
+      api.appendChunkToStep(lane, `\n${detail}\n`);
+    }
   } else if (event.type === "assistant_response") {
     completeStepIfPresent(api, SPOTLIGHT_PIPELINE_STEP_IDS.understand);
     completeStepIfPresent(api, SPOTLIGHT_PIPELINE_STEP_IDS.gather);
@@ -602,30 +625,67 @@ async function postHostResult(params: {
         error: params.result.error,
         errorCode: params.result.errorCode,
         trace: params.result.trace,
+        // Free observation: the page just changed, so tell the agent what it
+        // looks like now instead of making it plan against the pre-call state.
+        uiContext: getSpotlightConfig().getUiContext?.() ?? undefined,
       }),
       signal: params.signal,
     },
   );
 }
 
+type SequencedRunEvent = RemoteRunEvent & { seq?: number };
+
 function parseSseChunk(buffer: string): {
-  events: RemoteRunEvent[];
+  events: SequencedRunEvent[];
   rest: string;
 } {
   const frames = buffer.split(/\n\n/u);
   const rest = frames.pop() ?? "";
   const events = frames.flatMap((frame) => {
-    const dataLine = frame
-      .split(/\n/u)
-      .find((line) => line.startsWith("data: "));
+    const lines = frame.split(/\n/u);
+    const dataLine = lines.find((line) => line.startsWith("data: "));
     if (!dataLine) return [];
+    const idLine = lines.find((line) => line.startsWith("id: "));
+    const seq = idLine ? Number.parseInt(idLine.slice(4), 10) : Number.NaN;
     try {
-      return [JSON.parse(dataLine.slice(6)) as RemoteRunEvent];
+      const event = JSON.parse(dataLine.slice(6)) as SequencedRunEvent;
+      return [Number.isFinite(seq) ? { ...event, seq } : event];
     } catch {
       return [];
     }
   });
   return { events, rest };
+}
+
+const SSE_RECONNECT_ATTEMPTS = 6;
+const SSE_RECONNECT_BASE_MS = 400;
+
+async function openRunEventStream(
+  runId: string,
+  afterSeq: number,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const query = afterSeq > 0 ? `?lastEventId=${afterSeq}` : "";
+  const response = await fetch(
+    `${getSpotlightServerBase()}/v1/runs/${encodeURIComponent(runId)}/events${query}`,
+    { headers: buildSpotlightJsonHeaders(), signal },
+  );
+  if (response.status === 410) {
+    throw new Error("Spotlight 后端已不再保留这次运行的记录，请重新提问。");
+  }
+  if (!response.ok || !response.body) {
+    throw new Error(`Spotlight 后端事件流连接失败：${response.status}`);
+  }
+  return response;
+}
+
+function reconnectDelay(attempt: number): number {
+  return Math.min(SSE_RECONNECT_BASE_MS * 2 ** attempt, 5_000);
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function warmupSpotlightRemoteContext(
@@ -727,68 +787,80 @@ export async function runRemoteSpotlightPipeline(
       { once: true },
     );
   }
-  const eventsResponse = await fetch(
-    `${base}/v1/runs/${encodeURIComponent(runId)}/events`,
-    {
-      headers: buildSpotlightJsonHeaders(),
-      signal,
-    },
-  );
-  if (!eventsResponse.ok || !eventsResponse.body) {
-    throw new Error(`Spotlight 后端事件流连接失败：${eventsResponse.status}`);
-  }
-
-  const reader = eventsResponse.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const parsed = parseSseChunk(buffer);
-      buffer = parsed.rest;
-      for (const event of parsed.events) {
-        if (event.type === "host_action_request") {
-          beginHostToolCall(api, event.request.call, lookup);
-          const result = await executeRemoteHostTool(event.request.call, api, {
-            allowedHostNames,
-            hostEffect: event.request.hostEffect,
-          });
-          settleHostToolCall(api, event.request.call, result, lookup);
-          await postHostResult({
-            runId,
-            correlationId: event.request.correlationId,
-            result,
-            signal,
-          });
-          continue;
+  // The run outlives any single connection, so a dropped stream is resumed from
+  // the last sequence number rather than restarting or failing the turn.
+  let lastSeq = 0;
+  let reconnects = 0;
+  while (true) {
+    const response = await openRunEventStream(runId, lastSeq, signal);
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let streamEnded = false;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          streamEnded = true;
+          break;
         }
-        if (event.type === "run_error") {
-          throw new Error(event.error);
-        }
-        await applyRemoteEvent(api, event, lookup);
-        await paintYield();
-        if (event.type === "run_completed") {
-          if (event.sessionPatch) {
-            useAgentSessionStore().applySessionPatch(event.sessionPatch);
+        buffer += decoder.decode(value, { stream: true });
+        const parsed = parseSseChunk(buffer);
+        buffer = parsed.rest;
+        for (const event of parsed.events) {
+          if (typeof event.seq === "number") lastSeq = event.seq;
+          if (event.type === "host_action_request") {
+            beginHostToolCall(api, event.request.call, lookup);
+            const result = await executeRemoteHostTool(event.request.call, api, {
+              allowedHostNames,
+              hostEffect: event.request.hostEffect,
+            });
+            settleHostToolCall(api, event.request.call, result, lookup);
+            await postHostResult({
+              runId,
+              correlationId: event.request.correlationId,
+              result,
+              signal,
+            });
+            continue;
           }
-          return {
-            command: null,
-            memoryReplay: event.memoryReplay ?? null,
-            memoryDecision: event.memoryDecision ?? null,
-            assistantReply: event.assistantReply,
-          };
+          if (event.type === "run_error") {
+            throw new Error(event.error);
+          }
+          await applyRemoteEvent(api, event, lookup);
+          await paintYield();
+          if (event.type === "run_completed") {
+            if (event.sessionPatch) {
+              useAgentSessionStore().applySessionPatch(event.sessionPatch);
+            }
+            return {
+              command: null,
+              memoryReplay: event.memoryReplay ?? null,
+              memoryDecision: event.memoryDecision ?? null,
+              assistantReply: event.assistantReply,
+            };
+          }
         }
       }
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      if (!isTransportError(error)) throw error;
+      streamEnded = true;
+    } finally {
+      reader.releaseLock();
     }
-  } finally {
-    reader.releaseLock();
+    if (!streamEnded || signal?.aborted) return { command: null };
+    reconnects += 1;
+    if (reconnects > SSE_RECONNECT_ATTEMPTS) {
+      throw new Error("Spotlight 后端事件流多次重连失败，请重试。");
+    }
+    await wait(reconnectDelay(reconnects - 1));
   }
+}
 
-  return {
-    command: null,
-  };
+/** A closed socket is recoverable; anything the server told us is not. */
+function isTransportError(error: unknown): boolean {
+  return error instanceof TypeError || error instanceof DOMException;
 }
 
 export async function cancelRemoteSpotlightRun(runId: string) {

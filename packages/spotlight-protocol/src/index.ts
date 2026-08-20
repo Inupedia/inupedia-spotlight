@@ -224,6 +224,37 @@ export interface HostToolResultRequest {
   error?: string;
   errorCode?: string;
   trace?: ToolTraceEvent[];
+  /**
+   * Observation taken after the handler ran. The browser piggybacks it here so
+   * the runtime can refresh its view of the page without a second round trip.
+   */
+  uiContext?: AgentUiContext;
+}
+
+/**
+ * A run is not bound to the connection that created it. `waiting_for_host` means
+ * the browser went away mid-call; the run stays alive so a reconnect can resume it.
+ */
+export type SpotlightRunStatus =
+  | "running"
+  | "waiting_for_host"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface SpotlightRunSummary {
+  steps: number;
+  toolCalls: number;
+  hostDispatches: number;
+  hostRedispatches: number;
+  elapsedMs: number;
+}
+
+export interface SpotlightActiveRun {
+  runId: string;
+  status: SpotlightRunStatus;
+  startedAt: number;
+  lastEventSeq: number;
 }
 
 export interface SpotlightHostToolsManifest {

@@ -39,7 +39,14 @@ import {
   memoryNamespace,
 } from "../tools.js";
 import { emitPhase, emitTool } from "./emit.js";
-import { conversationMemoryMiddleware } from "./agentMiddleware.js";
+import {
+  conversationMemoryMiddleware,
+  observationMiddleware,
+} from "./agentMiddleware.js";
+import {
+  observedStateForRouter,
+  observedStatePromptBlock,
+} from "./observedState.js";
 import {
   buildRouterContextPayload,
   buildSessionContext,
@@ -355,6 +362,9 @@ export function compileSpotlightWorkflow(
   const gather = buildGatherSubgraph(context, options, runSkills);
   const sessionContext = buildSessionContext(context.request);
   const sessionPrompt = sessionContextPromptBlock(sessionContext);
+  // Read late, never captured: the runtime replaces this after every host call.
+  const observation = () => context.observed?.() ?? context.request.uiContext;
+  const observedPrompt = () => observedStatePromptBlock(observation());
 
   return new StateGraph(RuntimeState)
     .addNode("route", async (state, config) => {
@@ -379,7 +389,10 @@ export function compileSpotlightWorkflow(
         state.question,
         clientTools,
         runSkills,
-        buildRouterContextPayload(sessionContext),
+        buildRouterContextPayload(
+          sessionContext,
+          observedStateForRouter(observation()),
+        ),
       );
       const chain = matchedSkillDeclaresChain(
         runSkills,
@@ -475,6 +488,7 @@ export function compileSpotlightWorkflow(
           memoryContext: memoryReadEnabled
             ? memoryContext
             : "The user disabled memory recall for this turn. Do not use long-term memory.",
+          observedPrompt: observedPrompt(),
           messages: state.messages,
         }),
         config,
@@ -591,6 +605,7 @@ export function compileSpotlightWorkflow(
                     : result.error || `${call.displayName}失败。`,
                   output: result.output,
                   error: result.error,
+                  trace: result.trace,
                 },
               }),
           }) as StructuredToolInterface;
@@ -632,6 +647,7 @@ export function compileSpotlightWorkflow(
                   : result.error || `${call.displayName}失败。`,
                 output: result.output,
                 error: result.error,
+                trace: result.trace,
               },
             }),
         }),
@@ -664,6 +680,7 @@ export function compileSpotlightWorkflow(
         ].join("\n"),
         middleware: [
           ...skillRuntime.middleware,
+          observationMiddleware(observedPrompt),
           ...conversationMemoryMiddleware(options.model),
           toolCallLimitMiddleware({ runLimit: 6 }),
         ],

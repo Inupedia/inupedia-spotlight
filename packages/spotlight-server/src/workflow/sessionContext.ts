@@ -82,11 +82,15 @@ export function buildSessionContext(request: CreateRunRequest): SessionContext {
   };
 }
 
-export function buildRouterContextPayload(session: SessionContext) {
+export function buildRouterContextPayload(
+  session: SessionContext,
+  observedState?: string,
+) {
   return {
     isReferential: session.isReferential,
     lastAssistantReply: session.lastAssistantReply,
     conversationContext: session.fullContextText || undefined,
+    observedState,
   };
 }
 

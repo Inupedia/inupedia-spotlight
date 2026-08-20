@@ -80,6 +80,28 @@ app.use(SpotlightVue, { config, enabled: true });
 
 会话记忆：LangGraph Checkpointer（`projectId + sessionId`）。跨会话长期记忆还要浏览器提供稳定 `memorySubjectId`；没有该值时拒绝「记住」，不会退化成项目级共享记忆。
 
+## Capability tier
+
+每个 Client Tool 有且只有一个能力等级，Server 按它决定敢不敢派发：
+
+| tier | 含义 | 丢结果时怎么办 |
+| --- | --- | --- |
+| `observe` | 读浏览器 / UI 状态 | 直接重发 |
+| `query` | 读业务后端，幂等 | 直接重发 |
+| `navigate` | 改 UI，本地可逆 | 直接重发 |
+| `mutate` | 改外部系统 | **不能重发**，注册期直接拒绝 |
+
+不写 `tier` 时由 `sideEffect` / `replayPolicy` / `riskLevel` 推导，旧清单不用改。前三档都能安全重放，所以断线恢复就是重发同一次调用——这是运行时唯一的恢复手段。`mutate` 需要调用账本、ACK 和对账，见 [docs/design/capability-protocol-v2.md](docs/design/capability-protocol-v2.md)。
+
+## Run 与连接分离
+
+Run 不绑定 SSE 连接：
+
+- 每个事件带 `seq`，重连用 `Last-Event-ID`（或 `?lastEventId=`）增量续读，不重跑这一轮。
+- 浏览器断开时 run 进入 `waiting_for_host` 而不是失败；重连后未完成的页面调用会重新派发一次。
+- 过期的 run 返回 `410`（而不是 `404`），客户端据此停止重试。
+- 浏览器在每次 host 结果里回传新鲜 `uiContext`，Agent 下一步看到的是操作**之后**的页面。
+
 ## 开发与发布
 
 ```bash
@@ -88,7 +110,7 @@ pnpm test
 pnpm build
 ```
 
-1. Push tag，例如 `v0.5.19`。
+1. Push tag，例如 `v0.6.0`。
 2. GitHub Actions 对齐所有 package 版本、跑测试、发布 npm（`NPM_TOKEN`）。
 3. Server 镜像：`ghcr.io/inupedia/spotlight-server:<ver>`。
 
