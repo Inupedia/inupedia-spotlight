@@ -1,108 +1,214 @@
-# Inupedia Spotlight
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Inupedia Spotlight — make an existing Vue app agent-ready with typed Client Tools, Skills, LangGraph runtime, knowledge, and memory">
+</p>
 
-业务前端只声明**当前页面能做什么**。路由、知识检索、Action、Memory 和 SSE 都在 Spotlight Server。
+<p align="center">
+  <a href="./skills/spotlight-integrate/README.md"><strong>Agent Skill 接入</strong></a>
+  ·
+  <a href="./docs/client-tools.md">Client Tools</a>
+  ·
+  <a href="./docs/server-deployment.md">Server 部署</a>
+  ·
+  <a href="./packages/README.md">Packages</a>
+</p>
 
-面向 **Vue 3 + Vite**。新项目用 Agent Skill 蒸馏现成 UI，不要在宿主里再写一套 Agent。
+## Spotlight 是什么
 
+**Inupedia Spotlight** 是一套面向现有 **Vue 3 + Vite** 应用的 Agent Runtime。业务前端只声明“当前页面真正能做什么”，Spotlight 把这些能力变成带类型的 **Client Tools**，再通过 **Skills**、LangGraph 路由、Knowledge、Memory 和可恢复 Run，把自然语言安全地落到已有业务能力上。
+
+> **宿主业务代码始终是事实源。** Spotlight 不复制一套业务系统，也不依赖 CSS Selector 模拟点击；Router、Store、Service、GIS、播放器、Pinia 等能力仍留在原应用中。
+
+### 一条真实的调用链
+
+```text
+用户自然语言
+    ↓
+Skill 选择 / LangGraph 路由
+    ↓
+Spotlight Server
+    ↓
+Client Tool（类型 + JSDoc + JSON Schema）
+    ↓
+浏览器 RPC
+    ↓
+原 Router / Store / Service / 页面引擎
 ```
-宿主 Vue 应用                         Spotlight Server
-─────────────────                    ─────────────────
-defineClientTool  →  浏览器 RPC  →   LangGraph 路由
-.inupedia/skills  →  随 Run 上报  →   Knowledge / Action
-getUiContext / 用户 id                Checkpointer · Store · Memory Gate
-地图 / 播放器 / Pinia 留在浏览器       知识库 · 联网搜索 Provider
-```
 
-| 你写 | SDK / Server 负责 |
+你写的是业务适配层，Spotlight 负责把它变成可路由、可恢复、可记忆的 Agent 能力：
+
+| 业务项目负责 | Spotlight SDK / Server 负责 |
 | --- | --- |
-| 包装已有页面函数为 Client Tool | 构建期推导 Tool 名、JSDoc、JSON Schema |
-| 业务 Skill（何时用哪个 Tool） | Skill 路由、list ≠ open、确定性执行 |
-| `projectId`、Server URL、稳定用户 id | 会话记忆、受控长期记忆、知识/搜索 |
+| 包装已有 Router / Store / Service 为 Client Tool | 构建期推导 Tool 名、JSDoc 与 JSON Schema |
+| 编写业务 Skill，说明何时使用哪些 Tool | Skill 路由、Knowledge、Action 与多步编排 |
+| 提供 `projectId`、Server URL、稳定用户 ID | 会话状态、长期记忆、Run 生命周期与 SSE 恢复 |
+| 保留原有权限、状态和业务约束 | 在 Runtime 中按能力等级决定是否允许派发 / 重放 |
 
-当前版本以 npm 为准：`npm view @inupedia/spotlight-vue version`。`@inupedia/spotlight-*` 与 `ghcr.io/inupedia/spotlight-server:<ver>` 必须同一 semver。
+## 为什么不是 DOM Agent
 
-## 新项目：让 Agent 接入
+Spotlight 推荐：
 
-Skill 包：[skills/spotlight-integrate](skills/spotlight-integrate/README.md)。人只确认 `projectId`、Server 地址 / API key、稳定登录用户 id（不要用会轮换的 token）。
-
-**A. 装进 Cursor / Codex / Claude Code**
-
-把整个 `skills/spotlight-integrate/` 拷到 skills 目录（不能只拷 `SKILL.md`），在宿主仓库说：
-
-```
-Use spotlight-integrate. Follow standard.md. Distill this app into Spotlight.
+```text
+自然语言 → Skill → Client Tool → 原 Store / Service / Router
 ```
 
-**B. 贴给任意大模型**
+而不是：
+
+```text
+自然语言 → CSS Selector → 模拟鼠标点击
+```
+
+这样做有三个直接收益：
+
+- **可维护**：页面改布局、换组件，不会让 Agent 的核心能力一起失效。
+- **可验证**：Tool 输入输出来自 TypeScript 类型，构建阶段就能发现缺失描述和不可推导类型。
+- **可控**：读、查询、导航和外部写入可以采用不同的执行与恢复策略，而不是把所有操作都当成“点一下”。
+
+## 最快接入：让 Coding Agent 蒸馏现有前端
+
+新项目优先使用仓库自带的 [`spotlight-integrate`](./skills/spotlight-integrate/README.md) Skill Pack。它会先分析真实 Router / Store / Service / UI 能力，再生成 Client Tools、业务 Skills、Project Pack 和验收材料。
+
+把整个目录复制到 Cursor / Codex / Claude Code 的 skills 目录：
+
+```text
+skills/spotlight-integrate/
+```
+
+然后在**已经打开宿主 Vue 项目**的 Coding Agent 中执行：
+
+```text
+Use spotlight-integrate.
+Agentize this app with Spotlight.
+Follow architecture.md and standard.md.
+```
+
+也可以直接把完整 Skill Pack 展开到剪贴板：
 
 ```bash
 bash skills/spotlight-integrate/prompt.sh --copy
 ```
 
-把剪贴板贴进**已经打开宿主前端**的对话。脚本会打出标准、测试、流水线和模板；缺文件会失败。
+接入过程中，人只需要确认少量项目级信息，例如 `projectId`、Spotlight Server 地址 / API key，以及用于 Memory 的稳定登录用户 ID。
 
-非 Vue 3 宿主会在 stage 0 停止（例如 React）。已接过 Spotlight 的仓库就地扩展，不搬家、不另起 `projectId`。
-
-约定与验收：[standard.md](skills/spotlight-integrate/standard.md) · [testing.md](skills/spotlight-integrate/testing.md)
+> 当前自动接线路径以 **Vue 3 + Vite** 为目标。非 Vue 3 项目不会被强行改造成 Vue，也不会擅自迁移构建系统。
 
 ## 手工接入
 
-自己写 Tool / Skill 时从这里开始：
+如果你更希望自己控制 Tool 和 Skill，最小路径也很薄。
 
-- [Client Tool / Skill 接入指南](docs/client-tools.md)
-- [Server 部署与 Project Pack](docs/server-deployment.md)
-- 包一览：[packages/README.md](packages/README.md)
+### 1. 安装
 
-最小形状：
+```bash
+pnpm add @inupedia/spotlight-client @inupedia/spotlight-vue
+```
+
+### 2. 把已有业务函数包装成 Client Tool
 
 ```ts
-/** 按名称打开已有资源。 */
-export const openItem = defineClientTool(
+// src/spotlight/tools.ts
+import { defineClientTool } from "@inupedia/spotlight-client";
+import { videoService } from "@/service/video";
+
+/** 按名称全屏播放指定视频。 */
+export const playVideoFullscreen = defineClientTool(
   async ({ name }: { name: string }): Promise<void> => {
-    await existingOpen(name);
+    await videoService.playFullscreen(name);
   },
 );
+
+export const spotlightTools = [playVideoFullscreen];
 ```
 
+Spotlight 在构建阶段从**导出变量名 + JSDoc + TypeScript 类型**推导 Tool 名称、说明和 JSON Schema；业务代码不需要手写 LangChain Tool 元数据。
+
+### 3. 注册 Spotlight
+
 ```ts
-app.use(SpotlightVue, { config, enabled: true });
+// src/main.ts
+import { createApp } from "vue";
+import { SpotlightVue } from "@inupedia/spotlight-vue";
+import App from "./App.vue";
+import spotlightConfig from "./spotlight/config";
+
+createApp(App)
+  .use(SpotlightVue, { config: spotlightConfig })
+  .mount("#app");
 ```
+
+完整的 Vite 插件、配置、Skill 加载与环境变量示例见 **[Client Tool / Skill 接入指南](./docs/client-tools.md)**。
+
+## Runtime 里发生了什么
+
+Spotlight 把“浏览器里真实存在的能力”和“服务端 Agent Runtime”明确分开：
+
+```text
+┌──────────────────────────────┐        ┌────────────────────────────────┐
+│         Vue Host App         │        │        Spotlight Server        │
+│                              │        │                                │
+│ Router / Store / Service     │        │ LangGraph routing              │
+│          ↓                   │  RPC   │ Skills / Knowledge / Actions   │
+│ Client Tools ────────────────┼───────→│ Run state / SSE                │
+│          ↑                   │←───────┼ Long-term Memory Gate          │
+│ fresh uiContext after action │        │ Provider integrations          │
+└──────────────────────────────┘        └────────────────────────────────┘
+```
+
+浏览器负责执行真实页面能力；Server 负责理解、规划、检索、记忆和运行状态。通用 Server 不应该写死某个产品的业务语义，具体业务知识保留在宿主 Skill、Tool description、schema 和 `uiContext` 中。
+
+## Capability tiers
+
+每个 Client Tool 有且只有一个能力等级，Runtime 据此决定是否允许安全重放：
+
+| Tier | 典型行为 | 断线 / 丢结果后 |
+| --- | --- | --- |
+| `observe` | 读取浏览器或 UI 状态 | 可直接重发 |
+| `query` | 读取业务后端，幂等 | 可直接重发 |
+| `navigate` | 改变 UI，本地可逆 | 可直接重发 |
+| `mutate` | 修改外部系统 | **不能盲目重发** |
+
+不显式填写 `tier` 时，可由 `sideEffect`、`replayPolicy`、`riskLevel` 推导。更完整的协议设计见 [`capability-protocol-v2.md`](./docs/design/capability-protocol-v2.md)。
+
+## Run 与连接分离
+
+Spotlight 的 Run 不绑定某一次 SSE 连接：
+
+- 每个事件带 `seq`，重连可通过 `Last-Event-ID`（或 `?lastEventId=`）增量续读，而不是重新执行整轮。
+- 浏览器断开时，Run 可以进入 `waiting_for_host`；Host 恢复后继续处理未完成的页面调用。
+- 过期 Run 返回 `410`，客户端据此停止无意义重试。
+- 浏览器每次执行 Tool 后回传新的 `uiContext`，Agent 下一步看到的是**操作之后**的页面状态。
+
+## Memory
+
+Spotlight 将两类记忆分开：
+
+- **会话记忆**：由 LangGraph Checkpointer 按 `projectId + sessionId` 保存。
+- **跨会话长期记忆**：必须由宿主提供稳定的 `memorySubjectId`。
+
+如果宿主没有稳定用户 ID，Spotlight 会拒绝把“记住这个”降级成项目级共享记忆，避免不同用户之间发生记忆串扰。
 
 ## Packages
 
 | Package | 职责 |
 | --- | --- |
 | `@inupedia/spotlight-protocol` | Client / Server 共享协议 |
-| `@inupedia/spotlight-client` | `defineClientTool`、HTTP、Vite 清单 |
-| `@inupedia/spotlight-vue` | Vue 插件、命令栏、随 Run 上报 Skill |
-| `@inupedia/spotlight-memory` | Pack Memory Gate（精确 / 语义缓存） |
-| `@inupedia/spotlight-server` | LangGraph Agent Server（路由、Knowledge、Action、记忆） |
+| `@inupedia/spotlight-client` | `defineClientTool`、HTTP、Vite Tool Manifest |
+| `@inupedia/spotlight-vue` | Vue Plugin、命令面板、Skill 上报与浏览器执行管线 |
+| `@inupedia/spotlight-memory` | Memory Gate 与缓存存储 |
+| `@inupedia/spotlight-server` | 可部署的 LangChain / LangGraph Runtime |
 
-会话记忆：LangGraph Checkpointer（`projectId + sessionId`）。跨会话长期记忆还要浏览器提供稳定 `memorySubjectId`；没有该值时拒绝「记住」，不会退化成项目级共享记忆。
+更完整的 package 说明见 [`packages/README.md`](./packages/README.md)。
 
-## Capability tier
+## 版本与兼容性
 
-每个 Client Tool 有且只有一个能力等级，Server 按它决定敢不敢派发：
+当前发布版本以 npm registry 为准：
 
-| tier | 含义 | 丢结果时怎么办 |
-| --- | --- | --- |
-| `observe` | 读浏览器 / UI 状态 | 直接重发 |
-| `query` | 读业务后端，幂等 | 直接重发 |
-| `navigate` | 改 UI，本地可逆 | 直接重发 |
-| `mutate` | 改外部系统 | **不能重发**，注册期直接拒绝 |
+```bash
+npm view @inupedia/spotlight-vue version
+npm view @inupedia/spotlight-server version
+```
 
-不写 `tier` 时由 `sideEffect` / `replayPolicy` / `riskLevel` 推导，旧清单不用改。前三档都能安全重放，所以断线恢复就是重发同一次调用——这是运行时唯一的恢复手段。`mutate` 需要调用账本、ACK 和对账，见 [docs/design/capability-protocol-v2.md](docs/design/capability-protocol-v2.md)。
+`@inupedia/spotlight-*` 与 `ghcr.io/inupedia/spotlight-server:<version>` 应保持同一 semver。仓库本身要求 **Node.js >= 22**、**pnpm >= 9**；当前 Vue package 的 peer 目标为 **Vue >= 3.5** 与 **Pinia >= 3**。
 
-## Run 与连接分离
-
-Run 不绑定 SSE 连接：
-
-- 每个事件带 `seq`，重连用 `Last-Event-ID`（或 `?lastEventId=`）增量续读，不重跑这一轮。
-- 浏览器断开时 run 进入 `waiting_for_host` 而不是失败；重连后未完成的页面调用会重新派发一次。
-- 过期的 run 返回 `410`（而不是 `404`），客户端据此停止重试。
-- 浏览器在每次 host 结果里回传新鲜 `uiContext`，Agent 下一步看到的是操作**之后**的页面。
-
-## 开发与发布
+## 开发
 
 ```bash
 pnpm install
@@ -110,8 +216,34 @@ pnpm test
 pnpm build
 ```
 
-1. Push tag，例如 `v0.6.0`。
-2. GitHub Actions 对齐所有 package 版本、跑测试、发布 npm（`NPM_TOKEN`）。
-3. Server 镜像：`ghcr.io/inupedia/spotlight-server:<ver>`。
+常用校验：
 
-仓库变量 `NPM_PUBLISH_ACCESS` 设为 `public` 或 `restricted`。Node-only 能力必须走 `/node` 子入口，不能进浏览器主包。
+```bash
+pnpm typecheck
+pnpm smoke:packages
+pnpm test:ci
+```
+
+发布流程以 tag 驱动。CI 对齐 workspace package 版本、运行测试并发布 npm；Server 镜像发布到：
+
+```text
+ghcr.io/inupedia/spotlight-server:<version>
+```
+
+Node-only 能力必须走 `/node` 子入口，不能混入浏览器主包。
+
+## 继续阅读
+
+| 想做什么 | 文档 |
+| --- | --- |
+| 让 Coding Agent 自动完成现有 Vue 项目的 Agent 化 | [`skills/spotlight-integrate/README.md`](./skills/spotlight-integrate/README.md) |
+| 手工定义 Client Tool / Skill | [`docs/client-tools.md`](./docs/client-tools.md) |
+| 部署 Spotlight Server / Project Pack | [`docs/server-deployment.md`](./docs/server-deployment.md) |
+| 理解 Capability / 重放协议 | [`docs/design/capability-protocol-v2.md`](./docs/design/capability-protocol-v2.md) |
+| 查看 SDK 包结构 | [`packages/README.md`](./packages/README.md) |
+
+---
+
+<p align="center">
+  <sub>Build the agent layer around the product you already have — not a second product beside it.</sub>
+</p>
