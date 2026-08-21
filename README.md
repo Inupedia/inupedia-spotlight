@@ -1,108 +1,259 @@
-# Inupedia Spotlight
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Spotlight — one intelligent entry point for the whole frontend product">
+</p>
 
-业务前端只声明**当前页面能做什么**。路由、知识检索、Action、Memory 和 SSE 都在 Spotlight Server。
+<p align="center">
+  <a href="./skills/spotlight-integrate/README.md"><strong>Integration Skill</strong></a>
+  ·
+  <a href="./docs/client-tools.md">Client Tools</a>
+  ·
+  <a href="./docs/server-deployment.md">Server Deployment</a>
+  ·
+  <a href="./packages/README.md">Packages</a>
+</p>
 
-面向 **Vue 3 + Vite**。新项目用 Agent Skill 蒸馏现成 UI，不要在宿主里再写一套 Agent。
+## One entry point for the whole product
 
-```
-宿主 Vue 应用                         Spotlight Server
-─────────────────                    ─────────────────
-defineClientTool  →  浏览器 RPC  →   LangGraph 路由
-.inupedia/skills  →  随 Run 上报  →   Knowledge / Action
-getUiContext / 用户 id                Checkpointer · Store · Memory Gate
-地图 / 播放器 / Pinia 留在浏览器       知识库 · 联网搜索 Provider
-```
+Spotlight is inspired by the interaction model behind **Apple's Spotlight**: start with one universal entry point, express what you want, and let the system take you to the right thing.
 
-| 你写 | SDK / Server 负责 |
+We think frontend products are moving in the same direction. Users should not have to learn where every feature, page, report, control, or workflow lives before they can get work done. A modern product should offer one intelligent command surface that can **search, navigate, explain, and act** across the capabilities already inside it.
+
+Spotlight turns that idea into a framework-agnostic agent runtime for existing frontend products. It does not ask you to rebuild the UI or create a second “agent version” of the product. Instead, it connects natural-language intent to real Router / Store / Service / SDK capabilities through typed Client Tools, Skills, LangGraph, Knowledge, Memory, and recoverable Runs.
+
+<p align="center">
+  <img src="./assets/readme/demo.svg" width="100%" alt="Current Spotlight Vue adapter command surface demo">
+</p>
+
+The current Vue adapter realizes the idea as a focused command surface over the host app. The UI is only the entry point; execution still goes through real product capabilities.
+
+> **The host product remains the source of truth.** Router, Store, Service, SDK, GIS, media players, permissions, and business rules stay in the host application. Spotlight adds the capability layer, routing, runtime state, retrieval, and memory around them.
+
+Spotlight's architecture is **framework-agnostic**. This repository currently provides the most complete adapter and automated integration path for **Vue 3 + Vite**, but the Client Tool / Skill / Runtime model is designed to extend to other frontend stacks without forcing them to migrate to Vue.
+
+## Architecture
+
+<p align="center">
+  <img src="./assets/readme/architecture.svg" width="100%" alt="Spotlight architecture connecting user intent, the frontend product, typed Client Tools, and Spotlight Runtime">
+</p>
+
+The architecture deliberately keeps product execution and agent orchestration separate:
+
+| Your product owns | Spotlight owns |
 | --- | --- |
-| 包装已有页面函数为 Client Tool | 构建期推导 Tool 名、JSDoc、JSON Schema |
-| 业务 Skill（何时用哪个 Tool） | Skill 路由、list ≠ open、确定性执行 |
-| `projectId`、Server URL、稳定用户 id | 会话记忆、受控长期记忆、知识/搜索 |
+| Stable Router / Store / Service / SDK capabilities | Client Tool protocol and runtime invocation |
+| Business-facing Skills that describe when tools should be used | Skill routing, Knowledge, Actions, and multi-step orchestration |
+| `projectId`, Server URL, and stable user identity | Session state, long-term memory, Run lifecycle, and SSE recovery |
+| Existing permissions, state, and business constraints | Runtime coordination, reconnect behavior, and execution boundaries |
 
-当前版本以 npm 为准：`npm view @inupedia/spotlight-vue version`。`@inupedia/spotlight-*` 与 `ghcr.io/inupedia/spotlight-server:<ver>` 必须同一 semver。
+Spotlight does not move business logic into the runtime. It creates a reliable execution layer **between user intent and real product capabilities**.
 
-## 新项目：让 Agent 接入
+## Why not a DOM agent?
 
-Skill 包：[skills/spotlight-integrate](skills/spotlight-integrate/README.md)。人只确认 `projectId`、Server 地址 / API key、稳定登录用户 id（不要用会轮换的 token）。
+<p align="center">
+  <img src="./assets/readme/capability-vs-dom.svg" width="100%" alt="Symmetric comparison between Spotlight's typed capability path and fragile DOM automation">
+</p>
 
-**A. 装进 Cursor / Codex / Claude Code**
+Spotlight follows the **capability path**, not the **pixel / selector path**.
 
-把整个 `skills/spotlight-integrate/` 拷到 skills 目录（不能只拷 `SKILL.md`），在宿主仓库说：
+- **Stable** — layout and component changes do not automatically break the agent.
+- **Verifiable** — tools have explicit names, descriptions, and input/output contracts.
+- **Policy-aware** — reads, navigation, and sensitive writes can follow different execution rules.
+- **Maintainable** — the agent invokes real business capabilities instead of guessing through the DOM.
 
+When a product can expose a stable business capability, Spotlight can orchestrate it much more reliably than simulated browser clicks.
+
+## Fastest adoption path
+
+<p align="center">
+  <img src="./assets/readme/integration-flow.svg" width="100%" alt="Five-stage Spotlight integration flow from an existing frontend product to Spotlight Runtime">
+</p>
+
+The preferred integration model is to let a Coding Agent understand the product you already have, discover stable actions and data flows, and generate a thin Spotlight layer instead of reimplementing business logic.
+
+This repository includes [`spotlight-integrate`](./skills/spotlight-integrate/README.md), a Skill Pack for that workflow.
+
+Copy the entire directory into your Coding Agent's skills folder:
+
+```text
+skills/spotlight-integrate/
 ```
-Use spotlight-integrate. Follow standard.md. Distill this app into Spotlight.
+
+Then run it inside the host frontend repository:
+
+```text
+Use spotlight-integrate.
+Agentize this app with Spotlight.
+Follow architecture.md and standard.md.
 ```
 
-**B. 贴给任意大模型**
+You can also flatten the complete Skill Pack into one prompt:
 
 ```bash
 bash skills/spotlight-integrate/prompt.sh --copy
 ```
 
-把剪贴板贴进**已经打开宿主前端**的对话。脚本会打出标准、测试、流水线和模板；缺文件会失败。
+During integration, the project-specific details you typically need to confirm are:
 
-非 Vue 3 宿主会在 stage 0 停止（例如 React）。已接过 Spotlight 的仓库就地扩展，不搬家、不另起 `projectId`。
+- `projectId`
+- Spotlight Server URL / API key
+- a stable user identity for Memory
+- sensitive actions that should be gated rather than exposed automatically
 
-约定与验收：[standard.md](skills/spotlight-integrate/standard.md) · [testing.md](skills/spotlight-integrate/testing.md)
+> **Current implementation maturity:** automated integration is strongest for **Vue 3 + Vite** today. That is the current adapter implementation, not Spotlight's architectural boundary.
 
-## 手工接入
+## Current Vue adapter example
 
-自己写 Tool / Skill 时从这里开始：
+The repository currently ships `@inupedia/spotlight-vue`, so Vue 3 + Vite projects can integrate with a very thin adapter layer. The example below demonstrates the current first-class adapter; it does **not** define Spotlight's product scope.
 
-- [Client Tool / Skill 接入指南](docs/client-tools.md)
-- [Server 部署与 Project Pack](docs/server-deployment.md)
-- 包一览：[packages/README.md](packages/README.md)
+### 1. Install
 
-最小形状：
+```bash
+pnpm add @inupedia/spotlight-client @inupedia/spotlight-vue
+```
+
+### 2. Wrap an existing capability as a Client Tool
 
 ```ts
-/** 按名称打开已有资源。 */
-export const openItem = defineClientTool(
+// src/spotlight/tools.ts
+import { defineClientTool } from "@inupedia/spotlight-client";
+import { videoService } from "@/service/video";
+
+/** Play a named video in fullscreen. */
+export const playVideoFullscreen = defineClientTool(
   async ({ name }: { name: string }): Promise<void> => {
-    await existingOpen(name);
+    await videoService.playFullscreen(name);
   },
 );
+
+export const spotlightTools = [playVideoFullscreen];
 ```
 
+In the current TypeScript / Vite adapter, Spotlight can derive tool metadata from the **exported symbol name + JSDoc + TypeScript types**, including the JSON Schema used by the runtime. Business code does not need to hand-write bulky LangChain tool metadata.
+
+### 3. Register Spotlight
+
 ```ts
-app.use(SpotlightVue, { config, enabled: true });
+// src/main.ts
+import { createApp } from "vue";
+import { SpotlightVue } from "@inupedia/spotlight-vue";
+import App from "./App.vue";
+import spotlightConfig from "./spotlight/config";
+
+createApp(App)
+  .use(SpotlightVue, { config: spotlightConfig })
+  .mount("#app");
 ```
+
+For the complete Vite plugin, configuration, Skill loading, and environment-variable setup, see **[Client Tool / Skill Integration Guide](./docs/client-tools.md)**.
+
+## Runtime boundary
+
+<p align="center">
+  <img src="./assets/readme/runtime-boundary.svg" width="100%" alt="Balanced responsibility boundary between the frontend host and Spotlight Runtime">
+</p>
+
+The frontend host executes real product actions. Spotlight coordinates intent, retrieval, state, and recovery.
+
+The host remains responsible for:
+
+- UI / components
+- Router / Store / Service execution
+- Client Tool execution
+- returning fresh `uiContext` after actions
+
+Spotlight Runtime remains responsible for:
+
+- Skills
+- LangGraph routing and planning
+- Run lifecycle and SSE coordination
+- Knowledge / RAG
+- Memory
+- model / provider integrations
+
+Generic server logic should not hard-code the semantics of a specific product. Product-specific meaning belongs in host Skills, tool descriptions, schemas, and `uiContext`.
+
+## Safety boundaries
+
+`spotlight-integrate` does not expose every discovered function automatically. Candidate capabilities are classified first:
+
+| Class | Meaning |
+| --- | --- |
+| `DIRECT` | A stable capability already exists and can be safely exposed as a Tool |
+| `REFACTOR` | The capability is real, but currently trapped inside component-local logic and should be extracted without changing behavior |
+| `GATED` | A sensitive action such as delete, payment, transfer, or submit; it should not be auto-exposed |
+| `REJECT` | A fabricated capability, arbitrary script / DOM executor, or another unsafe abstraction |
+
+The goal is not to let the agent click everything. The goal is to expose **real, describable, verifiable business capabilities**.
+
+[`docs/design/capability-protocol-v2.md`](./docs/design/capability-protocol-v2.md) describes a further capability-tier and replay design, but that document is explicitly marked as a **deferred design** and should not be treated as shipped runtime behavior.
+
+## Runs and reconnect
+
+A Spotlight **Run** is not tied to one SSE connection.
+
+- Each event carries a sequence number.
+- Reconnects can continue from `Last-Event-ID` (or `?lastEventId=`) instead of re-running the whole turn.
+- A browser disconnect can move a run into `waiting_for_host` rather than failing it immediately.
+- When the host returns, unfinished browser-side work can continue.
+- Expired runs return `410`, allowing clients to stop retrying.
+- After each tool execution, the browser can return fresh `uiContext`, so the next agent step sees the state **after** the action.
+
+This gives multi-step product execution much stronger recovery semantics than restarting the entire interaction after every connection failure.
+
+## Memory
+
+Spotlight separates two memory scopes.
+
+### Session memory
+
+Managed by the LangGraph Checkpointer and scoped by:
+
+- `projectId`
+- `sessionId`
+
+### Cross-session long-term memory
+
+Requires a **stable** `memorySubjectId` from the host product.
+
+If the host cannot provide a stable user identity, Spotlight should not silently fall back to a shared project-wide memory bucket. That would risk memory leakage across users.
 
 ## Packages
 
-| Package | 职责 |
+| Package | Role |
 | --- | --- |
-| `@inupedia/spotlight-protocol` | Client / Server 共享协议 |
-| `@inupedia/spotlight-client` | `defineClientTool`、HTTP、Vite 清单 |
-| `@inupedia/spotlight-vue` | Vue 插件、命令栏、随 Run 上报 Skill |
-| `@inupedia/spotlight-memory` | Pack Memory Gate（精确 / 语义缓存） |
-| `@inupedia/spotlight-server` | LangGraph Agent Server（路由、Knowledge、Action、记忆） |
+| `@inupedia/spotlight-protocol` | Shared client / server protocol |
+| `@inupedia/spotlight-client` | `defineClientTool`, HTTP client, and build-time tool manifest |
+| `@inupedia/spotlight-vue` | Current Vue adapter: plugin, command UI, Skill reporting, and browser execution pipeline |
+| `@inupedia/spotlight-memory` | Memory Gate and cache-backed storage |
+| `@inupedia/spotlight-server` | Deployable LangChain / LangGraph runtime |
 
-会话记忆：LangGraph Checkpointer（`projectId + sessionId`）。跨会话长期记忆还要浏览器提供稳定 `memorySubjectId`；没有该值时拒绝「记住」，不会退化成项目级共享记忆。
+See [`packages/README.md`](./packages/README.md) for the package-level overview.
 
-## Capability tier
+## Versioning and compatibility
 
-每个 Client Tool 有且只有一个能力等级，Server 按它决定敢不敢派发：
+Check current releases from npm:
 
-| tier | 含义 | 丢结果时怎么办 |
-| --- | --- | --- |
-| `observe` | 读浏览器 / UI 状态 | 直接重发 |
-| `query` | 读业务后端，幂等 | 直接重发 |
-| `navigate` | 改 UI，本地可逆 | 直接重发 |
-| `mutate` | 改外部系统 | **不能重发**，注册期直接拒绝 |
+```bash
+npm view @inupedia/spotlight-vue version
+npm view @inupedia/spotlight-server version
+```
 
-不写 `tier` 时由 `sideEffect` / `replayPolicy` / `riskLevel` 推导，旧清单不用改。前三档都能安全重放，所以断线恢复就是重发同一次调用——这是运行时唯一的恢复手段。`mutate` 需要调用账本、ACK 和对账，见 [docs/design/capability-protocol-v2.md](docs/design/capability-protocol-v2.md)。
+`@inupedia/spotlight-*` packages and:
 
-## Run 与连接分离
+```text
+ghcr.io/inupedia/spotlight-server:<version>
+```
 
-Run 不绑定 SSE 连接：
+should stay aligned to the same semver.
 
-- 每个事件带 `seq`，重连用 `Last-Event-ID`（或 `?lastEventId=`）增量续读，不重跑这一轮。
-- 浏览器断开时 run 进入 `waiting_for_host` 而不是失败；重连后未完成的页面调用会重新派发一次。
-- 过期的 run 返回 `410`（而不是 `404`），客户端据此停止重试。
-- 浏览器在每次 host 结果里回传新鲜 `uiContext`，Agent 下一步看到的是操作**之后**的页面。
+Repository-level requirements:
 
-## 开发与发布
+- **Node.js >= 22**
+- **pnpm >= 9**
+
+The current Vue package targets **Vue >= 3.5** and **Pinia >= 3**. That is an implementation maturity statement, not Spotlight's architectural boundary.
+
+## Development
 
 ```bash
 pnpm install
@@ -110,8 +261,30 @@ pnpm test
 pnpm build
 ```
 
-1. Push tag，例如 `v0.6.0`。
-2. GitHub Actions 对齐所有 package 版本、跑测试、发布 npm（`NPM_TOKEN`）。
-3. Server 镜像：`ghcr.io/inupedia/spotlight-server:<ver>`。
+Common checks:
 
-仓库变量 `NPM_PUBLISH_ACCESS` 设为 `public` 或 `restricted`。Node-only 能力必须走 `/node` 子入口，不能进浏览器主包。
+```bash
+pnpm typecheck
+pnpm smoke:packages
+pnpm test:ci
+```
+
+The release flow is tag-driven. CI validates workspace versions, runs tests, publishes npm packages, and publishes the server image.
+
+Node-only capabilities must remain behind `/node` entry points and must not leak into browser-facing package entry points.
+
+## Further reading
+
+| Goal | Document |
+| --- | --- |
+| Use a Coding Agent to agentize an existing frontend product | [`skills/spotlight-integrate/README.md`](./skills/spotlight-integrate/README.md) |
+| Define Client Tools and Skills manually | [`docs/client-tools.md`](./docs/client-tools.md) |
+| Deploy Spotlight Server and the Project Pack | [`docs/server-deployment.md`](./docs/server-deployment.md) |
+| Review the deferred capability / replay design | [`docs/design/capability-protocol-v2.md`](./docs/design/capability-protocol-v2.md) |
+| Explore package structure | [`packages/README.md`](./packages/README.md) |
+
+---
+
+<p align="center">
+  <sub>One intelligent entry point. Real product capabilities underneath.</sub>
+</p>
