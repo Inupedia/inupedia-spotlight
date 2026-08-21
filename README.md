@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="Inupedia Spotlight — turn existing frontend product capabilities into typed, skill-routed agent actions with recoverable runs, knowledge, and memory">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Spotlight — one intelligent entry point for the whole frontend product">
 </p>
 
 <p align="center">
@@ -12,23 +12,31 @@
   <a href="./packages/README.md">Packages</a>
 </p>
 
-## What is Spotlight?
+## One entry point for the whole product
 
-**Inupedia Spotlight** is an agent runtime for **existing frontend products**.
+Spotlight is inspired by the interaction model behind **Apple's Spotlight**: start with one universal entry point, express what you want, and let the system take you to the right thing.
 
-It does not ask you to rebuild your UI or create a second “agent version” of the product beside the real one. Instead, Spotlight wraps **real frontend capabilities** as typed **Client Tools**, then uses **Skills**, LangGraph, Knowledge, Memory, and recoverable Runs to route natural-language intent into product behaviors that already exist.
+We think frontend products are moving in the same direction. Users should not have to learn where every feature, page, report, control, or workflow lives before they can get work done. A modern product should offer one intelligent command surface that can **search, navigate, explain, and act** across the capabilities already inside it.
 
-> **The host product remains the source of truth.** Router, Store, Service, SDK, GIS, media players, and other business entry points stay in the host application. Spotlight adds the capability layer, routing, runtime state, retrieval, and memory around them.
+Spotlight turns that idea into a framework-agnostic agent runtime for existing frontend products. It does not ask you to rebuild the UI or create a second “agent version” of the product. Instead, it connects natural-language intent to real Router / Store / Service / SDK capabilities through typed Client Tools, Skills, LangGraph, Knowledge, Memory, and recoverable Runs.
 
-Spotlight's core architecture is **framework-agnostic**. This repository currently provides the most complete adapter and automated integration path for **Vue 3 + Vite**, but the Client Tool / Skill / Runtime model is designed to extend to other frontend stacks without forcing them to migrate to Vue.
+<p align="center">
+  <img src="./assets/readme/demo.svg" width="100%" alt="Current Spotlight Vue adapter command surface demo">
+</p>
+
+The current Vue adapter realizes the idea as a focused command surface over the host app. The UI is only the entry point; execution still goes through real product capabilities.
+
+> **The host product remains the source of truth.** Router, Store, Service, SDK, GIS, media players, permissions, and business rules stay in the host application. Spotlight adds the capability layer, routing, runtime state, retrieval, and memory around them.
+
+Spotlight's architecture is **framework-agnostic**. This repository currently provides the most complete adapter and automated integration path for **Vue 3 + Vite**, but the Client Tool / Skill / Runtime model is designed to extend to other frontend stacks without forcing them to migrate to Vue.
 
 ## Architecture
 
 <p align="center">
-  <img src="./assets/readme/architecture.svg" width="100%" alt="Spotlight architecture connecting user intent, frontend capabilities, typed Client Tools, Spotlight Runtime, knowledge, memory, and model providers">
+  <img src="./assets/readme/architecture.svg" width="100%" alt="Spotlight architecture connecting user intent, the frontend product, typed Client Tools, and Spotlight Runtime">
 </p>
 
-The architecture intentionally separates responsibilities:
+The architecture deliberately keeps product execution and agent orchestration separate:
 
 | Your product owns | Spotlight owns |
 | --- | --- |
@@ -42,7 +50,7 @@ Spotlight does not move business logic into the runtime. It creates a reliable e
 ## Why not a DOM agent?
 
 <p align="center">
-  <img src="./assets/readme/capability-vs-dom.svg" width="100%" alt="Comparison between Spotlight's typed capability path and fragile DOM automation">
+  <img src="./assets/readme/capability-vs-dom.svg" width="100%" alt="Symmetric comparison between Spotlight's typed capability path and fragile DOM automation">
 </p>
 
 Spotlight follows the **capability path**, not the **pixel / selector path**.
@@ -57,7 +65,7 @@ When a product can expose a stable business capability, Spotlight can orchestrat
 ## Fastest adoption path
 
 <p align="center">
-  <img src="./assets/readme/integration-flow.svg" width="100%" alt="Spotlight integration flow from an existing frontend product to capability discovery, generated adapters, and Spotlight Runtime">
+  <img src="./assets/readme/integration-flow.svg" width="100%" alt="Five-stage Spotlight integration flow from an existing frontend product to Spotlight Runtime">
 </p>
 
 The preferred integration model is to let a Coding Agent understand the product you already have, discover stable actions and data flows, and generate a thin Spotlight layer instead of reimplementing business logic.
@@ -91,7 +99,7 @@ During integration, the project-specific details you typically need to confirm a
 - a stable user identity for Memory
 - sensitive actions that should be gated rather than exposed automatically
 
-> **Current implementation maturity:** automated integration is strongest for **Vue 3 + Vite** today. That is the current adapter implementation, not the architectural boundary of Spotlight.
+> **Current implementation maturity:** automated integration is strongest for **Vue 3 + Vite** today. That is the current adapter implementation, not Spotlight's architectural boundary.
 
 ## Current Vue adapter example
 
@@ -141,7 +149,7 @@ For the complete Vite plugin, configuration, Skill loading, and environment-vari
 ## Runtime boundary
 
 <p align="center">
-  <img src="./assets/readme/runtime-boundary.svg" width="100%" alt="Responsibility boundary between the frontend host and Spotlight Runtime">
+  <img src="./assets/readme/runtime-boundary.svg" width="100%" alt="Balanced responsibility boundary between the frontend host and Spotlight Runtime">
 </p>
 
 The frontend host executes real product actions. Spotlight coordinates intent, retrieval, state, and recovery.
@@ -243,7 +251,7 @@ Repository-level requirements:
 - **Node.js >= 22**
 - **pnpm >= 9**
 
-The current Vue package targets **Vue >= 3.5** and **Pinia >= 3**. Again, that is an implementation maturity statement, not the architectural boundary of Spotlight.
+The current Vue package targets **Vue >= 3.5** and **Pinia >= 3**. That is an implementation maturity statement, not Spotlight's architectural boundary.
 
 ## Development
 
@@ -278,5 +286,5 @@ Node-only capabilities must remain behind `/node` entry points and must not leak
 ---
 
 <p align="center">
-  <sub>Build the agent layer around the product you already have — not a second product beside it.</sub>
+  <sub>One intelligent entry point. Real product capabilities underneath.</sub>
 </p>
