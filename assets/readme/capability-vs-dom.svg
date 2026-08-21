@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="510" viewBox="0 0 1200 510" role="img" aria-labelledby="title desc">
+  <title id="title">Capability path versus DOM automation</title>
+  <desc id="desc">Comparison between Spotlight's typed capability execution path and fragile DOM automation.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#070b11"/><stop offset="1" stop-color="#0b121d"/></linearGradient>
+    <linearGradient id="good" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#55d6ff"/><stop offset="1" stop-color="#67e8f9"/></linearGradient>
+    <linearGradient id="bad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fb7185"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#111925"/><stop offset="1" stop-color="#0c131d"/></linearGradient>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#77879c"/></marker>
+  </defs>
+  <rect width="1200" height="510" rx="30" fill="url(#bg)"/><rect x="1" y="1" width="1198" height="508" rx="29" fill="none" stroke="#223044"/>
+  <text x="48" y="44" fill="#55d6ff" font-family="ui-monospace,monospace" font-size="16" font-weight="700" letter-spacing="2.2">RELIABLE EXECUTION MODEL</text>
+  <text x="48" y="94" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="40" font-weight="800">Capability path vs DOM automation</text>
+  <text x="48" y="125" fill="#93a2b7" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="18">Route intent to real product capabilities instead of guessing through the DOM.</text>
+  <g transform="translate(48 162)">
+    <rect width="532" height="254" rx="20" fill="url(#panel)" stroke="#2b9fbd"/>
+    <circle cx="28" cy="30" r="14" fill="#0b1119" stroke="#55d6ff" stroke-width="2"/><path d="M21 30l5 5 10-12" fill="none" stroke="#55d6ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="54" y="36" fill="#55d6ff" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="20" font-weight="750">Recommended path</text>
+    <g transform="translate(24 70)">
+      <g><rect width="104" height="116" rx="14" fill="#0b1119" stroke="#3aa7c5"/><path d="M28 24h46a10 10 0 0 1 10 10v18a10 10 0 0 1-10 10H55L42 73V62H28A10 10 0 0 1 18 52V34a10 10 0 0 1 10-10Z" fill="none" stroke="#55d6ff" stroke-width="2.5"/><text x="52" y="94" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15">User intent</text></g>
+      <path d="M112 58h24" stroke="#77879c" stroke-width="2.5" marker-end="url(#arrow)"/>
+      <g transform="translate(144)"><rect width="104" height="116" rx="14" fill="#0b1119" stroke="#3aa7c5"/><path d="M38 22h28v10h10v28H66v10H38V60H28V32h10Z" fill="none" stroke="#55d6ff" stroke-width="2.5"/><text x="52" y="94" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15">Skill</text></g>
+      <path d="M256 58h24" stroke="#77879c" stroke-width="2.5" marker-end="url(#arrow)"/>
+      <g transform="translate(288)"><rect width="104" height="116" rx="14" fill="#0b1119" stroke="#3aa7c5"/><path d="M38 64l28-28M60 31l10 10M34 68l10 10" stroke="#55d6ff" stroke-width="3" stroke-linecap="round"/><text x="52" y="89" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14">Typed Client</text><text x="52" y="106" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14">Tool</text></g>
+      <path d="M400 58h24" stroke="#77879c" stroke-width="2.5" marker-end="url(#arrow)"/>
+      <g transform="translate(432)"><rect width="76" height="116" rx="14" fill="#0b1119" stroke="#3aa7c5"/><ellipse cx="38" cy="31" rx="16" ry="7" fill="none" stroke="#55d6ff" stroke-width="2.5"/><path d="M22 31v25c0 4 7 7 16 7s16-3 16-7V31M22 43c0 4 7 7 16 7s16-3 16-7" fill="none" stroke="#55d6ff" stroke-width="2.5"/><text x="38" y="91" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12">Business</text><text x="38" y="106" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12">API</text></g>
+    </g>
+    <g transform="translate(24 205)"><rect width="142" height="32" rx="16" fill="#0b1119" stroke="#2b9fbd"/><text x="71" y="21" text-anchor="middle" fill="#cfeffc" font-family="ui-monospace,monospace" font-size="13">stable</text><rect x="158" width="142" height="32" rx="16" fill="#0b1119" stroke="#2b9fbd"/><text x="229" y="21" text-anchor="middle" fill="#cfeffc" font-family="ui-monospace,monospace" font-size="13">verifiable</text><rect x="316" width="192" height="32" rx="16" fill="#0b1119" stroke="#2b9fbd"/><text x="412" y="21" text-anchor="middle" fill="#cfeffc" font-family="ui-monospace,monospace" font-size="13">policy-aware</text></g>
+  </g>
+  <g transform="translate(620 162)">
+    <rect width="532" height="254" rx="20" fill="url(#panel)" stroke="#8d4c6b"/>
+    <path d="M28 17l15 26H13Z" fill="none" stroke="#fb7185" stroke-width="2.5" stroke-linejoin="round"/><path d="M28 25v8M28 38v1" stroke="#fb7185" stroke-width="2.5" stroke-linecap="round"/>
+    <text x="54" y="36" fill="#fb7185" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="20" font-weight="750">Fragile path</text>
+    <g transform="translate(24 70)">
+      <g><rect width="104" height="116" rx="14" fill="#0b1119" stroke="#8d4c6b"/><path d="M28 24h46a10 10 0 0 1 10 10v18a10 10 0 0 1-10 10H55L42 73V62H28A10 10 0 0 1 18 52V34a10 10 0 0 1 10-10Z" fill="none" stroke="#a78bfa" stroke-width="2.5"/><text x="52" y="94" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15">User intent</text></g>
+      <path d="M112 58h24" stroke="#77879c" stroke-width="2.5" marker-end="url(#arrow)"/>
+      <g transform="translate(144)"><rect width="104" height="116" rx="14" fill="#0b1119" stroke="#8d4c6b"/><rect x="27" y="26" width="50" height="40" rx="8" fill="none" stroke="#a78bfa" stroke-width="2.5" stroke-dasharray="6 5"/><path d="M41 39l-9 7 9 7M63 39l9 7-9 7" fill="none" stroke="#a78bfa" stroke-width="2"/><text x="52" y="89" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13">Selector /</text><text x="52" y="105" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13">DOM guess</text></g>
+      <path d="M256 58h24" stroke="#77879c" stroke-width="2.5" marker-end="url(#arrow)"/>
+      <g transform="translate(288)"><rect width="104" height="116" rx="14" fill="#0b1119" stroke="#8d4c6b"/><path d="M35 28l23 18-12 3 6 14-8 3-6-14-8 8Z" fill="none" stroke="#a78bfa" stroke-width="2.5" stroke-linejoin="round"/><text x="52" y="89" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13">Simulated</text><text x="52" y="105" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13">click</text></g>
+      <path d="M400 58h24" stroke="#77879c" stroke-width="2.5" marker-end="url(#arrow)"/>
+      <g transform="translate(432)"><rect width="76" height="116" rx="14" fill="#0b1119" stroke="#8d4c6b"/><rect x="17" y="26" width="42" height="36" rx="5" fill="none" stroke="#a78bfa" stroke-width="2.5"/><path d="M17 36h42M28 26v10" stroke="#a78bfa" stroke-width="2"/><text x="38" y="91" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12">Current</text><text x="38" y="106" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12">DOM</text></g>
+    </g>
+    <g transform="translate(24 205)"><rect width="142" height="32" rx="16" fill="#0b1119" stroke="#8d4c6b"/><text x="71" y="21" text-anchor="middle" fill="#ffd5de" font-family="ui-monospace,monospace" font-size="13">layout-coupled</text><rect x="158" width="142" height="32" rx="16" fill="#0b1119" stroke="#8d4c6b"/><text x="229" y="21" text-anchor="middle" fill="#ffd5de" font-family="ui-monospace,monospace" font-size="13">brittle</text><rect x="316" width="192" height="32" rx="16" fill="#0b1119" stroke="#8d4c6b"/><text x="412" y="21" text-anchor="middle" fill="#ffd5de" font-family="ui-monospace,monospace" font-size="13">hard to govern</text></g>
+  </g>
+  <rect x="48" y="438" width="1104" height="44" rx="15" fill="#0b1119" stroke="#243246"/>
+  <text x="600" y="466" text-anchor="middle" fill="#9ba9bb" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="17">Spotlight follows the capability path: <tspan fill="#55d6ff">explicit contracts</tspan> over <tspan fill="#a78bfa">brittle page manipulation</tspan>.</text>
+</svg>
