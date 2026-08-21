@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="Inupedia Spotlight — make an existing Vue app agent-ready with typed Client Tools, Skills, LangGraph runtime, knowledge, and memory">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Inupedia Spotlight — turn existing frontend product capabilities into typed, skill-routed agent actions with recoverable runs, knowledge, and memory">
 </p>
 
 <p align="center">
@@ -14,26 +14,57 @@
 
 ## Spotlight 是什么
 
-**Inupedia Spotlight** 是一套面向现有 **Vue 3 + Vite** 应用的 Agent Runtime。业务前端只声明“当前页面真正能做什么”，Spotlight 把这些能力变成带类型的 **Client Tools**，再通过 **Skills**、LangGraph 路由、Knowledge、Memory 和可恢复 Run，把自然语言安全地落到已有业务能力上。
+**Inupedia Spotlight** 是一套面向现有**前端产品**的 Agent Runtime。它不要求重做 UI，也不在宿主旁边复制一套“Agent 版业务系统”；而是把前端中真实存在的业务能力包装成带类型的 **Client Tools**，再通过 **Skills**、LangGraph、Knowledge、Memory 和可恢复 Run，把自然语言安全地落到原有产品能力上。
 
-> **宿主业务代码始终是事实源。** Spotlight 不复制一套业务系统，也不依赖 CSS Selector 模拟点击；Router、Store、Service、GIS、播放器、Pinia 等能力仍留在原应用中。
+> **核心架构不绑定前端框架。** Router、Store、Service、SDK、GIS、播放器或其它业务入口仍由宿主产品掌握。Spotlight 负责能力协议、路由、运行状态、知识与记忆。当前仓库首先提供 **Vue 3 + Vite** 的完整 Adapter 与自动化接入路径，后续框架可以沿同一 Client Tool / Skill 模型扩展。
 
-### 一条真实的调用链
+### 整体架构
 
 ```mermaid
-flowchart TD
-    U["用户自然语言"] --> R["Skill 选择 / LangGraph 路由"]
-    R --> S["Spotlight Server"]
-    S --> T["Client Tool<br/>TypeScript + JSDoc + JSON Schema"]
-    T --> RPC["浏览器 RPC"]
-    RPC --> APP["原 Router / Store / Service / 页面引擎"]
+flowchart TB
+    classDef intent fill:#172033,stroke:#7dd3fc,color:#f8fafc,stroke-width:2px;
+    classDef product fill:#111827,stroke:#64748b,color:#f8fafc,stroke-width:1.5px;
+    classDef runtime fill:#17142a,stroke:#a78bfa,color:#f8fafc,stroke-width:1.5px;
+    classDef context fill:#0f1f24,stroke:#5eead4,color:#f8fafc,stroke-width:1.5px;
+    classDef bridge fill:#152231,stroke:#60a5fa,color:#e0f2fe,stroke-width:2px;
+
+    U(["User intent"]):::intent
+
+    subgraph PRODUCT["Existing frontend product"]
+        direction LR
+        UI["UI / Components"]:::product
+        CAP["Business capabilities<br/>Router · Store · Service · SDK"]:::product
+        TOOL["Client Tools<br/>typed capability adapters"]:::bridge
+        UI --> CAP --> TOOL
+    end
+
+    subgraph RUNTIME["Spotlight Runtime"]
+        direction LR
+        SKILL["Skills<br/>when & why"]:::runtime
+        GRAPH["LangGraph<br/>route & plan"]:::runtime
+        RUN["Run Engine<br/>SSE · resume · uiContext"]:::runtime
+        SKILL --> GRAPH --> RUN
+    end
+
+    subgraph CONTEXT["Context & integrations"]
+        direction LR
+        KNOW["Knowledge / RAG"]:::context
+        MEM["Memory"]:::context
+        MODEL["Models / Providers"]:::context
+    end
+
+    U --> SKILL
+    RUN <--> TOOL
+    GRAPH --> KNOW
+    GRAPH --> MEM
+    GRAPH --> MODEL
 ```
 
-你写的是业务适配层，Spotlight 负责把它变成可路由、可恢复、可记忆的 Agent 能力：
+这张图里，**宿主产品始终是业务事实源**。Spotlight 不依赖 CSS Selector 模拟点击，也不要求业务逻辑迁入 Server；它只在“自然语言意图”和“已有业务能力”之间增加一层可描述、可路由、可恢复的 Agent Runtime。
 
 | 业务项目负责 | Spotlight SDK / Server 负责 |
 | --- | --- |
-| 包装已有 Router / Store / Service 为 Client Tool | 构建期推导 Tool 名、JSDoc 与 JSON Schema |
+| 暴露稳定的 Router / Store / Service / SDK 能力 | 将能力组织为 Client Tool 协议与运行时调用 |
 | 编写业务 Skill，说明何时使用哪些 Tool | Skill 路由、Knowledge、Action 与多步编排 |
 | 提供 `projectId`、Server URL、稳定用户 ID | 会话状态、长期记忆、Run 生命周期与 SSE 恢复 |
 | 保留原有权限、状态和业务约束 | 维护 Run 状态、连接恢复与服务端执行边界 |
@@ -41,35 +72,43 @@ flowchart TD
 ## 为什么不是 DOM Agent
 
 ```mermaid
-flowchart TB
-    subgraph A["Spotlight — capability path"]
-        direction LR
-        A1["自然语言"] --> A2["Skill"] --> A3["Client Tool"] --> A4["Store / Service / Router"]
-    end
+flowchart LR
+    classDef good fill:#10241d,stroke:#34d399,color:#ecfdf5,stroke-width:2px;
+    classDef bad fill:#2a171b,stroke:#fb7185,color:#fff1f2,stroke-width:2px;
+    classDef neutral fill:#172033,stroke:#64748b,color:#f8fafc,stroke-width:1.5px;
 
-    subgraph B["DOM automation — fragile path"]
-        direction LR
-        B1["自然语言"] --> B2["CSS Selector"] --> B3["模拟鼠标点击"] --> B4["页面 DOM"]
-    end
+    I1(["Intent"]):::neutral --> S1["Skill"]:::good --> T1["Typed Client Tool"]:::good --> A1["Existing business API"]:::good
+    I2(["Intent"]):::neutral --> S2["Selector / DOM guess"]:::bad --> T2["Simulated click"]:::bad --> A2["Current DOM structure"]:::bad
 ```
 
-这样做有三个直接收益：
+**Spotlight 走的是 capability path，而不是 pixel / selector path。** 这样做有三个直接收益：
 
 - **可维护**：页面改布局、换组件，不会让 Agent 的核心能力一起失效。
-- **可验证**：Tool 输入输出来自 TypeScript 类型，构建阶段就能发现缺失描述和不可推导类型。
-- **可控**：读、查询、导航和外部写入可以采用不同的执行与恢复策略，而不是把所有操作都当成“点一下”。
+- **可验证**：Tool 有明确名称、描述和输入输出契约；当前 TypeScript Adapter 还能在构建期推导 JSON Schema。
+- **可控**：读取、查询、导航和外部写入可以采用不同的执行与恢复策略，而不是把所有操作都简化成“点一下”。
 
 ## 最快接入：让 Coding Agent 蒸馏现有前端
 
-新项目优先使用仓库自带的 [`spotlight-integrate`](./skills/spotlight-integrate/README.md) Skill Pack。它会先分析真实 Router / Store / Service / UI 能力，再生成 Client Tools、业务 Skills、Project Pack 和验收材料。
+Spotlight 的目标接入方式是：让 Coding Agent 先理解宿主产品真正拥有的能力，再生成薄 Adapter、业务 Skills 和 Project Pack，而不是重新实现业务逻辑。
 
 ```mermaid
 flowchart LR
-    APP["现有 Vue 应用<br/>Router / Store / Service"] --> DISTILL["spotlight-integrate<br/>Coding Agent"]
-    DISTILL --> ADAPTER["Client Tools + Skills<br/>Project Pack"]
-    ADAPTER --> RUNTIME["Spotlight Server + LLM"]
-    RUNTIME --> USER["用户用自然语言<br/>调用原业务能力"]
+    classDef source fill:#111827,stroke:#64748b,color:#f8fafc,stroke-width:1.5px;
+    classDef process fill:#17142a,stroke:#a78bfa,color:#f8fafc,stroke-width:1.8px;
+    classDef output fill:#0f1f24,stroke:#5eead4,color:#f8fafc,stroke-width:1.8px;
+    classDef runtime fill:#152231,stroke:#60a5fa,color:#e0f2fe,stroke-width:1.8px;
+
+    APP["Existing frontend<br/>UI · Router · Store · Service · SDK"]:::source
+    DISCOVER["Capability discovery<br/>by Coding Agent"]:::process
+    PACK["Thin adapters + Skills<br/>Project Pack"]:::output
+    SPOT["Spotlight Runtime<br/>route · run · memory"]:::runtime
+    USER(["Natural-language use"]):::runtime
+
+    APP --> DISCOVER --> PACK --> SPOT --> USER
+    USER -. invokes existing capability .-> APP
 ```
+
+仓库自带的 [`spotlight-integrate`](./skills/spotlight-integrate/README.md) Skill Pack 就是在做这件事。**它当前自动化支持最完整的是 Vue 3 + Vite**：会分析真实 Router / Store / Service / UI 能力，再生成 Client Tools、业务 Skills、Project Pack 和验收材料。
 
 把整个目录复制到 Cursor / Codex / Claude Code 的 skills 目录：
 
@@ -77,7 +116,7 @@ flowchart LR
 skills/spotlight-integrate/
 ```
 
-然后在**已经打开宿主 Vue 项目**的 Coding Agent 中执行：
+然后在已经打开宿主前端项目的 Coding Agent 中执行：
 
 ```text
 Use spotlight-integrate.
@@ -93,11 +132,11 @@ bash skills/spotlight-integrate/prompt.sh --copy
 
 接入过程中，人只需要确认少量项目级信息，例如 `projectId`、Spotlight Server 地址 / API key，以及用于 Memory 的稳定登录用户 ID。
 
-> 当前自动接线路径以 **Vue 3 + Vite** 为目标。非 Vue 3 项目不会被强行改造成 Vue，也不会擅自迁移构建系统。
+> **框架边界说明：** Spotlight 的 Client Tool / Skill / Runtime 模型不要求宿主必须使用 Vue；但当前仓库的自动接线脚本和 UI Adapter 以 **Vue 3 + Vite** 为首个完整实现。其它框架应复用同一能力模型，而不是被强制迁移到 Vue。
 
-## 手工接入
+## 当前 Vue Adapter 示例
 
-如果你更希望自己控制 Tool 和 Skill，最小路径也很薄。
+当前仓库已经提供 `@inupedia/spotlight-vue`，所以 Vue 3 + Vite 项目可以用很薄的代码完成接入。下面只是**现有 Adapter 示例**，不是 Spotlight 的产品边界。
 
 ### 1. 安装
 
@@ -122,7 +161,7 @@ export const playVideoFullscreen = defineClientTool(
 export const spotlightTools = [playVideoFullscreen];
 ```
 
-Spotlight 在构建阶段从**导出变量名 + JSDoc + TypeScript 类型**推导 Tool 名称、说明和 JSON Schema；业务代码不需要手写 LangChain Tool 元数据。
+Spotlight 在当前 TypeScript/Vite Adapter 中可从**导出变量名 + JSDoc + TypeScript 类型**推导 Tool 名称、说明和 JSON Schema；业务代码不需要手写 LangChain Tool 元数据。
 
 ### 3. 注册 Spotlight
 
@@ -142,29 +181,46 @@ createApp(App)
 
 ## Runtime 里发生了什么
 
-Spotlight 把“浏览器里真实存在的能力”和“服务端 Agent Runtime”明确分开：
+浏览器负责执行真实页面能力；Server 负责理解、规划、检索、记忆和运行状态。两边通过 Run + RPC/SSE 连接，但**业务语义仍留在宿主产品**：
 
 ```mermaid
 flowchart LR
-    subgraph HOST["Vue Host App"]
+    classDef host fill:#111827,stroke:#64748b,color:#f8fafc,stroke-width:1.5px;
+    classDef bridge fill:#152231,stroke:#60a5fa,color:#e0f2fe,stroke-width:2px;
+    classDef server fill:#17142a,stroke:#a78bfa,color:#f8fafc,stroke-width:1.5px;
+    classDef data fill:#0f1f24,stroke:#5eead4,color:#f8fafc,stroke-width:1.5px;
+
+    subgraph HOST["Frontend Host"]
         direction TB
-        BIZ["Router / Store / Service"] --> TOOLS["Client Tools"]
-        TOOLS --> UICTX["fresh uiContext after action"]
+        BIZ["Business APIs<br/>Router · Store · Service · SDK"]:::host
+        TOOL["Client Tools"]:::bridge
+        CTX["fresh uiContext"]:::host
+        BIZ --> TOOL --> CTX
     end
 
     subgraph SERVER["Spotlight Server"]
         direction TB
-        ROUTER["LangGraph routing"] --> AGENT["Skills / Knowledge / Actions"]
-        AGENT --> RUNS["Run state / SSE"]
-        RUNS --> MEMORY["Long-term Memory Gate"]
-        MEMORY --> PROVIDERS["Provider integrations"]
+        ROUTE["Skill routing / LangGraph"]:::server
+        RUN["Run state + SSE"]:::server
+        SAFE["Execution boundary"]:::server
+        ROUTE --> RUN --> SAFE
     end
 
-    TOOLS -- "browser RPC" --> ROUTER
-    RUNS -- "SSE / tool call" --> TOOLS
+    subgraph DATA["Context"]
+        direction TB
+        K["Knowledge"]:::data
+        M["Memory"]:::data
+        P["Model providers"]:::data
+    end
+
+    TOOL <== "browser RPC" ==> RUN
+    CTX -. "state after action" .-> ROUTE
+    ROUTE --> K
+    ROUTE --> M
+    ROUTE --> P
 ```
 
-浏览器负责执行真实页面能力；Server 负责理解、规划、检索、记忆和运行状态。通用 Server 不应该写死某个产品的业务语义，具体业务知识保留在宿主 Skill、Tool description、schema 和 `uiContext` 中。
+通用 Server 不应该写死某个产品的业务语义，具体业务知识保留在宿主 Skill、Tool description、schema 和 `uiContext` 中。
 
 ## 安全边界
 
@@ -204,8 +260,8 @@ Spotlight 将两类记忆分开：
 | Package | 职责 |
 | --- | --- |
 | `@inupedia/spotlight-protocol` | Client / Server 共享协议 |
-| `@inupedia/spotlight-client` | `defineClientTool`、HTTP、Vite Tool Manifest |
-| `@inupedia/spotlight-vue` | Vue Plugin、命令面板、Skill 上报与浏览器执行管线 |
+| `@inupedia/spotlight-client` | Client Tool 定义、HTTP 与构建清单 |
+| `@inupedia/spotlight-vue` | 当前 Vue Adapter：插件、命令面板、Skill 上报与浏览器执行管线 |
 | `@inupedia/spotlight-memory` | Memory Gate 与缓存存储 |
 | `@inupedia/spotlight-server` | 可部署的 LangChain / LangGraph Runtime |
 
@@ -220,7 +276,7 @@ npm view @inupedia/spotlight-vue version
 npm view @inupedia/spotlight-server version
 ```
 
-`@inupedia/spotlight-*` 与 `ghcr.io/inupedia/spotlight-server:<version>` 应保持同一 semver。仓库本身要求 **Node.js >= 22**、**pnpm >= 9**；当前 Vue package 的 peer 目标为 **Vue >= 3.5** 与 **Pinia >= 3**。
+`@inupedia/spotlight-*` 与 `ghcr.io/inupedia/spotlight-server:<version>` 应保持同一 semver。仓库本身要求 **Node.js >= 22**、**pnpm >= 9**；当前 `@inupedia/spotlight-vue` Adapter 的 peer 目标为 **Vue >= 3.5** 与 **Pinia >= 3**。
 
 ## 开发
 
@@ -250,8 +306,8 @@ Node-only 能力必须走 `/node` 子入口，不能混入浏览器主包。
 
 | 想做什么 | 文档 |
 | --- | --- |
-| 让 Coding Agent 自动完成现有 Vue 项目的 Agent 化 | [`skills/spotlight-integrate/README.md`](./skills/spotlight-integrate/README.md) |
-| 手工定义 Client Tool / Skill | [`docs/client-tools.md`](./docs/client-tools.md) |
+| 让 Coding Agent 自动完成现有前端产品的 Agent 化（当前 Vue/Vite 自动化最完整） | [`skills/spotlight-integrate/README.md`](./skills/spotlight-integrate/README.md) |
+| 查看当前 Client Tool / Vue Adapter 接入方式 | [`docs/client-tools.md`](./docs/client-tools.md) |
 | 部署 Spotlight Server / Project Pack | [`docs/server-deployment.md`](./docs/server-deployment.md) |
 | 查看未来 Capability / 重放协议设计（deferred） | [`docs/design/capability-protocol-v2.md`](./docs/design/capability-protocol-v2.md) |
 | 查看 SDK 包结构 | [`packages/README.md`](./packages/README.md) |
