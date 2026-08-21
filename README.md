@@ -41,7 +41,7 @@ Client Tool（类型 + JSDoc + JSON Schema）
 | 包装已有 Router / Store / Service 为 Client Tool | 构建期推导 Tool 名、JSDoc 与 JSON Schema |
 | 编写业务 Skill，说明何时使用哪些 Tool | Skill 路由、Knowledge、Action 与多步编排 |
 | 提供 `projectId`、Server URL、稳定用户 ID | 会话状态、长期记忆、Run 生命周期与 SSE 恢复 |
-| 保留原有权限、状态和业务约束 | 在 Runtime 中按能力等级决定是否允许派发 / 重放 |
+| 保留原有权限、状态和业务约束 | 维护 Run 状态、连接恢复与服务端执行边界 |
 
 ## 为什么不是 DOM Agent
 
