@@ -1,79 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="540" viewBox="0 0 1200 540" role="img" aria-labelledby="title desc">
-  <title id="title">Spotlight architecture</title>
-  <desc id="desc">Framework-agnostic Spotlight architecture connecting user intent, the existing frontend product, typed Client Tools, Spotlight Runtime, knowledge, memory, and model providers.</desc>
-  <defs>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="570" viewBox="0 0 1200 570" role="img" aria-labelledby="title desc">
+<title id="title">Spotlight architecture</title><desc id="desc">Four-stage architecture showing user intent, the existing frontend product, typed Client Tools, and the Spotlight Runtime.</desc>
+<defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#070b11"/><stop offset="1" stop-color="#0c1320"/></linearGradient>
     <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#55d6ff"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
     <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#121a26"/><stop offset="1" stop-color="#0c131d"/></linearGradient>
-    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#77879c"/></marker>
-    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#55d6ff"/></marker>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#7c8ba0"/></marker>
   </defs>
-  <rect width="1200" height="540" rx="30" fill="url(#bg)"/>
-  <rect x="1" y="1" width="1198" height="538" rx="29" fill="none" stroke="#223044"/>
-  <text x="48" y="44" fill="#55d6ff" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700" letter-spacing="2.2">FRAMEWORK-AGNOSTIC AGENT RUNTIME</text>
-  <text x="48" y="96" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="42" font-weight="800">Spotlight architecture</text>
-  <text x="48" y="128" fill="#93a2b7" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="18">Keep the product as the source of truth. Add an agent layer around real frontend capabilities.</text>
-  <g transform="translate(48 174)">
-    <rect width="178" height="258" rx="20" fill="url(#panel)" stroke="#314158"/>
-    <circle cx="28" cy="30" r="15" fill="#0c1824" stroke="#55d6ff" stroke-width="2"/>
-    <text x="28" y="36" text-anchor="middle" fill="#55d6ff" font-family="ui-monospace,monospace" font-size="16" font-weight="700">1</text>
-    <text x="54" y="36" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="18" font-weight="700">User intent</text>
-    <rect x="20" y="76" width="138" height="132" rx="18" fill="#0b1119" stroke="#26364b"/>
-    <path d="M58 110 h62 a14 14 0 0 1 14 14 v28 a14 14 0 0 1-14 14 H92 l-18 16 v-16 H58 a14 14 0 0 1-14-14 v-28 a14 14 0 0 1 14-14Z" fill="none" stroke="url(#accent)" stroke-width="3"/>
-    <circle cx="72" cy="138" r="4" fill="#55d6ff"/><circle cx="90" cy="138" r="4" fill="#7b9cff"/><circle cx="108" cy="138" r="4" fill="#a78bfa"/>
-    <text x="89" y="232" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="16">Natural-language</text>
-    <text x="89" y="253" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="16">request</text>
-  </g>
-  <g transform="translate(272 174)">
-    <rect width="300" height="258" rx="20" fill="url(#panel)" stroke="#314158"/>
-    <circle cx="28" cy="30" r="15" fill="#0c1824" stroke="#55d6ff" stroke-width="2"/>
-    <text x="28" y="36" text-anchor="middle" fill="#55d6ff" font-family="ui-monospace,monospace" font-size="16" font-weight="700">2</text>
-    <text x="54" y="36" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="18" font-weight="700">Existing frontend product</text>
-    <g transform="translate(20 70)">
-      <rect width="260" height="48" rx="12" fill="#0b1119" stroke="#26364b"/>
-      <rect x="16" y="14" width="22" height="18" rx="3" fill="none" stroke="#55d6ff" stroke-width="2"/><path d="M16 20h22M24 14v18" stroke="#55d6ff" stroke-width="2"/>
-      <text x="54" y="30" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="16">UI / Components</text>
-      <rect y="58" width="260" height="48" rx="12" fill="#0b1119" stroke="#26364b"/>
-      <path d="M23 74 h9 v-8 h8 v8 h9 v8 h-9 v9 h-8 v-9 h-9Z" fill="none" stroke="#7b9cff" stroke-width="2"/>
-      <text x="54" y="88" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="16">Business capabilities</text>
-      <rect y="116" width="260" height="48" rx="12" fill="#0b1119" stroke="#26364b"/>
-      <ellipse cx="30" cy="133" rx="12" ry="5" fill="none" stroke="#a78bfa" stroke-width="2"/><path d="M18 133v14c0 3 5 5 12 5s12-2 12-5v-14" fill="none" stroke="#a78bfa" stroke-width="2"/><path d="M18 140c0 3 5 5 12 5s12-2 12-5" fill="none" stroke="#a78bfa" stroke-width="2"/>
-      <text x="54" y="146" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15">Router · Store · Service · SDK</text>
-    </g>
-  </g>
-  <g transform="translate(618 174)">
-    <rect width="238" height="258" rx="20" fill="url(#panel)" stroke="#314158"/>
-    <circle cx="28" cy="30" r="15" fill="#0c1824" stroke="#55d6ff" stroke-width="2"/>
-    <text x="28" y="36" text-anchor="middle" fill="#55d6ff" font-family="ui-monospace,monospace" font-size="16" font-weight="700">3</text>
-    <text x="54" y="36" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="18" font-weight="700">Capability layer</text>
-    <rect x="20" y="72" width="198" height="144" rx="18" fill="#0c1420" stroke="url(#accent)" stroke-width="1.7"/>
-    <circle cx="119" cy="112" r="24" fill="#0b1119" stroke="#55d6ff"/>
-    <path d="M107 119l25-25M126 92l8 8M101 125l8 8" stroke="url(#accent)" stroke-width="4" stroke-linecap="round"/>
-    <text x="119" y="163" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="20" font-weight="750">Typed Client Tools</text>
-    <text x="119" y="190" text-anchor="middle" fill="#8fa0b5" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14">thin adapters over</text>
-    <text x="119" y="208" text-anchor="middle" fill="#8fa0b5" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14">real product capabilities</text>
-  </g>
-  <g transform="translate(902 174)">
-    <rect width="250" height="258" rx="20" fill="url(#panel)" stroke="url(#accent)" stroke-width="1.6"/>
-    <circle cx="28" cy="30" r="15" fill="#0c1824" stroke="#7b9cff" stroke-width="2"/>
-    <text x="28" y="36" text-anchor="middle" fill="#7b9cff" font-family="ui-monospace,monospace" font-size="16" font-weight="700">4</text>
-    <text x="54" y="36" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="18" font-weight="700">Spotlight Runtime</text>
-    <g transform="translate(18 66)">
-      <rect width="214" height="42" rx="11" fill="#0b1119" stroke="#26364b"/><text x="18" y="27" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="16">Skills</text>
-      <rect y="52" width="214" height="42" rx="11" fill="#0b1119" stroke="#26364b"/><text x="18" y="79" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="16">LangGraph route &amp; plan</text>
-      <rect y="104" width="214" height="42" rx="11" fill="#0b1119" stroke="#26364b"/><text x="18" y="131" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="16">Run Engine</text>
-      <g transform="translate(0 160)">
-        <rect width="66" height="44" rx="10" fill="#0b1119" stroke="#55d6ff"/><text x="33" y="19" text-anchor="middle" fill="#cfeffc" font-family="ui-monospace,monospace" font-size="12">Knowledge</text><text x="33" y="34" text-anchor="middle" fill="#8fa0b5" font-family="ui-monospace,monospace" font-size="11">RAG</text>
-        <rect x="74" width="66" height="44" rx="10" fill="#0b1119" stroke="#7b9cff"/><text x="107" y="27" text-anchor="middle" fill="#d9ddff" font-family="ui-monospace,monospace" font-size="12">Memory</text>
-        <rect x="148" width="66" height="44" rx="10" fill="#0b1119" stroke="#a78bfa"/><text x="181" y="19" text-anchor="middle" fill="#eadcff" font-family="ui-monospace,monospace" font-size="11">Models</text><text x="181" y="34" text-anchor="middle" fill="#8fa0b5" font-family="ui-monospace,monospace" font-size="11">Providers</text>
-      </g>
-    </g>
-  </g>
-  <path d="M226 303 H262" stroke="#77879c" stroke-width="3" marker-end="url(#arrow)"/>
-  <path d="M572 303 H608" stroke="#77879c" stroke-width="2.5" stroke-dasharray="7 7" marker-end="url(#arrow)"/>
-  <path d="M856 303 H892" stroke="#77879c" stroke-width="2.5" stroke-dasharray="7 7" marker-end="url(#arrow)"/>
-  <path d="M891 333 H856" stroke="#55d6ff" stroke-width="2" stroke-dasharray="6 6" marker-end="url(#arrowCyan)"/>
-  <rect x="48" y="464" width="1104" height="48" rx="16" fill="#0b1119" stroke="#243246"/>
-  <path d="M82 481l5 10 10 5-10 5-5 10-5-10-10-5 10-5Z" fill="none" stroke="url(#accent)" stroke-width="2"/>
-  <text x="112" y="494" fill="#9ba9bb" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="17">Keep the product as the <tspan fill="#55d6ff">source of truth</tspan>. Spotlight adds routing, execution, and memory around <tspan fill="#a78bfa">real frontend capabilities</tspan>.</text>
+<rect width="1200" height="570" rx="30" fill="url(#bg)"/><rect x="1" y="1" width="1198" height="568" rx="29" fill="none" stroke="#223044"/>
+<text x="48" y="44" fill="#55d6ff" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="16" font-weight="700" letter-spacing="2.2">FRAMEWORK-AGNOSTIC AGENT RUNTIME</text>
+  <text x="48" y="94" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="40" font-weight="800">Spotlight architecture</text>
+  <text x="48" y="126" fill="#93a2b7" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="18">One command surface over the real capabilities your frontend already owns.</text>
+<g transform="translate(48 166)"><rect width="246" height="306" rx="20" fill="url(#panel)" stroke="#314158"/>
+<circle cx="28" cy="30" r="15" fill="#0c1824" stroke="#55d6ff" stroke-width="2"/><text x="28" y="36" text-anchor="middle" fill="#55d6ff" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="16" font-weight="700">1</text><text x="54" y="36" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="18" font-weight="700">User intent</text>
+<rect x="22" y="76" width="202" height="164" rx="18" fill="#0b1119" stroke="#26364b"/><path d="M78 110h90a14 14 0 0 1 14 14v38a14 14 0 0 1-14 14h-42l-24 20v-20H78a14 14 0 0 1-14-14v-38a14 14 0 0 1 14-14Z" fill="none" stroke="url(#accent)" stroke-width="3"/><circle cx="105" cy="144" r="4" fill="#55d6ff"/><circle cx="123" cy="144" r="4" fill="#7b9cff"/><circle cx="141" cy="144" r="4" fill="#a78bfa"/>
+<text x="123" y="271" text-anchor="middle" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="16">Natural-language request</text></g>
+<g transform="translate(334 166)"><rect width="246" height="306" rx="20" fill="url(#panel)" stroke="#314158"/>
+<circle cx="28" cy="30" r="15" fill="#0c1824" stroke="#55d6ff" stroke-width="2"/><text x="28" y="36" text-anchor="middle" fill="#55d6ff" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="16" font-weight="700">2</text><text x="54" y="36" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="17" font-weight="700">Frontend product</text>
+<g transform="translate(18 72)"><rect width="210" height="54" rx="12" fill="#0b1119" stroke="#26364b"/><rect x="16" y="16" width="24" height="20" rx="3" fill="none" stroke="#55d6ff" stroke-width="2"/><path d="M16 23h24M25 16v20" stroke="#55d6ff" stroke-width="2"/><text x="54" y="33" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="15">UI / Components</text>
+<rect y="66" width="210" height="54" rx="12" fill="#0b1119" stroke="#26364b"/><path d="M24 84h9v-8h8v8h9v8h-9v9h-8v-9h-9Z" fill="none" stroke="#7b9cff" stroke-width="2"/><text x="54" y="99" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="15">Business capabilities</text>
+<rect y="132" width="210" height="72" rx="12" fill="#0b1119" stroke="#26364b"/><ellipse cx="30" cy="151" rx="12" ry="5" fill="none" stroke="#a78bfa" stroke-width="2"/><path d="M18 151v14c0 3 5 5 12 5s12-2 12-5v-14" fill="none" stroke="#a78bfa" stroke-width="2"/><text x="54" y="155" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="14">Router · Store</text><text x="54" y="176" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="14">Service · SDK</text></g></g>
+<g transform="translate(620 166)"><rect width="246" height="306" rx="20" fill="url(#panel)" stroke="#314158"/>
+<circle cx="28" cy="30" r="15" fill="#0c1824" stroke="#55d6ff" stroke-width="2"/><text x="28" y="36" text-anchor="middle" fill="#55d6ff" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="16" font-weight="700">3</text><text x="54" y="36" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="17" font-weight="700">Capability layer</text>
+<rect x="18" y="72" width="210" height="188" rx="18" fill="#0c1420" stroke="url(#accent)" stroke-width="1.7"/><circle cx="123" cy="119" r="25" fill="#0b1119" stroke="#55d6ff"/><path d="M110 128l29-29M133 96l9 9M105 133l9 9" stroke="url(#accent)" stroke-width="4" stroke-linecap="round"/><text x="123" y="176" text-anchor="middle" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="18" font-weight="750">Typed Client Tools</text><text x="123" y="207" text-anchor="middle" fill="#8fa0b5" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="13">thin adapters over real</text><text x="123" y="226" text-anchor="middle" fill="#8fa0b5" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="13">product capabilities</text><text x="123" y="284" text-anchor="middle" fill="#8fa0b5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12">explicit contracts</text></g>
+<g transform="translate(906 166)"><rect width="246" height="306" rx="20" fill="url(#panel)" stroke="url(#accent)" stroke-width="1.7"/>
+<circle cx="28" cy="30" r="15" fill="#0c1824" stroke="#7b9cff" stroke-width="2"/><text x="28" y="36" text-anchor="middle" fill="#7b9cff" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="16" font-weight="700">4</text><text x="54" y="36" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="17" font-weight="700">Spotlight Runtime</text>
+<g transform="translate(16 68)"><rect width="214" height="44" rx="11" fill="#0b1119" stroke="#26364b"/><text x="16" y="28" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="15">Skills</text><rect y="54" width="214" height="44" rx="11" fill="#0b1119" stroke="#26364b"/><text x="16" y="82" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="15">LangGraph route &amp; plan</text><rect y="108" width="214" height="44" rx="11" fill="#0b1119" stroke="#26364b"/><text x="16" y="136" fill="#d7e0ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="15">Run Engine</text>
+<g transform="translate(0 168)"><rect width="66" height="52" rx="10" fill="#0b1119" stroke="#55d6ff"/><text x="33" y="22" text-anchor="middle" fill="#cfeffc" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5">Knowledge</text><text x="33" y="39" text-anchor="middle" fill="#8fa0b5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10">RAG</text><rect x="74" width="66" height="52" rx="10" fill="#0b1119" stroke="#7b9cff"/><text x="107" y="31" text-anchor="middle" fill="#d9ddff" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11">Memory</text><rect x="148" width="66" height="52" rx="10" fill="#0b1119" stroke="#a78bfa"/><text x="181" y="22" text-anchor="middle" fill="#eadcff" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="10.5">Models</text><text x="181" y="39" text-anchor="middle" fill="#8fa0b5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="9.5">Providers</text></g></g></g>
+<path d="M302 319 H324" stroke="#7c8ba0" stroke-width="2.5" marker-end="url(#arrow)"/>
+<path d="M588 319 H610" stroke="#7c8ba0" stroke-width="2.5" marker-end="url(#arrow)"/>
+<path d="M874 319 H896" stroke="#7c8ba0" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="48" y="506" width="1104" height="44" rx="15" fill="#0b1119" stroke="#243246"/><text x="600" y="534" text-anchor="middle" fill="#9ba9bb" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica Neue,Arial,sans-serif" font-size="16">Keep the product as the source of truth. Spotlight coordinates intent around real frontend capabilities.</text>
 </svg>
