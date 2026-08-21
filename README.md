@@ -21,10 +21,10 @@ We think frontend products are moving in the same direction. Users should not ha
 Spotlight turns that idea into a framework-agnostic agent runtime for existing frontend products. It does not ask you to rebuild the UI or create a second “agent version” of the product. Instead, it connects natural-language intent to real Router / Store / Service / SDK capabilities through typed Client Tools, Skills, LangGraph, Knowledge, Memory, and recoverable Runs.
 
 <p align="center">
-  <img src="./assets/readme/demo.png" width="100%" alt="Current Spotlight Vue adapter command surface demo">
+  <img src="./assets/readme/demo.gif" width="100%" alt="Spotlight recognizes a request to view a camera and opens the matching live video in the host product">
 </p>
 
-The current Vue adapter realizes the idea as a focused command surface over the host app. The UI is only the entry point; execution still goes through real product capabilities.
+The GIF above is that idea in a real host product. A user asks, in natural language, to look at a specific camera. Spotlight recognizes the intent, selects the matching Skill / Client Tool, and opens the exact live video through the host's own player — not by clicking through the UI. The command surface is only the entry point; execution still goes through real product capabilities.
 
 > **The host product remains the source of truth.** Router, Store, Service, SDK, GIS, media players, permissions, and business rules stay in the host application. Spotlight adds the capability layer, routing, runtime state, retrieval, and memory around them.
 
