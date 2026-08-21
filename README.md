@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="Spotlight — one intelligent entry point for the whole frontend product">
+  <img src="./assets/readme/hero.png" width="100%" alt="Spotlight — one intelligent entry point for the whole frontend product">
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@ We think frontend products are moving in the same direction. Users should not ha
 Spotlight turns that idea into a framework-agnostic agent runtime for existing frontend products. It does not ask you to rebuild the UI or create a second “agent version” of the product. Instead, it connects natural-language intent to real Router / Store / Service / SDK capabilities through typed Client Tools, Skills, LangGraph, Knowledge, Memory, and recoverable Runs.
 
 <p align="center">
-  <img src="./assets/readme/demo.svg" width="100%" alt="Current Spotlight Vue adapter command surface demo">
+  <img src="./assets/readme/demo.png" width="100%" alt="Current Spotlight Vue adapter command surface demo">
 </p>
 
 The current Vue adapter realizes the idea as a focused command surface over the host app. The UI is only the entry point; execution still goes through real product capabilities.
@@ -33,7 +33,7 @@ Spotlight's architecture is **framework-agnostic**. This repository currently pr
 ## Architecture
 
 <p align="center">
-  <img src="./assets/readme/architecture.svg" width="100%" alt="Spotlight architecture connecting user intent, the frontend product, typed Client Tools, and Spotlight Runtime">
+  <img src="./assets/readme/architecture.png" width="100%" alt="Spotlight architecture connecting user intent, the frontend product, typed Client Tools, and Spotlight Runtime">
 </p>
 
 The architecture deliberately keeps product execution and agent orchestration separate:
@@ -50,7 +50,7 @@ Spotlight does not move business logic into the runtime. It creates a reliable e
 ## Why not a DOM agent?
 
 <p align="center">
-  <img src="./assets/readme/capability-vs-dom.svg" width="100%" alt="Symmetric comparison between Spotlight's typed capability path and fragile DOM automation">
+  <img src="./assets/readme/capability-vs-dom.png" width="100%" alt="Symmetric comparison between Spotlight's typed capability path and fragile DOM automation">
 </p>
 
 Spotlight follows the **capability path**, not the **pixel / selector path**.
@@ -65,7 +65,7 @@ When a product can expose a stable business capability, Spotlight can orchestrat
 ## Fastest adoption path
 
 <p align="center">
-  <img src="./assets/readme/integration-flow.svg" width="100%" alt="Five-stage Spotlight integration flow from an existing frontend product to Spotlight Runtime">
+  <img src="./assets/readme/integration-flow.png" width="100%" alt="Five-stage Spotlight integration flow from an existing frontend product to Spotlight Runtime">
 </p>
 
 The preferred integration model is to let a Coding Agent understand the product you already have, discover stable actions and data flows, and generate a thin Spotlight layer instead of reimplementing business logic.
@@ -149,7 +149,7 @@ For the complete Vite plugin, configuration, Skill loading, and environment-vari
 ## Runtime boundary
 
 <p align="center">
-  <img src="./assets/readme/runtime-boundary.svg" width="100%" alt="Balanced responsibility boundary between the frontend host and Spotlight Runtime">
+  <img src="./assets/readme/runtime-boundary.png" width="100%" alt="Balanced responsibility boundary between the frontend host and Spotlight Runtime">
 </p>
 
 The frontend host executes real product actions. Spotlight coordinates intent, retrieval, state, and recovery.
