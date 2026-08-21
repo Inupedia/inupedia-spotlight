@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="390" viewBox="0 0 1200 390" role="img" aria-labelledby="title desc">
+  <title id="title">Inupedia Spotlight</title>
+  <desc id="desc">Spotlight turns existing Vue application capabilities into safe skill-routed agent actions through Client Tools, a LangGraph runtime, knowledge, and memory.</desc>
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7DD3FC"/>
+      <stop offset="100%" stop-color="#A78BFA"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#121923"/>
+      <stop offset="100%" stop-color="#0E141D"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="390" rx="28" fill="#080C12"/>
+  <rect x="1" y="1" width="1198" height="388" rx="27" fill="none" stroke="#243040"/>
+
+  <g transform="translate(60 48)">
+    <text x="0" y="0" fill="#7DD3FC" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="700" letter-spacing="2">AGENT RUNTIME FOR EXISTING VUE APPS</text>
+    <text x="0" y="78" fill="#F8FAFC" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="70" font-weight="800" letter-spacing="-2">Inupedia Spotlight</text>
+    <text x="0" y="126" fill="#B8C4D4" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="25">
+      Make an existing Vue app agent-ready.
+    </text>
+    <text x="0" y="164" fill="#7F8DA1" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="20">
+      Typed capabilities · Skill routing · Safe browser execution · Memory
+    </text>
+
+    <g transform="translate(0 216)">
+      <rect x="0" y="0" width="122" height="36" rx="18" fill="#111925" stroke="#2A3A4E"/>
+      <text x="61" y="24" text-anchor="middle" fill="#DDE7F4" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">Vue 3 + Vite</text>
+
+      <rect x="136" y="0" width="132" height="36" rx="18" fill="#111925" stroke="#2A3A4E"/>
+      <text x="202" y="24" text-anchor="middle" fill="#DDE7F4" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">Client Tools</text>
+
+      <rect x="282" y="0" width="142" height="36" rx="18" fill="#111925" stroke="#2A3A4E"/>
+      <text x="353" y="24" text-anchor="middle" fill="#DDE7F4" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">LangGraph</text>
+
+      <rect x="438" y="0" width="158" height="36" rx="18" fill="#111925" stroke="#2A3A4E"/>
+      <text x="517" y="24" text-anchor="middle" fill="#DDE7F4" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">Memory + RAG</text>
+    </g>
+  </g>
+
+  <g id="project-proof" transform="translate(735 50)">
+    <rect x="0" y="0" width="405" height="286" rx="22" fill="url(#panel)" stroke="#273448"/>
+    <text x="26" y="35" fill="#91A3B8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">runtime path</text>
+
+    <g transform="translate(26 58)">
+      <rect x="0" y="0" width="148" height="62" rx="14" fill="#0B1119" stroke="#2B3A4D"/>
+      <text x="18" y="25" fill="#F1F5F9" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="700">Vue app</text>
+      <text x="18" y="47" fill="#7F8DA1" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">Router · Store · Service</text>
+
+      <path d="M158 31 H198" stroke="#5C708A" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M192 24 L199 31 L192 38" fill="none" stroke="#5C708A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <rect x="208" y="0" width="145" height="62" rx="14" fill="#0B1119" stroke="#3C6E7F"/>
+      <text x="226" y="25" fill="#E6FBFF" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="700">Client Tools</text>
+      <text x="226" y="47" fill="#76CDE5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">typed browser RPC</text>
+
+      <path d="M280 72 V102" stroke="#5C708A" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M273 96 L280 103 L287 96" fill="none" stroke="#5C708A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <rect x="88" y="112" width="265" height="74" rx="16" fill="#11131F" stroke="url(#accent)" stroke-width="1.5"/>
+      <text x="110" y="140" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="19" font-weight="800">Spotlight Server</text>
+      <text x="110" y="165" fill="#A9B5C6" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">skills · routing · runs · safety</text>
+
+      <path d="M220 196 V221" stroke="#5C708A" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M213 215 L220 222 L227 215" fill="none" stroke="#5C708A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <rect x="0" y="230" width="108" height="42" rx="12" fill="#0B1119" stroke="#2B3A4D"/>
+      <text x="54" y="256" text-anchor="middle" fill="#C9D6E5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">Knowledge</text>
+
+      <rect x="122" y="230" width="108" height="42" rx="12" fill="#0B1119" stroke="#2B3A4D"/>
+      <text x="176" y="256" text-anchor="middle" fill="#C9D6E5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">Memory</text>
+
+      <rect x="244" y="230" width="109" height="42" rx="12" fill="#0B1119" stroke="#2B3A4D"/>
+      <text x="298.5" y="256" text-anchor="middle" fill="#C9D6E5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">Actions</text>
+    </g>
+  </g>
+</svg>
