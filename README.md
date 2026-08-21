@@ -20,18 +20,13 @@
 
 ### 一条真实的调用链
 
-```text
-用户自然语言
-    ↓
-Skill 选择 / LangGraph 路由
-    ↓
-Spotlight Server
-    ↓
-Client Tool（类型 + JSDoc + JSON Schema）
-    ↓
-浏览器 RPC
-    ↓
-原 Router / Store / Service / 页面引擎
+```mermaid
+flowchart TD
+    U["用户自然语言"] --> R["Skill 选择 / LangGraph 路由"]
+    R --> S["Spotlight Server"]
+    S --> T["Client Tool<br/>TypeScript + JSDoc + JSON Schema"]
+    T --> RPC["浏览器 RPC"]
+    RPC --> APP["原 Router / Store / Service / 页面引擎"]
 ```
 
 你写的是业务适配层，Spotlight 负责把它变成可路由、可恢复、可记忆的 Agent 能力：
@@ -45,16 +40,17 @@ Client Tool（类型 + JSDoc + JSON Schema）
 
 ## 为什么不是 DOM Agent
 
-Spotlight 推荐：
+```mermaid
+flowchart TB
+    subgraph A["Spotlight — capability path"]
+        direction LR
+        A1["自然语言"] --> A2["Skill"] --> A3["Client Tool"] --> A4["Store / Service / Router"]
+    end
 
-```text
-自然语言 → Skill → Client Tool → 原 Store / Service / Router
-```
-
-而不是：
-
-```text
-自然语言 → CSS Selector → 模拟鼠标点击
+    subgraph B["DOM automation — fragile path"]
+        direction LR
+        B1["自然语言"] --> B2["CSS Selector"] --> B3["模拟鼠标点击"] --> B4["页面 DOM"]
+    end
 ```
 
 这样做有三个直接收益：
@@ -66,6 +62,14 @@ Spotlight 推荐：
 ## 最快接入：让 Coding Agent 蒸馏现有前端
 
 新项目优先使用仓库自带的 [`spotlight-integrate`](./skills/spotlight-integrate/README.md) Skill Pack。它会先分析真实 Router / Store / Service / UI 能力，再生成 Client Tools、业务 Skills、Project Pack 和验收材料。
+
+```mermaid
+flowchart LR
+    APP["现有 Vue 应用<br/>Router / Store / Service"] --> DISTILL["spotlight-integrate<br/>Coding Agent"]
+    DISTILL --> ADAPTER["Client Tools + Skills<br/>Project Pack"]
+    ADAPTER --> RUNTIME["Spotlight Server + LLM"]
+    RUNTIME --> USER["用户用自然语言<br/>调用原业务能力"]
+```
 
 把整个目录复制到 Cursor / Codex / Claude Code 的 skills 目录：
 
@@ -140,16 +144,24 @@ createApp(App)
 
 Spotlight 把“浏览器里真实存在的能力”和“服务端 Agent Runtime”明确分开：
 
-```text
-┌──────────────────────────────┐        ┌────────────────────────────────┐
-│         Vue Host App         │        │        Spotlight Server        │
-│                              │        │                                │
-│ Router / Store / Service     │        │ LangGraph routing              │
-│          ↓                   │  RPC   │ Skills / Knowledge / Actions   │
-│ Client Tools ────────────────┼───────→│ Run state / SSE                │
-│          ↑                   │←───────┼ Long-term Memory Gate          │
-│ fresh uiContext after action │        │ Provider integrations          │
-└──────────────────────────────┘        └────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph HOST["Vue Host App"]
+        direction TB
+        BIZ["Router / Store / Service"] --> TOOLS["Client Tools"]
+        TOOLS --> UICTX["fresh uiContext after action"]
+    end
+
+    subgraph SERVER["Spotlight Server"]
+        direction TB
+        ROUTER["LangGraph routing"] --> AGENT["Skills / Knowledge / Actions"]
+        AGENT --> RUNS["Run state / SSE"]
+        RUNS --> MEMORY["Long-term Memory Gate"]
+        MEMORY --> PROVIDERS["Provider integrations"]
+    end
+
+    TOOLS -- "browser RPC" --> ROUTER
+    RUNS -- "SSE / tool call" --> TOOLS
 ```
 
 浏览器负责执行真实页面能力；Server 负责理解、规划、检索、记忆和运行状态。通用 Server 不应该写死某个产品的业务语义，具体业务知识保留在宿主 Skill、Tool description、schema 和 `uiContext` 中。
