@@ -154,18 +154,20 @@ Spotlight 把“浏览器里真实存在的能力”和“服务端 Agent Runtim
 
 浏览器负责执行真实页面能力；Server 负责理解、规划、检索、记忆和运行状态。通用 Server 不应该写死某个产品的业务语义，具体业务知识保留在宿主 Skill、Tool description、schema 和 `uiContext` 中。
 
-## Capability tiers
+## 安全边界
 
-每个 Client Tool 有且只有一个能力等级，Runtime 据此决定是否允许安全重放：
+`spotlight-integrate` 不会把扫描到的所有函数都自动暴露给 Agent。候选能力会先被分类：
 
-| Tier | 典型行为 | 断线 / 丢结果后 |
-| --- | --- | --- |
-| `observe` | 读取浏览器或 UI 状态 | 可直接重发 |
-| `query` | 读取业务后端，幂等 | 可直接重发 |
-| `navigate` | 改变 UI，本地可逆 | 可直接重发 |
-| `mutate` | 修改外部系统 | **不能盲目重发** |
+| 分类 | 含义 |
+| --- | --- |
+| `DIRECT` | 已有稳定导出、可安全暴露，可直接包装为 Tool |
+| `REFACTOR` | 能力真实存在，但逻辑困在组件内部；需要先做行为不变的抽取 |
+| `GATED` | 删除、支付、提交订单、转账等高风险动作；默认不自动暴露 |
+| `REJECT` | 虚构能力、任意 DOM / 脚本执行器等，不应该成为 Tool |
 
-不显式填写 `tier` 时，可由 `sideEffect`、`replayPolicy`、`riskLevel` 推导。更完整的协议设计见 [`capability-protocol-v2.md`](./docs/design/capability-protocol-v2.md)。
+因此 Spotlight 的目标不是“让 Agent 什么都能点”，而是只把**真实、可描述、可验证**的业务入口放进 Runtime。
+
+仓库中的 [`capability-protocol-v2.md`](./docs/design/capability-protocol-v2.md) 记录了更进一步的能力分级 / 重放协议设计，但该文档当前明确标记为 **deferred design**，不应当被当作已经发布的运行时行为。
 
 ## Run 与连接分离
 
@@ -239,7 +241,7 @@ Node-only 能力必须走 `/node` 子入口，不能混入浏览器主包。
 | 让 Coding Agent 自动完成现有 Vue 项目的 Agent 化 | [`skills/spotlight-integrate/README.md`](./skills/spotlight-integrate/README.md) |
 | 手工定义 Client Tool / Skill | [`docs/client-tools.md`](./docs/client-tools.md) |
 | 部署 Spotlight Server / Project Pack | [`docs/server-deployment.md`](./docs/server-deployment.md) |
-| 理解 Capability / 重放协议 | [`docs/design/capability-protocol-v2.md`](./docs/design/capability-protocol-v2.md) |
+| 查看未来 Capability / 重放协议设计（deferred） | [`docs/design/capability-protocol-v2.md`](./docs/design/capability-protocol-v2.md) |
 | 查看 SDK 包结构 | [`packages/README.md`](./packages/README.md) |
 
 ---
